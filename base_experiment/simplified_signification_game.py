@@ -2,8 +2,7 @@ from functools import partial
 import numpy as np
 import jax, chex
 import jax.numpy as jnp
-from jax.tree_util import tree_map
-from torch.utils import data
+import jax_dataloader as jdl
 from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
@@ -20,12 +19,12 @@ class State:
 # so that at timestep t, the speaker generates an image, and the listener guesses the class of the image at timestep t+1. The listener will still guess the image at time-step t, but it will be based on the image generated at time-step t-1.
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_classes: int, dataset) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_classes: int, dataloader: jdl.DataLoader) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
         self.num_classes = num_classes
-        self.dataset = dataset  # This is a tfds dataset, which is a generator that returns a dictionary with keys 'image' and 'label'. It's batched so that each batch has num_listeners images and labels.
+        self.dataloader = dataloader
 
     @partial(jax.jit, static_argnums=[0])
     def get_obs(self, state: State) -> dict:
@@ -75,47 +74,35 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             previous_speaker_to_listener_map=state.speaker_to_listener_map
         )
 
-def numpy_collate(batch):
-    return tree_map(np.asarray, data.default_collate(batch))
-
-class NumpyLoader(data.DataLoader):
-        def __init__(self, dataset, batch_size=1,
-                        shuffle=False, sampler=None,
-                        batch_sampler=None, num_workers=0,
-                        pin_memory=False, drop_last=False,
-                        timeout=0, worker_init_fn=None):
-            super(self.__class__, self).__init__(dataset,
-                batch_size=batch_size,
-                shuffle=shuffle,
-                sampler=sampler,
-                batch_sampler=batch_sampler,
-                num_workers=num_workers,
-                collate_fn=numpy_collate,
-                pin_memory=pin_memory,
-                drop_last=drop_last,
-                timeout=timeout,
-                worker_init_fn=worker_init_fn)
-
-class FlattenAndCast(object):
-    def __call__(self, pic):
-        return np.ravel(np.array(pic, dtype=jnp.float32))
 
 def mnist_signification_game():
-    """Runs a signification game on MNIST."""
+    """Runs a simplified signification game on MNIST."""
+    
+    class FlattenAndCast(object):
+        def __call__(self, pic):
+            return np.ravel(np.array(pic, dtype=jnp.float32))
+    
+    class JustCast(object):
+        def __call__(self, pic):
+            return np.array(pic, dtype=jnp.float32)
     
     # Define parameters for a signification game
-    num_speakers = 0    # Speakers don't do anything at the moment
+    num_speakers = 0
     num_listeners = 5
     num_classes = 10
 
-    # Retrieve mnist dataset from torchvision
-    mnist_dataset = MNIST('/tmp/mnist/', download=True)
-    # training_generator = NumpyLoader(mnist_dataset, batch_size=num_listeners, num_workers=0)
+    mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=JustCast())
+    # If we use FlattenAndCast(), the images are flattened to be 1D arrays, otherwise they are 2D arrays
+    # The shape of the images will be (60000, 28, 28) if we use JustCast(), otherwise it is (60000, 784)
 
-    # train_images = np.array(mnist_dataset.train_data).reshape(len(mnist_dataset.train_data), -1)
-    # train_labels = one_hot(np.array(mnist_dataset.train_labels), n_targets)
+    dataloader = jdl.DataLoader(mnist_dataset, 'pytorch', batch_size=num_listeners, shuffle=True)
+    # The batch size is the number of listeners, so calling next(training_generator) will return a tuple of length 2,
+    # where the first element is a batch of num_listeners images and the second element is a batch of num_listener labels.
+    
+    batch = next(iter(dataloader)) # iterate next batch
+    print(batch)
 
-    # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_classes, dataset=ds)
+    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_classes, dataloader=dataloader)
 
 
 if __name__ == '__main__':

@@ -49,14 +49,16 @@ Clone JaxMARL in a separate directory with:
     HanabiGame,
     ...
     ```
-    This should work for JaxMARL v 0.0.2. If you're using a different version, you may need to find the lines yourself.
-
-## Running simplified_signification_game.py
-1. This script requires MNIST, which we get through torchvision. Install it with:
+    This should work for `JaxMARL v0.0.2`. If you're using a different version, you may need to find the lines yourself.
+6. We also need torch and torchvision, which can be installed with mamba:
     ```
     mamba install torchvision
     ```
     The conda analog would be something like (untested):
     ```
     conda install -c conda-forge torchvision
+    ```
+7. We also need jax-dataloader, which can be installed with pip:
+    ```
+    pip install jax-dataloader
     ```
