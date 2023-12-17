@@ -5,10 +5,15 @@ Our goal is to run `jaxmarl_testdrive.py`. This is a basic script that you shoul
 
 1. Make a conda environment with `conda create -n siggame python=3.9`
 2. Activate the environment with `conda activate siggame`
-3. Install jax. If you're on macOS, you can run this:
+3. Install jax. If you're on macOS, you can run this if you are using conda:
     ```
     conda install -c conda-forge jaxlib=0.4.19
     conda install -c conda-forge jax
+    ```
+    Or you can run this if you are using mamba (better):
+    ```
+    mamba install jaxlib=0.4.19
+    mamba install jax
     ```
     Verify that it is installed correctly by running 
     ```python -c 'import jax; print(jax.numpy.arange(10))'```
@@ -49,5 +54,9 @@ Clone JaxMARL in a separate directory with:
 ## Running simplified_signification_game.py
 1. This script requires MNIST, which we get through torchvision. Install it with:
     ```
-    pip install torch torchvision
+    mamba install torchvision
+    ```
+    The conda analog would be something like (untested):
+    ```
+    conda install -c conda-forge torchvision
     ```

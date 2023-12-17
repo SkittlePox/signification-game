@@ -108,13 +108,11 @@ def mnist_signification_game():
     num_listeners = 5
     num_classes = 10
 
-    rng = jax.random.PRNGKey(0)
+    # Retrieve mnist dataset from torchvision
+    mnist_dataset = MNIST('/tmp/mnist/', download=True)
+    # training_generator = NumpyLoader(mnist_dataset, batch_size=num_listeners, num_workers=0)
 
-    # Define our dataset, using torch datasets
-    mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=FlattenAndCast())
-    training_generator = NumpyLoader(mnist_dataset, batch_size=num_listeners, num_workers=0)
-
-    train_images = np.array(mnist_dataset.train_data).reshape(len(mnist_dataset.train_data), -1)
+    # train_images = np.array(mnist_dataset.train_data).reshape(len(mnist_dataset.train_data), -1)
     # train_labels = one_hot(np.array(mnist_dataset.train_labels), n_targets)
 
     # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_classes, dataset=ds)
