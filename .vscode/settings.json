@@ -1,6 +1,0 @@
-{
-    "python.analysis.extraPaths": [
-        "/Users/benjamin/code/JaxMARL/",
-        "/opt/anaconda3/envs/siggame/lib/python3.9/site-packages/"
-    ]
-}
