@@ -63,7 +63,7 @@ class SignificationGame(MultiAgentEnv):
 
         state = State(
             speaker_class_assignment=jax.random.randint(key, (self.num_speakers,), 0, self.num_classes),
-            listener_image_assignment=None,
+            listener_image_assignment=,
             speaker_to_listener_map=jax.random.randint(key, (self.num_listeners,), 0, self.num_speakers),
             previous_speaker_to_listener_map=state.speaker_to_listener_map
         )
