@@ -7,13 +7,23 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 
-# Likely need to make a dataclass for the state, this is the underlying state of the environment. Later there will be a get_obs method in the environment that will return the observation of the agent.
+
+# The chex.Arrays could alternatively be jnp.ndarrays, should test for performance
 @struct.dataclass
 class State:
-    speaker_class_assignment: chex.Array  # [num_classes] * num_speakers
-    listener_image_assignment: chex.Array  # [image_size] * num_listeners
-    speaker_to_listener_map: chex.Array  # [num_speakers] * num_listeners
-    previous_speaker_to_listener_map: chex.Array  # [num_speakers] * num_listeners
+    # Newly generated, to be evaluated next state
+    new_speaker_class_assignment: chex.Array  # [num_classes] * num_speakers
+    new_env_images: chex.Array  # [image_size] * num_listeners
+    new_listener_image_from_env_or_speaker_mask: chex.Array  # [bool] * num_listeners
+    new_listener_channel_assignment: chex.Array  # [max(num_speakers, num_listers)] * num_listeners
+
+    # Newly generated as a function of previous state, to be evaluated this state
+    speaker_images: chex.Array  # [image_size] * num_speakers
+
+    # From previous state
+    old_env_images: chex.Array  # [image_size] * num_listeners
+    old_listener_image_from_env_or_speaker_mask: chex.Array  # [bool] * num_listeners
+    old_listener_channel_assignment: chex.Array  # [max(num_speakers, num_listers)] * num_listeners
 
 # The current state changes based on whether it's the speaker or listeners turn, but we could change that
 # so that at timestep t, the speaker generates an image, and the listener guesses the class of the image at timestep t+1. The listener will still guess the image at time-step t, but it will be based on the image generated at time-step t-1.
@@ -53,25 +63,36 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     def step_env(self, key: chex.PRNGKey, state: State, actions: dict):
         """Performs a step in the environment."""
         
-        # get the actions as array
         actions = jnp.array([actions[i] for i in self.agents])
         # The first num_speakers actions are images, the last num_listeners actions are classes
-        
-        # The listener should classify the images in listener_image_assignment and return an integer. The reward for both agents is a function of this.
-        
-        # At the next state, speaker_class_assignment is a random array of integers between 0 and num_classes-1
-        # At the next state, listener_image_assignment is the actions of the speakers re-arranged to match speaker_to_listener_map
-        # The speaker_to_listener_map is an array of integers between 0 and num_speakers-1, where speaker_to_listener_map[i] is the index of the speaker whose image the listener at index i sees.
-        
-        # Arrange the actions of the speakers to match the speaker_to_listener_map
-        speaker_actions = actions[:self.num_speakers]
-        listener_image_assignment = jnp.take(speaker_actions, state.speaker_to_listener_map)
+
+        # ACTIONS: The listeners report their classification from the last images, the speakers report the image they generated from the last classes
+        # CURRENT STATE: The last images and classes
+
+        # NEXT STATE:
+        # New: The speaker_class_assignment is updated with the labels from the dataloader, next(dataloader)[1]
+        # New: The env_images are updated with the images from the dataloader, next(dataloader)[0]
+        # New: listener_image_from_env_or_speaker_mask is updated with a random array of booleans, jax.random.randint(key, (self.num_listeners,), 0, 2).astype(bool)
+        # New: listener_channel_assignment is updated based on the value of listener_image_from_env_or_speaker_mask
+        # New: speaker_images are updated with the actions from the speakers
+        # Old: old_env_images, old_listener_image_from_env_or_speaker_mask, and old_listener_channel_assignment are updated with the values from the current state
+
+        new_env_images, new_speaker_class_assignment = next(self.dataloader)
+        new_listener_image_from_env_or_speaker_mask = jax.random.randint(key, (self.num_listeners,), 0, 2).astype(bool) # When true we use the env image, when false we use the speaker image
+
+        _listener_channel_assignment_env = jax.random.randint(key, (self.num_listeners,), 0, self.num_listeners)
+        _listener_channel_assignment_speaker = jax.random.randint(key, (self.num_listeners,), 0, self.num_speakers)
+        new_listener_channel_assignment = jnp.where(new_listener_image_from_env_or_speaker_mask, _listener_channel_assignment_env, _listener_channel_assignment_speaker)
 
         state = State(
-            speaker_class_assignment=jax.random.randint(key, (self.num_speakers,), 0, self.num_classes),
-            listener_image_assignment=listener_image_assignment,
-            speaker_to_listener_map=jax.random.randint(key, (self.num_listeners,), 0, self.num_speakers),
-            previous_speaker_to_listener_map=state.speaker_to_listener_map
+            new_speaker_class_assignment=new_speaker_class_assignment,
+            new_env_images=new_env_images,
+            new_listener_image_from_env_or_speaker_mask=new_listener_image_from_env_or_speaker_mask,
+            new_listener_channel_assignment=new_listener_channel_assignment,
+            speaker_images=actions[:self.num_speakers],
+            old_env_images=state.new_env_images,
+            old_listener_image_from_env_or_speaker_mask=state.new_listener_image_from_env_or_speaker_mask,
+            old_listener_channel_assignment=state.new_listener_channel_assignment
         )
 
 
@@ -99,10 +120,11 @@ def mnist_signification_game():
     # The batch size is the number of listeners, so calling next(training_generator) will return a tuple of length 2,
     # where the first element is a batch of num_listeners images and the second element is a batch of num_listener labels.
     
-    batch = next(iter(dataloader)) # iterate next batch
-    print(batch)
+    # Run this to verify the dataloader works:
+    # batch = next(iter(dataloader))
+    # print(batch)
 
-    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_classes, dataloader=dataloader)
+    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_classes, dataloader)
 
 
 if __name__ == '__main__':
