@@ -122,7 +122,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # old_listener_channel_assignment tells us which channel the listener was attempting to classify, and old_channel_class_assignment tells us the class of that channel.
         listener_rewards = jnp.where(listener_actions == state.old_channel_class_assignment[state.old_listener_channel_assignment], 1, -1)
         # Also give the same rewards to the speakers who spoke the images that were classified correctly, as per state.old_listener_image_from_env_or_speaker_mask and state.old_listener_channel_assignment
-        speaker_rewards = jnp.where(jnp.logical_and(state.old_listener_image_from_env_or_speaker_mask, listener_rewards == 1), 1, 0)
+        # print(listener_rewards)
+        speaker_rewards = jnp.where(jnp.logical_and(~state.old_listener_image_from_env_or_speaker_mask, listener_rewards != 0), listener_rewards, 0)
+        # I need to rearrange the speaker awards according to the channel assignment, so that the speaker rewards are in the same order as the speaker actions
+        # Rearrange the speaker rewards so they are in the same order as the speaker actions
+        speaker_rewards = jnp.take(speaker_rewards, state.old_listener_channel_assignment)  # For some reason this (sorta) works, but I don't know why
+        speaker_rewards = jnp.take(speaker_rewards, state.old_listener_channel_assignment)
 
         rewards = {**{"speaker_{}".format(i): speaker_rewards[i] for i in range(self.num_speakers)}, **{"listener_{}".format(i): listener_rewards[i] for i in range(self.num_listeners)}}
         rewards["__all__"] = sum(rewards.values())
@@ -154,7 +159,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_images=jnp.zeros((max(self.num_speakers, 1), 28, 28), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function
             old_env_images=jnp.zeros((self.num_listeners, 28, 28), dtype=jnp.float32),
             old_channel_class_assignment=jnp.zeros((self.num_listeners,), dtype=jnp.int32),
-            old_listener_image_from_env_or_speaker_mask=jnp.full((self.num_listeners,), True),
+            old_listener_image_from_env_or_speaker_mask=jnp.full((self.num_listeners,), True),  # This doesn't matter, on the first state there is nothing to classify
             old_listener_channel_assignment=jnp.zeros((self.num_listeners,), dtype=jnp.int32),
             iteration=0
         )
@@ -187,7 +192,7 @@ def mnist_signification_game():
             return np.array(pic, dtype=jnp.float32)
     
     # Define parameters for a signification game
-    num_speakers = 0
+    num_speakers = 4
     num_listeners = 5
     num_classes = 10
 
@@ -206,7 +211,7 @@ def mnist_signification_game():
     key = jax.random.PRNGKey(0)
     key, key_reset, key_act, key_step = jax.random.split(key, 4)
     
-    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_classes, dataloader, env_images_only=True)
+    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_classes, dataloader, env_images_only=False)
     obs, state = env.reset(key_reset)
     
     # print(list(obs.keys()))
@@ -215,13 +220,29 @@ def mnist_signification_game():
 
     action_keys = jax.random.split(key_act, len(env.agents))
     actions = {agent: env.action_space(agent).sample(action_keys[i]) for i, agent in enumerate(env.agents)}
-    print(actions)
 
+    for agent, agent_action in actions.items():
+        if agent.startswith("speaker"):
+            continue
+        print(f"Action for {agent}: {agent_action}")
+
+    obs, state, reward, done, infos = env.step(key_step, state, actions)    # Running this twice, since the first state cannot yield reward.
     obs, state, reward, done, infos = env.step(key_step, state, actions)
 
     # print(obs, state, reward, done, infos)
-    print(state.old_channel_class_assignment)
-    print(reward)
+    # print("True classes:", state.old_channel_class_assignment)
+    print(state.old_listener_image_from_env_or_speaker_mask)
+    print("Channel assigment:", state.old_listener_channel_assignment)
+    # print(reward)
+
+    for i in range(num_listeners):
+        print(f"listener_{i} attended to {'env channel' if state.old_listener_image_from_env_or_speaker_mask[i] else 'speaker'} {state.old_listener_channel_assignment[i]} with true class {state.old_channel_class_assignment[state.old_listener_channel_assignment[i]]}")
+
+    for agent, agent_reward in reward.items():
+        print(f"Reward for {agent}: {agent_reward}")
+
+    
+
 
 
 
