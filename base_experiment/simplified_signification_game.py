@@ -11,7 +11,7 @@ from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 # The chex.Arrays could alternatively be jnp.ndarrays, should test for performance
 @struct.dataclass
 class State:
-    # Newly generated, to be evaluated next state
+    # Newly generated, to be evaluated next state after speakers generate images
     new_speaker_class_assignment: chex.Array  # [num_classes] * num_speakers
     new_env_images: chex.Array  # [image_size] * num_listeners
     new_listener_image_from_env_or_speaker_mask: chex.Array  # [bool] * num_listeners
@@ -20,7 +20,7 @@ class State:
     # Newly generated as a function of previous state, to be evaluated this state
     speaker_images: chex.Array  # [image_size] * num_speakers
 
-    # From previous state
+    # From previous state, to be evaluated this state
     old_env_images: chex.Array  # [image_size] * num_listeners
     old_listener_image_from_env_or_speaker_mask: chex.Array  # [bool] * num_listeners
     old_listener_channel_assignment: chex.Array  # [max(num_speakers, num_listers)] * num_listeners
@@ -42,19 +42,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         @partial(jax.vmap, in_axes=[0, None])
         def _observation(aidx: int, state: State) -> jnp.ndarray:
-            # Agents 0 through num_speakers-1 are speakers and see speaker_class_assignment[i]
-            # Agents num_speakers through num_speakers + num_listeners - 1 are listeners and see listener_image_assignment[i]
-            if aidx < self.num_speakers:
-                return state.speaker_class_assignment[aidx]
-            else:
-                return state.listener_image_assignment[aidx - self.num_speakers]
-        
-        # Here is an alternate version using jax.lax.cond which may or may not be faster:
-        # def _observation(aidx: int, state: State) -> jnp.ndarray:
-        #     return jax.lax.cond(aidx < self.num_speakers,
-        #                         lambda _: state.speaker_class_assignment[aidx],
-        #                         lambda _: state.listener_image_assignment[aidx - self.num_speakers],
-        #                         operand=None)
+            # The speakers see the classes, the listeners see the images
+            return jnp.where(aidx < self.num_speakers, 
+                             state.new_speaker_class_assignment[aidx],
+                             jnp.where(state.new_listener_image_from_env_or_speaker_mask, 
+                                       state.new_env_images[state.new_listener_channel_assignment], 
+                                       state.speaker_images[state.new_listener_channel_assignment]))
 
         obs = _observation(self.agent_range, state)
         return {a: obs[i] for i, a in enumerate(self.agents)}
