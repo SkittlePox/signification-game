@@ -27,6 +27,13 @@ class State:
 
     speaker_images: chex.Array  # [image_size] * num_speakers
 
+    previous_channel_map: chex.Array  # [num_speakers + num_channels] * [num_listeners] * num_channels
+    previous_env_images: chex.Array  # [image_size] * num_channels
+    previous_env_labels: chex.Array  # [num_classes] * num_channels
+    previous_speaker_labels: chex.Array  # [num_classes] * num_speakers
+
+    previous_speaker_images: chex.Array  # [image_size] * num_speakers
+
     iteration: int
 
 
@@ -72,65 +79,101 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     def step_env(self, key: chex.PRNGKey, state: State, actions: dict):
         """Performs a step in the environment."""
         
-        speaker_actions = jnp.array([actions[f"speaker_{i}"] for i in range(self.num_speakers)])
-        listener_actions = jnp.array([actions[f"listener_{i}"] for i in range(self.num_listeners)])
-        # The first num_speakers actions are images, the last num_listeners actions are classes
+        speaker_actions = jnp.array([actions[agent] for agent in self.speaker_agents])
+        listener_actions = jnp.array([actions[agent] for agent in self.listener_agents])
 
-        # ACTIONS: The listeners report their classification from the last images, the speakers report the image they generated from the last classes
-        # CURRENT STATE: The last images and classes
+        ######## First, evaluate the current state.
 
-        # NEXT STATE:
-        # New: The channel_class_assignment is updated with the labels from the dataloader, next(dataloader)[1]
-        # New: The env_images are updated with the images from the dataloader, next(dataloader)[0]
-        # New: listener_image_from_env_or_speaker_mask is updated with a random array of booleans, jax.random.randint(key, (self.num_listeners,), 0, 2).astype(bool)
-        # New: listener_channel_assignment is updated based on the value of listener_image_from_env_or_speaker_mask
-        # New: speaker_images are updated with the actions from the speakers
-        # Old: old_env_images, old_listener_image_from_env_or_speaker_mask, and old_listener_channel_assignment are updated with the values from the current state
-        
-        key1, key2, key3 = jax.random.split(key, 3)
-        new_env_images, new_channel_class_assignment = next(iter(self.dataloader))    # This is not jittable :(
+        @partial(jax.vmap, in_axes=[0, None])
+        def _evaluate_channel_rewards(c: int, listener_actions: jnp.ndarray) -> jnp.ndarray:
+            channel = state.channel_map[c]
+            speaker_index = channel[0]
+            listener_index = channel[1]
 
-        # When indices of new_listener_image_from_env_or_speaker_mask are true we use the env image, when false we use the speaker image
-        if self.kwargs.get("env_images_only", False):    # This is static, so it should be jittable
-            new_listener_image_from_env_or_speaker_mask = jnp.full((self.num_listeners,), True)
-        else:
-            new_listener_image_from_env_or_speaker_mask = jax.random.randint(key1, (self.num_listeners,), 0, 2).astype(bool)
-        
-        # The listener channel assignment is either the environment channel assignment or the speaker channel assignment, depending on the value of new_listener_image_from_env_or_speaker_mask
-        _listener_channel_assignment_env = jax.random.randint(key2, (self.num_listeners,), 0, self.num_listeners)
-        _listener_channel_assignment_speaker = jax.random.randint(key3, (self.num_listeners,), 0, self.num_speakers)
-        new_listener_channel_assignment = jnp.where(new_listener_image_from_env_or_speaker_mask, _listener_channel_assignment_env, _listener_channel_assignment_speaker)
+            # Determine the correct label based on the speaker index
+            is_speaker = speaker_index < self.num_speakers
+            label = jnp.where(is_speaker, state.speaker_labels[speaker_index], state.env_labels[speaker_index-self.num_speakers])
 
-        state = State(
-            new_channel_class_assignment=new_channel_class_assignment,
-            new_env_images=new_env_images,
-            new_listener_image_from_env_or_speaker_mask=new_listener_image_from_env_or_speaker_mask,
-            new_listener_channel_assignment=new_listener_channel_assignment,
-            speaker_images=speaker_actions if self.num_speakers > 0 else jnp.zeros((1, 28, 28), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function. This is static, so it should be jittable
-            old_env_images=state.new_env_images,
-            old_channel_class_assignment=state.new_channel_class_assignment,
-            old_listener_image_from_env_or_speaker_mask=state.new_listener_image_from_env_or_speaker_mask,
-            old_listener_channel_assignment=state.new_listener_channel_assignment,
-            iteration=state.iteration + 1
-        )
+            # Check if the listener's action matches the correct label and convert boolean to integer
+            listener_correct = (listener_actions[listener_index] == label).astype(int)
 
+            # Return reward based on whether the listener was correct
+            reward = 2 * listener_correct - 1
+
+            return speaker_index, listener_index, reward
+
+        speaker_indices, listener_indices, rewards = _evaluate_channel_rewards(jnp.arange(self.num_channels), listener_actions)
+
+        # Generate a reward vector containing all the rewards for each speaker and listener
+        speaker_rewards = jnp.zeros(self.num_speakers + self.num_channels)
+        listener_rewards = jnp.zeros(self.num_listeners)
+
+        ##### This may also not be jittable #####
+        # Iterate over the speaker_indices and listener_indices and add the rewards to the correct indices
+        for i in range(self.num_channels):
+            speaker_rewards = speaker_rewards.at[speaker_indices[i]].add(rewards[i])
+            listener_rewards = listener_rewards.at[listener_indices[i]].add(rewards[i])
+        ##### This may also not be jittable #####
+
+        rewards = {**{agent: speaker_rewards[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards[i] for i, agent in enumerate(self.listener_agents)}}
+        rewards["__all__"] = sum(rewards.values())
         dones = {agent: False for agent in self.agents}
         dones["__all__"] = False
 
-        # The listener was attempting to classify the channel, we have the channel labels but they are in a different order.
-        # old_listener_channel_assignment tells us which channel the listener was attempting to classify, and old_channel_class_assignment tells us the class of that channel.
-        listener_rewards = jnp.where(listener_actions == state.old_channel_class_assignment[state.old_listener_channel_assignment], 1, -1)
-        # Also give the same rewards to the speakers who spoke the images that were classified correctly, as per state.old_listener_image_from_env_or_speaker_mask and state.old_listener_channel_assignment
-        # print(listener_rewards)
-        speaker_rewards = jnp.where(jnp.logical_and(~state.old_listener_image_from_env_or_speaker_mask, listener_rewards != 0), listener_rewards, 0)
-        # I need to rearrange the speaker awards according to the channel assignment, so that the speaker rewards are in the same order as the speaker actions
-        # Rearrange the speaker rewards so they are in the same order as the speaker actions
-        speaker_rewards = jnp.take(speaker_rewards, state.old_listener_channel_assignment)  # For some reason this (sorta) works, but I don't know why
-        speaker_rewards = jnp.take(speaker_rewards, state.old_listener_channel_assignment)
 
-        rewards = {**{"speaker_{}".format(i): speaker_rewards[i] for i in range(self.num_speakers)}, **{"listener_{}".format(i): listener_rewards[i] for i in range(self.num_listeners)}}
-        rewards["__all__"] = sum(rewards.values())
+        ######## Then, update the state.
 
+        key, k1, k2, k3, k4 = jax.random.split(key, 5)
+        
+        ##### This is the only line in this function that is not jittable #####
+        next_env_images, next_env_labels = next(iter(self.dataloader))  # We expect the dataloader to have batch_size=num_channels.
+        ##### This is the only line in this function that is not jittable #####
+
+        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
+        
+        # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
+        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(state.iteration)).astype(int)
+        # requested_num_speaker_images should not be greater than self.num_speakers
+        # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
+        
+        # Collect num_speakers speakers
+        speaker_ids = jax.random.permutation(k2, self.num_speakers)
+        speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))
+        # Collect num_env environment channels
+        env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers
+
+        # Make a mask of size self.num_channels that is 1 if the index is less than requested_num_speaker_images, and 0 otherwise
+        mask = jnp.where(jnp.arange(self.num_channels) < requested_num_speaker_images, 1, 0)
+        possible_speakers = jnp.where(mask, speaker_ids, env_ids)
+        speakers = jax.random.permutation(k4, possible_speakers).reshape((-1, 1))
+
+        # listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]
+        listeners = jax.lax.slice(jax.random.permutation(k1, self.num_listeners).reshape((-1, 1)), [0, 0], [self.num_channels, 1])
+        next_channel_map = jnp.hstack((speakers, listeners))
+
+        state = State(
+            next_channel_map=next_channel_map,
+            next_env_images=next_env_images,
+            next_env_labels=next_env_labels,
+            next_speaker_labels=next_speaker_labels,
+
+            channel_map=state.next_channel_map,
+            env_images=state.next_env_images,
+            env_labels=state.next_env_labels,
+            speaker_labels=state.next_speaker_labels,
+
+            speaker_images=speaker_actions,
+
+            previous_channel_map=state.channel_map,
+            previous_env_images=state.env_images,
+            previous_env_labels=state.env_labels,
+            previous_speaker_labels=state.speaker_labels,
+
+            previous_speaker_images=state.speaker_images,
+
+            iteration=state.iteration + 1
+        )
+        
         return lax.stop_gradient(self.get_obs(state)), lax.stop_gradient(state), rewards, dones, {}
     
     def reset(self, key: chex.PRNGKey) -> Tuple[Dict, State]:
@@ -144,21 +187,23 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        num_speakers = jnp.floor(self.num_channels * self.channel_ratio_fn(0)).astype(int)
-        # num_speakers should not be greater than self.num_speakers
-        # assert num_speakers <= self.num_speakers, f"num_speakers ({num_speakers}) cannot be greater than self.num_speakers ({self.num_speakers})"
-
-        num_env = self.num_channels - num_speakers
+        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(0)).astype(int)
+        # requested_num_speaker_images should not be greater than self.num_speakers
+        # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
         # Collect num_speakers speakers
-        speaker_ids = jax.random.permutation(k2, self.num_speakers)[:num_speakers].reshape((-1, 1))
+        speaker_ids = jax.random.permutation(k2, self.num_speakers)
+        speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))
         # Collect num_env environment channels
-        env_ids = jax.random.permutation(k3, self.num_channels)[:num_env].reshape((-1, 1))
-        # Concatenate the two arrays and shuffle them
-        possible_speakers = jnp.vstack((speaker_ids, env_ids))
-        speakers = jax.random.permutation(k4, possible_speakers)
+        env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers
 
-        listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]
+        # Make a mask of size self.num_channels that is 1 if the index is less than requested_num_speaker_images, and 0 otherwise
+        mask = jnp.where(jnp.arange(self.num_channels) < requested_num_speaker_images, 1, 0)
+        possible_speakers = jnp.where(mask, speaker_ids, env_ids)
+        speakers = jax.random.permutation(k4, possible_speakers).reshape((-1, 1))
+
+        # listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]
+        listeners = jax.lax.slice(jax.random.permutation(k1, self.num_listeners).reshape((-1, 1)), [0, 0], [self.num_channels, 1])
         next_channel_map = jnp.hstack((speakers, listeners))
 
         state = State(
@@ -173,6 +218,13 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_labels=jnp.zeros_like(next_speaker_labels),
 
             speaker_images=jnp.zeros((max(self.num_speakers, 1), self.image_dim, self.image_dim), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function
+
+            previous_channel_map=jnp.zeros_like(next_channel_map),
+            previous_env_images=jnp.zeros_like(next_env_images),
+            previous_env_labels=jnp.zeros_like(next_env_labels),
+            previous_speaker_labels=jnp.zeros_like(next_speaker_labels),
+
+            previous_speaker_images=jnp.zeros((max(self.num_speakers, 1), self.image_dim, self.image_dim), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function
 
             iteration=0
         )
@@ -205,12 +257,12 @@ def mnist_signification_game():
             return np.array(pic, dtype=jnp.float32)
         
     def ret_0(iteration):
-        return 0
+        return 0.0
     
     # Define parameters for a signification game
-    num_speakers = 5
-    num_listeners = 5
-    num_channels = 5
+    num_speakers = 10
+    num_listeners = 10
+    num_channels = 10
     num_classes = 10
 
     mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=JustCast())
@@ -235,8 +287,6 @@ def mnist_signification_game():
     print(obs)
     print(state)
 
-    return
-
     action_keys = jax.random.split(key_act, len(env.agents))
     actions = {agent: env.action_space(agent).sample(action_keys[i]) for i, agent in enumerate(env.agents)}
 
@@ -245,20 +295,23 @@ def mnist_signification_game():
             continue
         print(f"Action for {agent}: {agent_action}")
 
-    obs, state, reward, done, infos = env.step(key_step, state, actions)    # Running this twice, since the first state cannot yield reward.
+    key, key_step = jax.random.split(key_step, 2)
+    obs, state, reward, done, infos = env.step(key_step, state, actions)
+    
+    key, key_step = jax.random.split(key_step, 2)
     obs, state, reward, done, infos = env.step(key_step, state, actions)
 
-    # print(obs, state, reward, done, infos)
-    # print("True classes:", state.old_channel_class_assignment)
-    print(state.old_listener_image_from_env_or_speaker_mask)
-    print("Channel assigment:", state.old_listener_channel_assignment)
-    # print(reward)
+    key, key_step = jax.random.split(key_step, 2)
+    obs, state, reward, done, infos = env.step(key_step, state, actions)
 
-    for i in range(num_listeners):
-        print(f"listener_{i} attended to {'env channel' if state.old_listener_image_from_env_or_speaker_mask[i] else 'speaker'} {state.old_listener_channel_assignment[i]} with true class {state.old_channel_class_assignment[state.old_listener_channel_assignment[i]]}")
+    print(state.previous_channel_map)
+    print(state.previous_speaker_labels)
 
     for agent, agent_reward in reward.items():
         print(f"Reward for {agent}: {agent_reward}")
+
+    # for channel in state.previous_channel_map:
+    #     print(f"Channel {channel}: speaker spoke {state.previous_speaker_labels[channel[0]]} and listener heard {actions[f'listener_{channel[1]}']}")
 
 
 if __name__ == '__main__':
