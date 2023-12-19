@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Callable
 import numpy as np
 import jax, chex
 import jax.numpy as jnp
@@ -31,15 +31,17 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, dataloader: jdl.DataLoader, image_dim: int = 28, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Callable, dataloader: jdl.DataLoader, image_dim: int, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
-        self.dataloader = dataloader
+        self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
+        self.dataloader = dataloader    # We expect the dataloader to have batch_size=num_channels
         self.image_dim = image_dim
         self.kwargs = kwargs
+        # TODO: Move the above comments to an actual docstring
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]
@@ -133,22 +135,29 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     
     def reset(self, key: chex.PRNGKey) -> Tuple[Dict, State]:
         """Reset the environment"""
+        key, k1, k2, k3, k4 = jax.random.split(key, 5)
+        
+        ##### This is the only line in this function that is not jittable #####
+        next_env_images, next_env_labels = next(iter(self.dataloader))  # We expect the dataloader to have batch_size=num_channels.
+        ##### This is the only line in this function that is not jittable #####
 
-        next_env_images, next_env_labels = next(iter(self.dataloader))  # We expect the dataloader to have batch_size=num_channels
-        next_speaker_labels = next_env_labels[:self.num_speakers]
+        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
 
-        key, speaker_key, listener_key = jax.random.split(key, 3)
+        listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]        
+        # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
+        # First of all decide on an actual number, the closest integer to num_channels * channel_ratio_fn(iteration)
+        num_speakers = jnp.floor(self.num_channels * self.channel_ratio_fn(0)).astype(int)
+        num_env = self.num_channels - num_speakers
+        
+        # Collect num_speakers speakers
+        speaker_ids = jax.random.permutation(k2, self.num_speakers)[:num_speakers].reshape((-1, 1))
+        # Collect num_env environment channels
+        env_ids = jax.random.permutation(k3, self.num_channels)[:num_env].reshape((-1, 1))
+        # Concatenate the two arrays and shuffle them
+        possible_speakers = jnp.vstack((speaker_ids, env_ids))
+        speakers = jax.random.permutation(k4, possible_speakers)
 
-        # Generate a channel map, where each channel is a speaker index and a listener index
-        if self.kwargs.get("env_images_only", False):
-            # I can make a list of all possible speaker and listener indices, then shuffle it, then take the first num_channels elements
-            # This should be conditioned on a function of the iteration number in the future. For now I'll handle the logic manually here.
-            possible_speakers = jax.random.permutation(speaker_key, self.num_channels).reshape((-1, 1))
-            possible_listeners = jax.random.permutation(listener_key, self.num_listeners).reshape((-1, 1))
-            next_channel_map = jnp.hstack((possible_speakers, possible_listeners))
-        else:
-            # This entire if-then conditional will eventually be replaced by a function of the iteration number
-            pass
+        next_channel_map = jnp.hstack((speakers, listeners))
 
         state = State(
             next_channel_map=next_channel_map,
@@ -192,6 +201,9 @@ def mnist_signification_game():
     class JustCast(object):
         def __call__(self, pic):
             return np.array(pic, dtype=jnp.float32)
+        
+    def ret_0(iteration):
+        return 0
     
     # Define parameters for a signification game
     num_speakers = 5
@@ -214,7 +226,7 @@ def mnist_signification_game():
     key = jax.random.PRNGKey(0)
     key, key_reset, key_act, key_step = jax.random.split(key, 4)
     
-    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, dataloader, env_images_only=True)
+    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataloader=dataloader, image_dim=28)
     obs, state = env.reset(key_reset)
     
     print(list(obs.keys()))
