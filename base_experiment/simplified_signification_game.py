@@ -245,7 +245,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         return {"speakers": self.speaker_agents, "listeners": self.listener_agents}
 
 
-def mnist_signification_game():
+def test_mnist_signification_game():
     """Runs a simplified signification game on MNIST."""
     
     class FlattenAndCast(object):
@@ -257,10 +257,10 @@ def mnist_signification_game():
             return np.array(pic, dtype=jnp.float32)
         
     def ret_0(iteration):
-        return 0.0
+        return 0.5
     
     # Define parameters for a signification game
-    num_speakers = 10
+    num_speakers = 5
     num_listeners = 10
     num_channels = 10
     num_classes = 10
@@ -304,8 +304,12 @@ def mnist_signification_game():
     key, key_step = jax.random.split(key_step, 2)
     obs, state, reward, done, infos = env.step(key_step, state, actions)
 
+    print("channel_map:")
     print(state.previous_channel_map)
+    print("speaker_labels:")
     print(state.previous_speaker_labels)
+    print("env_labels:")
+    print(state.previous_env_labels)
 
     for agent, agent_reward in reward.items():
         print(f"Reward for {agent}: {agent_reward}")
@@ -315,5 +319,5 @@ def mnist_signification_game():
 
 
 if __name__ == '__main__':
-    mnist_signification_game()
+    test_mnist_signification_game()
     # You can run this file with python -W 'ignore' improved_signification_game.py to ignore the warnings

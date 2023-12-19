@@ -63,36 +63,10 @@ Clone JaxMARL in a separate directory with:
     pip install jax-dataloader
     ```
 
-## SimplifiedSignificationGame
-The environment setup is based on the State class:
-```python
-class State:
-    # Newly generated, to be evaluated next state after speakers generate images
-    next_channel_map: chex.Array  # [num_speakers + num_channels] * [num_listeners] * num_channels
-    next_env_images: chex.Array  # [image_size] * num_channels
-    next_env_labels: chex.Array  # [num_classes] * num_channels
-    next_speaker_labels: chex.Array  # [num_classes] * num_speakers
-
-    # Current state, to be evaluated this state
-    channel_map: chex.Array  # [num_speakers + num_channels] * [num_listeners] * num_channels
-    env_images: chex.Array  # [image_size] * num_channels
-    env_labels: chex.Array  # [num_classes] * num_channels
-    speaker_labels: chex.Array  # [num_classes] * num_speakers
-    speaker_images: chex.Array  # [image_size] * num_speakers
-
-    # Previous state
-    previous_channel_map: chex.Array  # [num_speakers + num_channels] * [num_listeners] * num_channels
-    previous_env_images: chex.Array  # [image_size] * num_channels
-    previous_env_labels: chex.Array  # [num_classes] * num_channels
-    previous_speaker_labels: chex.Array  # [num_classes] * num_speakers
-    previous_speaker_images: chex.Array  # [image_size] * num_speakers
-
-    iteration: int
+Finally, we should be able to run `jaxmarl_testdrive.py` with:
+```shell
+python jaxmarl_testdrive.py
 ```
-In each state, the environment has a foot in two rounds of the game due to the asynchronous nature of the speaker and listener. The speakers generate new images based on the classes sampled at the current time step. These images are then classified by the listeners in the next state. 
 
-To manage these two consecutive rounds, all variables prefixed with `next_` are generated at the current time step for the next round, while all variables without a prefix are for the current round. Variables prefixed with `previous_` were generated in the previous time step. 
-
-The environment consists of two sets of communication channels. One channel contains images from the environment (`env_images`) and the other contains images from the speakers (`speaker_images`). The true labels for these images are stored in `env_labels` and `speaker_labels` respectively. 
-
-The crucial variable is `channel_map`, which is a 3D array of shape `[num_speakers + num_channels] * [num_listeners] * num_channels`. Each index corresponds to a channel, which is a 2D array of `[speaker_index listener_index]`, i.e. a speaker and a listener. The listener's job is to classify the speaker's image. Both the speaker and listener are rewarded (or punished) based on the listener's classification.
+## Running experiments.
+Check the `readme.md` in the `base_experiment/` folder for more information on that experiment.
