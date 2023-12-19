@@ -142,11 +142,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         ##### This is the only line in this function that is not jittable #####
 
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
-
-        listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]        
+        
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        # First of all decide on an actual number, the closest integer to num_channels * channel_ratio_fn(iteration)
         num_speakers = jnp.floor(self.num_channels * self.channel_ratio_fn(0)).astype(int)
+        # num_speakers should not be greater than self.num_speakers
+        # assert num_speakers <= self.num_speakers, f"num_speakers ({num_speakers}) cannot be greater than self.num_speakers ({self.num_speakers})"
+
         num_env = self.num_channels - num_speakers
         
         # Collect num_speakers speakers
@@ -157,6 +158,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         possible_speakers = jnp.vstack((speaker_ids, env_ids))
         speakers = jax.random.permutation(k4, possible_speakers)
 
+        listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]
         next_channel_map = jnp.hstack((speakers, listeners))
 
         state = State(
