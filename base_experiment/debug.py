@@ -1,6 +1,8 @@
 import jax
 import jax.numpy as jnp
 
+#### This file is for helping me understand some jax functions ####
+
 num_speakers = 5
 num_channels = 10
 num_listeners = 15

@@ -10,6 +10,13 @@ from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
 
+import matplotlib as mpl
+from matplotlib.backends.backend_agg import (
+    FigureCanvasAgg as FigureCanvas,
+)
+from matplotlib.figure import Figure
+from PIL import Image
+
 
 @struct.dataclass
 class State:
@@ -243,6 +250,77 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     def agent_classes(self) -> dict:
         """Returns a dictionary with agent classes, used in environments with hetrogenous agents."""
         return {"speakers": self.speaker_agents, "listeners": self.listener_agents}
+    
+    def render_mnist(self, state: State, actions: dict = None) -> None:
+        """Renders the environment (mnist)."""
+
+        fig = Figure((8, 4))
+        canvas = FigureCanvas(fig)
+        mpl.rcParams["xtick.labelbottom"] = False
+        mpl.rcParams["ytick.labelleft"] = False
+
+        num_channels = state.channel_map.shape[0]
+
+        @partial(jax.vmap, in_axes=[0, None])
+        def get_image_label(channel_index: int, state: State):
+            channel = state.previous_channel_map[channel_index]
+            speaker_index = channel[0]
+            listener_index = channel[1]
+            
+            image = lax.cond(speaker_index < self.num_speakers,
+                             lambda _: state.speaker_images[speaker_index],
+                             lambda _: state.previous_env_images[speaker_index-self.num_speakers],
+                             operand=None)
+                             
+            label = lax.cond(speaker_index < self.num_speakers,
+                             lambda _: state.previous_speaker_labels[speaker_index],
+                             lambda _: state.previous_env_labels[speaker_index-self.num_speakers],
+                             operand=None)
+
+            label_is_from_speaker = speaker_index < self.num_speakers
+                             
+            return image, label, label_is_from_speaker
+        
+        images, labels, labels_are_from_speaker = get_image_label(jnp.arange(num_channels), state)
+
+        for i in range(num_channels):
+            ax = fig.add_subplot(2, num_channels, i+1)
+            ax.imshow(
+                images[i],
+                cmap="Greys",
+                vmin=0,
+                vmax=255,
+                aspect="equal",
+                interpolation="none"
+            )
+            ax.set_aspect("equal")
+            ax.margins(0)
+            ax.annotate(
+                ('S' if labels_are_from_speaker[i] else 'E') + str(labels[i]) + ('' if actions is None else ' L' + str(actions[f"listener_{i}"])),
+                fontsize=12,
+                color="black",
+                xy=(0, 0),
+                xycoords="axes pixels",
+                xytext=(0, 60),
+            )
+            ax.annotate(
+                str(state.previous_channel_map[i]),
+                fontsize=10,
+                color="black",
+                xy=(0, 0),
+                xycoords="axes pixels",
+                xytext=(0, -25),
+            )
+            ax.set_xticks([])
+            ax.set_yticks([])
+        
+        canvas.draw()
+        image = Image.frombytes(
+            "RGB",
+            fig.canvas.get_width_height(),
+            fig.canvas.tostring_rgb(),
+        )
+        return image
 
 
 def test_mnist_signification_game():
@@ -313,6 +391,11 @@ def test_mnist_signification_game():
 
     for agent, agent_reward in reward.items():
         print(f"Reward for {agent}: {agent_reward}")
+
+    img = env.render_mnist(state, actions)
+
+    # Show image
+    img.show()
 
     # for channel in state.previous_channel_map:
     #     print(f"Channel {channel}: speaker spoke {state.previous_speaker_labels[channel[0]]} and listener heard {actions[f'listener_{channel[1]}']}")
