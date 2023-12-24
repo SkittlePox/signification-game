@@ -10,13 +10,6 @@ from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
 
-import matplotlib as mpl
-from matplotlib.backends.backend_agg import (
-    FigureCanvasAgg as FigureCanvas,
-)
-from matplotlib.figure import Figure
-from PIL import Image
-
 
 @struct.dataclass
 class State:
@@ -253,6 +246,13 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     
     def render_mnist(self, state: State, actions: dict = None) -> None:
         """Renders the environment (mnist)."""
+
+        import matplotlib as mpl
+        from matplotlib.backends.backend_agg import (
+            FigureCanvasAgg as FigureCanvas,
+        )
+        from matplotlib.figure import Figure
+        from PIL import Image
 
         fig = Figure((8, 4))
         canvas = FigureCanvas(fig)
