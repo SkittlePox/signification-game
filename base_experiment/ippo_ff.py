@@ -21,14 +21,24 @@ from omegaconf import OmegaConf
 from .simplified_signification_game import SimplifiedSignificationGame
 
 
+
+def batchify(x: dict, agent_list, num_actors):
+    x = jnp.stack([x[a] for a in agent_list])
+    return x.reshape((num_actors, -1))
+
+def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
+    x = x.reshape((num_actors, num_envs, -1))
+    return {a: x[i] for i, a in enumerate(agent_list)}
+
+
 # There should be two kinds of ActorCritics, one for listeners and one for speakers. For now, this will be for listeners.
-class ActorCritic(nn.Module):
+class ActorCriticListener(nn.Module):
     action_dim: Sequence[int]
     config: Dict
 
     @nn.compact
     def __call__(self, x):
-        obs, dones, avail_actions = x
+        obs, done, avail_actions = x
         # Embedding Layer
         embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(obs)
         embedding = nn.relu(embedding)
@@ -63,17 +73,34 @@ class Transition(NamedTuple):
     speaker_avail_actions: jnp.ndarray
     listener_avail_actions: jnp.ndarray
 
-def batchify(x: dict, agent_list, num_actors):
-    x = jnp.stack([x[a] for a in agent_list])
-    return x.reshape((num_actors, -1))
+def initialize_listener(env, agent_name, rng, config, learning_rate):
+    listener_network = ActorCriticListener(env.action_space(agent_name).n, config=config)
 
-def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
-    x = x.reshape((num_actors, num_envs, -1))
-    return {a: x[i] for i, a in enumerate(agent_list)}
+    rng, _rng = jax.random.split(rng)
+    init_x = (
+        jnp.zeros(
+            (1, config["NUM_ENVS"], env.observation_space(agent_name).n)
+        ),
+        jnp.zeros((1, config["NUM_ENVS"])),
+        jnp.zeros((1, config["NUM_ENVS"], env.action_space(agent_name).n))
+    )
+    network_params = listener_network.init(_rng, init_x)
+    if config["ANNEAL_LR"]:
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adam(learning_rate=learning_rate, eps=1e-5),
+        )
+    else:
+        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR"], eps=1e-5))
+    
+    train_state = TrainState.create(
+        apply_fn=listener_network.apply,
+        params=network_params,
+        tx=tx,
+    )
+    return listener_network, train_state
 
-def make_train(config):
-    # Before making the environment, we need to collect the dataset
-
+def define_env(config):
     if config["ENV_DATASET"] == 'mnist':
         class JustCast(object):
             def __call__(self, pic):
@@ -94,6 +121,59 @@ def make_train(config):
         mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=JustCast())
         dataloader = jdl.DataLoader(mnist_dataset, 'pytorch', batch_size=num_listeners, shuffle=True)
         env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataloader=dataloader, image_dim=28, **config["ENV_KWARGS"])
+        
+        return env
+
+def env_step(runner_state, env, config):
+    """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
+    speaker_train_states, listener_train_states, env_state, last_obs, last_done, rng = runner_state
+
+    # SELECT ACTION
+    rng, _rng = jax.random.split(rng)
+    # Technically at any state the listener always gets to classify something.
+    avail_actions = env.action_space("listener_0")
+    avail_actions = jnp.stack([avail_actions]*len(env.listener_agents))
+    avail_actions = avail_actions.reshape((config["NUM_ACTORS"], -1))
+
+    # avail_actions = jax.vmap(env.get_legal_moves_listener)(env_state.env_state)  # This will be a problem for the speakers, ignoring for now.
+    # avail_actions = jax.lax.stop_gradient(
+    #     batchify(avail_actions, env.agents, config["NUM_ACTORS"])
+    # )
+    # TODO #2: Work on the remainder of this function.
+
+    obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
+    
+    ac_in = (obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions[np.newaxis, :])
+    pi, value = network.apply(listener_train_states.params, ac_in)    # TODO: Obviously fix this to solicit actions from individual agent networks.
+    action = pi.sample(seed=_rng)
+    log_prob = pi.log_prob(action)
+    env_act = unbatchify(action, env.agents, config["NUM_ENVS"], env.num_agents)
+
+    # STEP ENV
+    rng, _rng = jax.random.split(rng)
+    rng_step = jax.random.split(_rng, config["NUM_ENVS"])
+    obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(
+        rng_step, env_state, env_act
+    )
+    info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
+    done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
+    transition = Transition(
+        done_batch,
+        action.squeeze(),
+        value.squeeze(),
+        batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze(),
+        log_prob.squeeze(),
+        obs_batch,
+        info,
+        avail_actions
+    )
+    runner_state = (speaker_train_states, listener_train_states, env_state, obsv, done_batch, rng)
+    return runner_state, transition
+
+
+def test_rollout_execution(config, rng):
+    env = define_env(config)
+    env = LogWrapper(env)
 
     config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]
     config["NUM_UPDATES"] = (
@@ -102,112 +182,81 @@ def make_train(config):
     config["MINIBATCH_SIZE"] = (
             config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
     )
+    
+    # For the learning rate
+    def linear_schedule(count):
+        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
+        return config["LR"] * frac
 
+    # MAKE AGENTS
+    rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
+    listener_rngs = jax.random.split(rng_l, len(env.listener_agents))   # Make an rng key for each listener
+    listeners_stuff = jax.lax.map(lambda x: initialize_listener(env, x[0], x[1], config, learning_rate=linear_schedule), (env.listener_agents, listener_rngs))
+    listener_networks, listener_train_states = zip(*listeners_stuff)
+    # TODO eventually: Add speaker networks and train states
+
+    # INIT ENV
+    rng, _rng = jax.random.split(rng)
+    reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
+    env = define_env(config)
+    obsv, env_state = jax.lax.map(lambda rng: env.reset(rng), reset_rng) # env.reset is currently not vmappable because it uses a dataloader, but if it were then this would be too
+
+
+    # TODO #1: Ensure that the remainder of this function works as expected.
+    # TRAIN LOOP
+    def _update_step(update_runner_state, unused):
+        # COLLECT TRAJECTORIES
+        runner_state, update_steps = update_runner_state
+        runner_state, traj_batch = jax.lax.scan(
+            env_step, runner_state, None, config["NUM_STEPS"]
+        )
+
+    rng, _rng = jax.random.split(rng)
+    runner_state = (listener_train_states, env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
+    runner_state, _ = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+        _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
+    )
+    return {"runner_state": runner_state}   # Return the updated runner state
+
+
+def make_train(config):
+    env = define_env(config)
     env = LogWrapper(env)
 
+    config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]
+    config["NUM_UPDATES"] = (
+            config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
+    )
+    config["MINIBATCH_SIZE"] = (
+            config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
+    )
+    
+    # For the learning rate
     def linear_schedule(count):
         frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
         return config["LR"] * frac
 
     def train(rng):
-
-        # INIT NETWORKS
-        def _initialize_listener(env, agent_name, rng):
-            listener_network = ActorCritic(env.action_space(agent_name).n, config=config)
-
-            rng, _rng = jax.random.split(rng)
-            init_x = (
-                jnp.zeros(
-                    (1, config["NUM_ENVS"], env.observation_space(agent_name).n)
-                ),
-                jnp.zeros((1, config["NUM_ENVS"])),
-                jnp.zeros((1, config["NUM_ENVS"], env.action_space(agent_name).n))
-            )
-            network_params = listener_network.init(_rng, init_x)
-            if config["ANNEAL_LR"]:
-                tx = optax.chain(
-                    optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-                    optax.adam(learning_rate=linear_schedule, eps=1e-5),
-                )
-            else:
-                tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR"], eps=1e-5))
-            
-            train_state = TrainState.create(
-                apply_fn=listener_network.apply,
-                params=network_params,
-                tx=tx,
-            )
-            return listener_network, train_state
-        
-        rng, rng_s, rng_l = jax.random.split(rng, 3)
-        
-        # There is likely a way to make this vmappable.
+        # MAKE AGENTS
+        rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
         listener_rngs = jax.random.split(rng_l, len(env.listener_agents))   # Make an rng key for each listener
-        listeners_stuff = [_initialize_listener(env, agent_name, listener_rngs[i]) for i, agent_name in enumerate(env.listener_agents)]
+        listeners_stuff = jax.lax.map(lambda x: initialize_listener(env, x[0], x[1], config, learning_rate=linear_schedule), (env.listener_agents, listener_rngs))
         listener_networks, listener_train_states = zip(*listeners_stuff)
-
-        # # There are no speakers for now, so I'll leave this alone.
-        # speaker_rngs = jax.random.split(rng_s, len(env.speaker_agents))
-        # speakers_stuff = []
-        # speaker_networks, speaker_train_states = None, None # TODO: Some kind of unzip here
+        # TODO: Add speaker networks and train states
 
         # INIT ENV
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-        
-        # obsv, env_state = jax.vmap(env.reset, in_axes=(0))(reset_rng) # env.reset is not vmappable because it uses a dataloader.
-        obsv = []
-        env_state = []
-        for i in range(config["NUM_ENVS"]):
-            o, e = env.reset(reset_rng[i])
-            obsv.append(o)
-            env_state.append(e)
-        obsv = jnp.stack(obsv)
-        env_state = jnp.stack(env_state)
+        env = define_env(config)
+
+        obsv, env_state = jax.lax.map(lambda rng: env.reset(rng), reset_rng) # env.reset is currently not vmappable because it uses a dataloader, but if it were then this would be too
 
         # TRAIN LOOP
         def _update_step(update_runner_state, unused):
             # COLLECT TRAJECTORIES
             runner_state, update_steps = update_runner_state
-            def _env_step(runner_state, unused):
-                speaker_train_states, listener_train_states, env_state, last_obs, last_done, rng = runner_state
-
-                # SELECT ACTION
-                rng, _rng = jax.random.split(rng)
-                avail_actions = jax.vmap(env.get_legal_moves)(env_state.env_state)
-                avail_actions = jax.lax.stop_gradient(
-                    batchify(avail_actions, env.agents, config["NUM_ACTORS"])
-                )
-                obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
-                ac_in = (obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions[np.newaxis, :])
-                pi, value = network.apply(train_state.params, ac_in)    # TODO: Obviously fix this to solicit actions from individual agent networks.
-                action = pi.sample(seed=_rng)
-                log_prob = pi.log_prob(action)
-                env_act = unbatchify(action, env.agents, config["NUM_ENVS"], env.num_agents)
-
-                # STEP ENV
-                rng, _rng = jax.random.split(rng)
-                rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-                obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(
-                    rng_step, env_state, env_act
-                )
-                info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
-                done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
-                transition = Transition(
-                    done_batch,
-                    action.squeeze(),
-                    value.squeeze(),
-                    batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze(),
-                    log_prob.squeeze(),
-                    obs_batch,
-                    info,
-                    avail_actions
-                )
-                runner_state = (train_state, env_state, obsv, done_batch, rng)
-                return runner_state, transition
-
             runner_state, traj_batch = jax.lax.scan(
-                _env_step, runner_state, None, config["NUM_STEPS"]
+                env_step, runner_state, None, config["NUM_STEPS"]
             )
 
             # CALCULATE ADVANTAGE
@@ -349,16 +398,22 @@ def make_train(config):
             return (runner_state, update_steps), None
 
         rng, _rng = jax.random.split(rng)
-        # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
-        runner_state = (listener_train_states, env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng)
-        # Perform the update step for a specified number of updates and update the runner state
-        runner_state, _ = jax.lax.scan(
+        runner_state = (listener_train_states, env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
+        runner_state, _ = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
             _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
         )
-        # Return the updated runner state
-        return {"runner_state": runner_state}
+        return {"runner_state": runner_state}   # Return the updated runner state
 
     return train
+
+
+@hydra.main(version_base=None, config_path="config", config_name="test")
+def test(config):
+    config = OmegaConf.to_container(config) 
+
+    rng = jax.random.PRNGKey(50)
+    out = test_rollout_execution(config, rng)
+    print(out['runner_state'])
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
@@ -380,9 +435,8 @@ def main(config):
     out = train(rng)
 
 
-
 if __name__ == "__main__":
-    main()
+    test()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
