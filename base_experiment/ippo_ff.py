@@ -34,6 +34,7 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
 # There should be two kinds of ActorCritics, one for listeners and one for speakers. For now, this will be for listeners.
 class ActorCriticListener(nn.Module):
     action_dim: Sequence[int]
+    image_dim: Sequence[int]
     config: Dict
 
     @nn.compact
@@ -74,11 +75,11 @@ class Transition(NamedTuple):
     listener_avail_actions: jnp.ndarray
 
 def initialize_listener(env, rng, config, learning_rate):
-    listener_network = ActorCriticListener(env.num_classes, config=config)
+    listener_network = ActorCriticListener(action_dim=env.num_classes, image_dim=env.image_dim, config=config)
 
     rng, _rng = jax.random.split(rng)
     init_x = jnp.zeros(
-            (1, config["NUM_ENVS"], env.image_dim)
+            (1, config["NUM_ENVS"], env.image_dim**2)
         )
     network_params = listener_network.init(_rng, init_x)    # I'm not sure how this works, I need to control the size of the inputs and the size of the outputs
     if config["ANNEAL_LR"]:
@@ -127,38 +128,34 @@ def env_step(runner_state, env, config):
     # SELECT ACTION
     rng, _rng = jax.random.split(rng)
     # Technically at any state the listener always gets to classify something.
-    avail_listener_actions = jnp.stack(jnp.arange(env.num_classes)*len(env.listener_agents))
-    # avail_listener_actions = avail_listener_actions.reshape((config["NUM_ACTORS"], -1))
+    # avail_listener_actions = jnp.stack(jnp.arange(env.num_classes)*len(env.listener_agents))
 
-    # avail_actions = jax.vmap(env.get_legal_moves_listener)(env_state.env_state)  # This will be a problem for the speakers, ignoring for now.
-    # avail_actions = jax.lax.stop_gradient(
-    #     batchify(avail_actions, env.agents, config["NUM_ACTORS"])
-    # )
-    # TODO #2: Work on the remainder of this function.
-
-    # obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
-
-    # Should probably jax this
+    listener_rngs = jax.random.split(_rng, len(env.listener_agents))    
+    # We may need to have another iteration loop for the number of environments config["NUM_ENVS"]!!! Instead, I'll unsqueeze listener_obsv
+    # TODO: Probably just do this now.
+    listener_obsv = listener_obsv.squeeze()
     
     actions = []
-    for listener_train_state, osbv in zip(listener_train_states, listener_obsv):
-        policy, critic = listener_train_state.apply_fn(listener_train_state.params, osbv)
-        action = policy.sample()    # This needs an argument
+    log_probs = []
+    for i in range(len(listener_train_states)):
+        listener_train_state, obsv, listener_rng = listener_train_states[i], listener_obsv[i], listener_rngs[i]
+        obsv = obsv.reshape((784))
+        policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
+        action = policy.sample(seed=listener_rng)
+        log_prob = policy.log_prob(action)
         actions.append(action)
-
-    print(actions)
-
+        log_probs.append(log_prob)
     
-    ac_in = (obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions[np.newaxis, :])
-    pi, value = network.apply(listener_train_states.params, ac_in)    # TODO: Obviously fix this to solicit actions from individual agent networks.
-    action = pi.sample(seed=_rng)
-    log_prob = pi.log_prob(action)
-    env_act = unbatchify(action, env.agents, config["NUM_ENVS"], env.num_agents)
+    # ac_in = (obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions[np.newaxis, :])
+    # pi, value = network.apply(listener_train_states.params, ac_in)    # TODO: Obviously fix this to solicit actions from individual agent networks.
+    # action = pi.sample(seed=_rng)
+    
+    # env_act = unbatchify(action, env.agents, config["NUM_ENVS"], env.num_agents)
 
     # STEP ENV
     rng, _rng = jax.random.split(rng)
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-    obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(
+    obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(    # TODO: Need to work on this.
         rng_step, env_state, env_act
     )
     info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
