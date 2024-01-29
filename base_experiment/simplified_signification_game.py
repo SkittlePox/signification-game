@@ -57,8 +57,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.observation_spaces = {**{agent: Discrete(num_classes) for agent in self.speaker_agents}, **{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.listener_agents}}
         self.action_spaces = {**{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.speaker_agents}, **{agent: Discrete(num_classes) for agent in self.listener_agents}}
 
-    @partial(jax.jit, static_argnums=[0])
-    def get_obs(self, state: State) -> dict:
+    @partial(jax.jit, static_argnums=[0, 2])
+    def get_obs(self, state: State, as_dict: bool = False):
         """Returns the observation for each agent."""
         
         @partial(jax.vmap, in_axes=[0, None])
@@ -69,14 +69,33 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         @partial(jax.vmap, in_axes=[0, None])
         def _listener_observation(aidx: int, state: State) -> jnp.ndarray:
             # The listeners need to see the newly generated images (which were generated from last-state's next_speaker_labels, i.e. speaker_labels) according to the channel map
-            return state.channel_map[:, aidx][0]
+            speaker_index = state.channel_map[:, aidx][0]
+            image = lax.cond(speaker_index < self.num_speakers,
+                             lambda _: state.speaker_images[speaker_index],
+                             lambda _: state.previous_env_images[speaker_index-self.num_speakers],
+                             operand=None)
+            
+            return image
         
-        speaker_obs = _speaker_observation(jnp.arange(self.num_speakers), state)
-        listener_obs = _listener_observation(jnp.arange(self.num_listeners), state)
-        return {**{agent: speaker_obs[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_obs[i] for i, agent in enumerate(self.listener_agents)}}
+        if as_dict:
+            observations = {}
+            if self.num_speakers != 0:
+                speaker_obs = _speaker_observation(jnp.arange(self.num_speakers), state)
+                observations = {agent: speaker_obs[i] for i, agent in enumerate(self.speaker_agents)}
+
+            listener_obs = _listener_observation(jnp.arange(self.num_listeners), state)
+            observations.update({agent: listener_obs[i] for i, agent in enumerate(self.listener_agents)})
+            return observations
+        else:
+            if self.num_speakers != 0:
+                speaker_obs = _speaker_observation(jnp.arange(self.num_speakers), state)
+            else:
+                speaker_obs = None
+            listener_obs = _listener_observation(jnp.arange(self.num_listeners), state)
+            return speaker_obs, listener_obs
     
     # @partial(jax.jit, static_argnums=[0])
-    def step_env(self, key: chex.PRNGKey, state: State, actions: dict):
+    def step_env(self, key: chex.PRNGKey, state: State, actions: dict, as_dict: bool = False):
         """Performs a step in the environment."""
         
         speaker_actions = jnp.array([actions[agent] for agent in self.speaker_agents])
@@ -174,9 +193,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             iteration=state.iteration + 1
         )
         
-        return lax.stop_gradient(self.get_obs(state)), lax.stop_gradient(state), rewards, dones, {}
+        return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, dones, {}
     
-    def reset(self, key: chex.PRNGKey) -> Tuple[Dict, State]:
+    def reset(self, key: chex.PRNGKey, as_dict: bool = False) -> Tuple[Dict, State]:
         """Reset the environment"""
         key, k1, k2, k3, k4 = jax.random.split(key, 5)
         
@@ -229,7 +248,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             iteration=0
         )
 
-        return self.get_obs(state), state
+        return self.get_obs(state, as_dict), state
     
     def observation_space(self, agent: str):
         """Observation space for a given agent."""
@@ -359,7 +378,7 @@ def test_mnist_signification_game():
     key, key_reset, key_act, key_step = jax.random.split(key, 4)
     
     env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataloader=dataloader, image_dim=28)
-    obs, state = env.reset(key_reset)
+    obs, state = env.reset(key_reset, as_dict=True)
     
     print(list(obs.keys()))
     print(obs)
@@ -375,7 +394,7 @@ def test_mnist_signification_game():
 
     key, key_step = jax.random.split(key_step, 2)
     obs, state, reward, done, infos = env.step(key_step, state, actions)
-    
+
     key, key_step = jax.random.split(key_step, 2)
     obs, state, reward, done, infos = env.step(key_step, state, actions)
 
