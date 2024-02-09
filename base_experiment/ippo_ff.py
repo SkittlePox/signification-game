@@ -1,7 +1,7 @@
 """
 Based on PureJaxRL Implementation of PPO
 """
-
+from functools import partial
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
@@ -99,10 +99,6 @@ def initialize_listener(env, rng, config, learning_rate):
 
 def define_env(config):
     if config["ENV_DATASET"] == 'mnist':
-        class JustCast(object):
-            def __call__(self, pic):
-                return np.array(pic, dtype=jnp.float32)
-            
         def ret_0(iteration):
             return 0.5
         
@@ -112,12 +108,12 @@ def define_env(config):
         num_channels = 10
         num_classes = 10
 
-        import jax_dataloader as jdl
         from torchvision.datasets import MNIST
+        from utils import to_jax
 
-        mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=JustCast())
-        dataloader = jdl.DataLoader(mnist_dataset, 'pytorch', batch_size=num_listeners, shuffle=True)
-        env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataloader=dataloader, image_dim=28, **config["ENV_KWARGS"])
+        mnist_dataset = MNIST('/tmp/mnist/', download=True)
+        images, labels = to_jax(mnist_dataset, num_datapoints=100)
+        env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
         
         return env
 
@@ -130,24 +126,33 @@ def env_step(runner_state, env, config):
     # Technically at any state the listener always gets to classify something.
     # avail_listener_actions = jnp.stack(jnp.arange(env.num_classes)*len(env.listener_agents))
 
-    listener_rngs = jax.random.split(_rng, len(env.listener_agents))    
+    listener_rngs = jax.random.split(_rng, len(env.listener_agents))
     
-    
-    all_actions = []
-    # Collect the actions for all the agents for the current env state for each environment
-    for j in range(config["NUM_ENVS"]):
-        actions = []
-        log_probs = []
-        listener_obsv_env = listener_obsv[j]
-        for i in range(len(listener_train_states)):
-            listener_train_state, obsv, listener_rng = listener_train_states[i], listener_obsv_env[i], listener_rngs[i]
-            obsv = obsv.ravel()
-            policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
-            action = policy.sample(seed=listener_rng)
-            log_prob = policy.log_prob(action)
-            actions.append(action)
-            log_probs.append(log_prob)
-        all_actions.append((actions, log_probs))
+    # all_actions = []
+    # # Collect the actions for all the agents for the current env state for each environment
+    # for j in range(config["NUM_ENVS"]):
+    #     actions = []
+    #     log_probs = []
+    #     listener_obsv_env = listener_obsv[j]
+    #     for i in range(len(listener_train_states)):
+    #         listener_train_state, obsv, listener_rng = listener_train_states[i], listener_obsv_env[i], listener_rngs[i]
+    #         obsv = obsv.ravel()
+    #         policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
+    #         action = policy.sample(seed=listener_rng)
+    #         log_prob = policy.log_prob(action)
+    #         actions.append(action)
+    #         log_probs.append(log_prob)
+    #     all_actions.append((actions, log_probs))
+
+    def get_actions_and_log_probs(listener_train_state, obsv, listener_rng):
+        obsv = obsv.ravel()
+        policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
+        action = policy.sample(seed=listener_rng)
+        log_prob = policy.log_prob(action)
+        return action, log_prob
+
+    get_actions_and_log_probs_vmap = jax.vmap(get_actions_and_log_probs, in_axes=(0, 0, 0))
+    all_actions = [get_actions_and_log_probs_vmap(listener_train_states, listener_obsv_env, listener_rngs) for listener_obsv_env in listener_obsv]
     
     # env_act = unbatchify(action, env.agents, config["NUM_ENVS"], env.num_agents)
 
@@ -196,7 +201,7 @@ def test_rollout_execution(config, rng):
 
     # MAKE AGENTS
     rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
-    listener_rngs = jax.random.split(rng_l, len(env.listener_agents))   # Make an rng key for each listener
+    listener_rngs = jax.random.split(rng_l, len(env.listener_agents) * config["NUM_ENVS"])   # Make an rng key for each listener, for each environment
     
     listeners_stuff = [initialize_listener(env, x_rng, config, linear_schedule) for x_rng in listener_rngs]
     listener_networks, listener_train_states = zip(*listeners_stuff)
@@ -205,20 +210,18 @@ def test_rollout_execution(config, rng):
     # INIT ENV
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-    env = define_env(config)
-    obs_and_envs = map(lambda rng: env.reset(rng), reset_rng)
-    obsv, env_state = zip(*obs_and_envs)
+    obsv, env_state = jax.vmap(env.reset)(reset_rng)
 
-    def collect_rollouts(runner_state, config):
-        for _ in range(config['NUM_STEPS']):
-            runner_state, transition = env_step(runner_state, env, config)
+    def collect_rollouts(runner_state, env, config):
+        runner_state, _ = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
         return runner_state
+    
 
     rng, _rng = jax.random.split(rng)
     runner_state = (listener_train_states, env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
     # We don't need to include the networks, the apply function is stored in the train states.
 
-    runner_state = collect_rollouts(runner_state, config)
+    runner_state = collect_rollouts(runner_state, env, config)
     return {"runner_state": runner_state}   # Return the updated runner state
 
 

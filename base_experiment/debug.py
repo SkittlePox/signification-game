@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import jax.lax as lax
 
 #### This file is for helping me understand some jax functions ####
 
@@ -27,3 +28,19 @@ listeners2 = jax.lax.slice(jax.random.permutation(key, num_listeners).reshape((-
 print(speakers)
 print(listeners)
 print(listeners2)
+
+def cumsum_step(carry, x):
+    # Here, `carry` holds the accumulated sum so far, and `x` is the current item.
+    new_carry = carry + x
+    return new_carry, new_carry  # Pass the updated sum and also return it as the result
+
+# Initial carry value is 0 because we start with no sum
+carry_init = 0
+
+# Example input array
+xs = jnp.array([1, 2, 3, 4])
+
+# Run scan
+_, cumsum = lax.scan(cumsum_step, carry_init, xs)
+
+print(cumsum)
