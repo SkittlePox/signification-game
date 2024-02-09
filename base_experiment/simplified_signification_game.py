@@ -392,13 +392,13 @@ def test_mnist_signification_game():
             continue
         print(f"Action for {agent}: {agent_action}")
 
-    key, key_step = jax.random.split(key_step, 2)
+    key, key_step = jax.random.split(key, 2)
     obs, state, reward, done, infos = env.step(key_step, state, actions)
 
-    key, key_step = jax.random.split(key_step, 2)
+    key, key_step = jax.random.split(key, 2)
     obs, state, reward, done, infos = env.step(key_step, state, actions)
 
-    key, key_step = jax.random.split(key_step, 2)
+    key, key_step = jax.random.split(key, 2)
     obs, state, reward, done, infos = env.step(key_step, state, actions)
 
     print("channel_map:")
