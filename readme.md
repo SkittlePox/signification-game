@@ -58,7 +58,7 @@ Clone JaxMARL in a separate directory with:
     ```shell
     conda install -c conda-forge torchvision
     ```
-7. We also need jax-dataloader, which can be installed with pip:
+7. ~We also need jax-dataloader, which can be installed with pip:~
     ```shell
     pip install jax-dataloader
     ```

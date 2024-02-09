@@ -3,7 +3,6 @@ from typing import Tuple, Dict, Callable
 import numpy as np
 import jax, chex
 import jax.numpy as jnp
-import jax_dataloader as jdl
 from jax import lax
 from torchvision.datasets import MNIST
 from flax import struct
