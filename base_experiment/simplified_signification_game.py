@@ -95,11 +95,17 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             return speaker_obs, listener_obs
     
     # @partial(jax.jit, static_argnums=[0])
-    def step_env(self, key: chex.PRNGKey, state: State, actions: dict, as_dict: bool = False):
-        """Performs a step in the environment."""
+    def step_env(self, key: chex.PRNGKey, state: State, actions, as_dict: bool = False):
+        """Performs a step in the environment.
+        This is currently not jittable because of self.dataloader
+        """
         
-        speaker_actions = jnp.array([actions[agent] for agent in self.speaker_agents])
-        listener_actions = jnp.array([actions[agent] for agent in self.listener_agents])
+        if isinstance(actions, dict):
+            speaker_actions = jnp.array([actions[agent] for agent in self.speaker_agents])
+            listener_actions = jnp.array([actions[agent] for agent in self.listener_agents])
+        else:
+            speaker_actions = actions[0]
+            listener_actions = actions[1]
 
         ######## First, evaluate the current state.
 

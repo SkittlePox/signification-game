@@ -131,47 +131,50 @@ def env_step(runner_state, env, config):
     # avail_listener_actions = jnp.stack(jnp.arange(env.num_classes)*len(env.listener_agents))
 
     listener_rngs = jax.random.split(_rng, len(env.listener_agents))    
-    # We may need to have another iteration loop for the number of environments config["NUM_ENVS"]!!! Instead, I'll unsqueeze listener_obsv
-    # TODO: Probably just do this now.
-    listener_obsv = listener_obsv.squeeze()
     
-    actions = []
-    log_probs = []
-    for i in range(len(listener_train_states)):
-        listener_train_state, obsv, listener_rng = listener_train_states[i], listener_obsv[i], listener_rngs[i]
-        obsv = obsv.reshape((784))
-        policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
-        action = policy.sample(seed=listener_rng)
-        log_prob = policy.log_prob(action)
-        actions.append(action)
-        log_probs.append(log_prob)
     
-    # ac_in = (obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions[np.newaxis, :])
-    # pi, value = network.apply(listener_train_states.params, ac_in)    # TODO: Obviously fix this to solicit actions from individual agent networks.
-    # action = pi.sample(seed=_rng)
+    all_actions = []
+    # Collect the actions for all the agents for the current env state for each environment
+    for j in range(config["NUM_ENVS"]):
+        actions = []
+        log_probs = []
+        listener_obsv_env = listener_obsv[j]
+        for i in range(len(listener_train_states)):
+            listener_train_state, obsv, listener_rng = listener_train_states[i], listener_obsv_env[i], listener_rngs[i]
+            obsv = obsv.ravel()
+            policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
+            action = policy.sample(seed=listener_rng)
+            log_prob = policy.log_prob(action)
+            actions.append(action)
+            log_probs.append(log_prob)
+        all_actions.append((actions, log_probs))
     
     # env_act = unbatchify(action, env.agents, config["NUM_ENVS"], env.num_agents)
 
     # STEP ENV
-    rng, _rng = jax.random.split(rng)
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-    obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(    # TODO: Need to work on this.
-        rng_step, env_state, env_act
-    )
-    info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
-    done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
-    transition = Transition(
-        done_batch,
-        action.squeeze(),
-        value.squeeze(),
-        batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze(),
-        log_prob.squeeze(),
-        obs_batch,
-        info,
-        avail_actions
-    )
-    runner_state = (listener_train_states, env_state, obsv, done_batch, rng)
-    return runner_state, transition
+
+    step_env_vmap = jax.vmap(env.step_env, in_axes=(0, 0, 0))
+    obsv, env_state, rewards, dones, info = step_env_vmap(rng_step, env_state, [(actions[0], None) for actions in all_actions])
+
+
+    # obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(    # TODO: Need to work on this.
+    #     rng_step, env_state, env_act
+    # )
+    # info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
+    # done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
+    # transition = Transition(
+    #     dones,
+    #     action.squeeze(),
+    #     value.squeeze(),
+    #     batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze(),
+    #     log_prob.squeeze(),
+    #     obs_batch,
+    #     info,
+    #     avail_actions
+    # )
+    runner_state = (listener_train_states, env_state, obsv, dones, rng)
+    return runner_state
 
 
 def test_rollout_execution(config, rng):
@@ -203,9 +206,8 @@ def test_rollout_execution(config, rng):
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
     env = define_env(config)
-    obsv, env_state = jax.lax.map(lambda rng: env.reset(rng), reset_rng) # env.reset is currently not vmappable because it uses a dataloader, but if it were then this would be too
-
-    speaker_obsv, listener_obsv = obsv
+    obs_and_envs = map(lambda rng: env.reset(rng), reset_rng)
+    obsv, env_state = zip(*obs_and_envs)
 
     def collect_rollouts(runner_state, config):
         for _ in range(config['NUM_STEPS']):
@@ -213,7 +215,7 @@ def test_rollout_execution(config, rng):
         return runner_state
 
     rng, _rng = jax.random.split(rng)
-    runner_state = (listener_train_states, env_state, listener_obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
+    runner_state = (listener_train_states, env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
     # We don't need to include the networks, the apply function is stored in the train states.
 
     runner_state = collect_rollouts(runner_state, config)
