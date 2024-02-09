@@ -10,6 +10,8 @@ from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
 
+from utils import to_jax
+
 
 @struct.dataclass
 class State:
@@ -38,14 +40,15 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Callable, dataloader: jdl.DataLoader, image_dim: int, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Callable, dataset: tuple, image_dim: int, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
         self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
-        self.dataloader = dataloader    # We expect the dataloader to have batch_size=num_channels
+        self.env_images = dataset[0]
+        self.env_labels = dataset[1]
         self.image_dim = image_dim
         self.kwargs = kwargs
         # TODO: Move the above comments to an actual docstring
@@ -57,6 +60,19 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.observation_spaces = {**{agent: Discrete(num_classes) for agent in self.speaker_agents}, **{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.listener_agents}}
         self.action_spaces = {**{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.speaker_agents}, **{agent: Discrete(num_classes) for agent in self.listener_agents}}
 
+    @partial(jax.jit, static_argnums=(0,))
+    def load_images(self, key: chex.PRNGKey, num_imgs: int = -1):
+        """Returns a random set of images and labels."""
+        num_imgs = self.num_channels if num_imgs == -1 else num_imgs
+
+        key, subkey = jax.random.split(key)
+        indices = jax.random.randint(subkey, shape=(num_imgs,), minval=0, maxval=len(self.env_images))
+        
+        images = self.env_images[indices]
+        labels = self.env_labels[indices]
+        return images, labels
+    
+    
     @partial(jax.jit, static_argnums=[0, 2])
     def get_obs(self, state: State, as_dict: bool = False):
         """Returns the observation for each agent."""
@@ -93,12 +109,10 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 speaker_obs = None
             listener_obs = _listener_observation(jnp.arange(self.num_listeners), state)
             return speaker_obs, listener_obs
-    
-    # @partial(jax.jit, static_argnums=[0])
+
+    @partial(jax.jit, static_argnums=[0, 4])
     def step_env(self, key: chex.PRNGKey, state: State, actions, as_dict: bool = False):
-        """Performs a step in the environment.
-        This is currently not jittable because of self.dataloader
-        """
+        """Performs a step in the environment."""
         
         if isinstance(actions, dict):
             speaker_actions = jnp.array([actions[agent] for agent in self.speaker_agents])
@@ -148,11 +162,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         ######## Then, update the state.
 
-        key, k1, k2, k3, k4 = jax.random.split(key, 5)
+        key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
         
-        ##### This is the only line in this function that is not jittable #####
-        next_env_images, next_env_labels = next(iter(self.dataloader))  # We expect the dataloader to have batch_size=num_channels.
-        ##### This is the only line in this function that is not jittable #####
+        next_env_images, next_env_labels = self.load_images(k5)
 
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
@@ -201,13 +213,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         
         return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, dones, {}
     
+    @partial(jax.jit, static_argnums=[0, 2])
     def reset(self, key: chex.PRNGKey, as_dict: bool = False) -> Tuple[Dict, State]:
         """Reset the environment"""
-        key, k1, k2, k3, k4 = jax.random.split(key, 5)
+        key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
         
-        ##### This is the only line in this function that is not jittable #####
-        next_env_images, next_env_labels = next(iter(self.dataloader))  # We expect the dataloader to have batch_size=num_channels.
-        ##### This is the only line in this function that is not jittable #####
+        next_env_images, next_env_labels = self.load_images(k5)
 
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
@@ -291,6 +302,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             channel = state.previous_channel_map[channel_index]
             speaker_index = channel[0]
             listener_index = channel[1]
+
             
             image = lax.cond(speaker_index < self.num_speakers,
                              lambda _: state.speaker_images[speaker_index],
@@ -350,15 +362,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
 def test_mnist_signification_game():
     """Runs a simplified signification game on MNIST."""
-    
-    class FlattenAndCast(object):
-        def __call__(self, pic):
-            return np.ravel(np.array(pic, dtype=jnp.float32))
-    
-    class JustCast(object):
-        def __call__(self, pic):
-            return np.array(pic, dtype=jnp.float32)
-        
     def ret_0(iteration):
         return 0.5
     
@@ -368,22 +371,13 @@ def test_mnist_signification_game():
     num_channels = 10
     num_classes = 10
 
-    mnist_dataset = MNIST('/tmp/mnist/', download=True, transform=JustCast())
-    # If we use FlattenAndCast(), the images are flattened to be 1D arrays, otherwise they are 2D arrays
-    # The shape of the images will be (60000, 28, 28) if we use JustCast(), otherwise it is (60000, 784)
-
-    dataloader = jdl.DataLoader(mnist_dataset, 'pytorch', batch_size=num_listeners, shuffle=True)
-    # The batch size is the number of listeners, so calling next(training_generator) will return a tuple of length 2,
-    # where the first element is a batch of num_listeners images and the second element is a batch of num_listener labels.
-    
-    # Run this to verify the dataloader works:
-    # batch = next(iter(dataloader))
-    # print(batch)
+    mnist_dataset = MNIST('/tmp/mnist/', download=True)
+    images, labels = to_jax(mnist_dataset, num_datapoints=100)
 
     key = jax.random.PRNGKey(0)
     key, key_reset, key_act, key_step = jax.random.split(key, 4)
     
-    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataloader=dataloader, image_dim=28)
+    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28)
     obs, state = env.reset(key_reset, as_dict=True)
     
     print(list(obs.keys()))
