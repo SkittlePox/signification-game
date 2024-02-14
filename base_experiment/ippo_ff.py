@@ -5,20 +5,21 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
+import chex
 import numpy as np
 import optax
 from flax.linen.initializers import constant, orthogonal
-from typing import Sequence, NamedTuple, Any, Dict
+from typing import Sequence, NamedTuple, Any, Dict, Tuple
 from flax.training.train_state import TrainState
 import distrax
-from jaxmarl.wrappers.baselines import LogWrapper
+from jaxmarl.wrappers.baselines import LogWrapper, LogEnvState
 import jaxmarl
 import wandb
 import functools
 import matplotlib.pyplot as plt
 import hydra
 from omegaconf import OmegaConf
-from simplified_signification_game import SimplifiedSignificationGame
+from simplified_signification_game import SimplifiedSignificationGame, State
 
 
 
@@ -29,6 +30,19 @@ def batchify(x: dict, agent_list, num_actors):
 def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
     x = x.reshape((num_actors, num_envs, -1))
     return {a: x[i] for i, a in enumerate(agent_list)}
+
+class SimpSigGameLogWrapper(LogWrapper):
+    @partial(jax.jit, static_argnums=(0,))
+    def reset(self, keys: chex.PRNGKey) -> Tuple[chex.Array, State]:
+        obs, env_state = jax.vmap(self._env.reset)(keys)
+        state = jax.vmap(lambda e_state: LogEnvState(
+            e_state,
+            jnp.zeros((self._env.num_agents,)),
+            jnp.zeros((self._env.num_agents,)),
+            jnp.zeros((self._env.num_agents,)),
+            jnp.zeros((self._env.num_agents,)),
+        ))(env_state)
+        return obs, state
 
 
 # There should be two kinds of ActorCritics, one for listeners and one for speakers. For now, this will be for listeners.
@@ -119,48 +133,61 @@ def define_env(config):
 
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
-    listener_train_states, env_state, listener_obsv, last_done, rng = runner_state
+    listener_train_states, env_state, obsv, last_done, rng = runner_state
+    speaker_obsv, listener_obvs = obsv
 
-    # SELECT ACTION
+    # COLLECT ACTIONS FROM AGENTS
     rng, _rng = jax.random.split(rng)
-    # Technically at any state the listener always gets to classify something.
-    # avail_listener_actions = jnp.stack(jnp.arange(env.num_classes)*len(env.listener_agents))
+
+
+    # def get_listener_action(listener_train_state, obsv, listener_rng):
+    #     obsv = obsv.ravel()
+    #     policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
+
+    # The question I have at this point is is env_state batched already? The answer is yes, because it is being passed via runner_state. However, runner_state can be batched!
 
     listener_rngs = jax.random.split(_rng, len(env.listener_agents))
-    
-    # all_actions = []
-    # # Collect the actions for all the agents for the current env state for each environment
-    # for j in range(config["NUM_ENVS"]):
-    #     actions = []
-    #     log_probs = []
-    #     listener_obsv_env = listener_obsv[j]
-    #     for i in range(len(listener_train_states)):
-    #         listener_train_state, obsv, listener_rng = listener_train_states[i], listener_obsv_env[i], listener_rngs[i]
-    #         obsv = obsv.ravel()
-    #         policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
-    #         action = policy.sample(seed=listener_rng)
-    #         log_prob = policy.log_prob(action)
-    #         actions.append(action)
-    #         log_probs.append(log_prob)
-    #     all_actions.append((actions, log_probs))
 
-    def get_actions_and_log_probs(listener_train_state, obsv, listener_rng):
-        obsv = obsv.ravel()
-        policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
-        action = policy.sample(seed=listener_rng)
-        log_prob = policy.log_prob(action)
-        return action, log_prob
+    all_actions = []
+    actions_agg = []
+    log_probs_agg = []
+    # Collect the actions for all the agents for the current env state for each environment
+    for j in range(config["NUM_ENVS"]):
+        actions = []
+        log_probs = []
+        listener_obsv_env = listener_obvs[j]
+        for i in range(len(listener_train_states)):
+            listener_train_state, obsv, listener_rng = listener_train_states[i], listener_obsv_env[i], listener_rngs[i]
+            obsv = obsv.ravel()
+            # jax.debug.print("obsv: {y}", y=obsv)
+            policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
+            action = policy.sample(seed=listener_rng)
+            log_prob = policy.log_prob(action)
+            actions.append(action)
+            log_probs.append(log_prob)
+        all_actions.append((actions, log_probs))
+        actions_agg.append(actions)
+        log_probs_agg.append(log_probs)
 
-    get_actions_and_log_probs_vmap = jax.vmap(get_actions_and_log_probs, in_axes=(0, 0, 0))
-    all_actions = [get_actions_and_log_probs_vmap(listener_train_states, listener_obsv_env, listener_rngs) for listener_obsv_env in listener_obsv]
+    # def get_actions_and_log_probs(listener_train_state, obsv, listener_rng):
+    #     obsv = obsv.ravel()
+    #     policy, critic = listener_train_state.apply_fn(listener_train_state.params, obsv)
+    #     action = policy.sample(seed=listener_rng)
+    #     log_prob = policy.log_prob(action)
+    #     return action, log_prob
+
+    # get_actions_and_log_probs_vmap = jax.vmap(get_actions_and_log_probs, in_axes=(0, 0, 0))
+    # all_actions = [get_actions_and_log_probs_vmap(listener_train_states, listener_obsv_env, listener_rngs) for listener_obsv_env in listener_obsv]
     
     # env_act = unbatchify(action, env.agents, config["NUM_ENVS"], env.num_agents)
 
     # STEP ENV
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
 
-    step_env_vmap = jax.vmap(env.step_env, in_axes=(0, 0, 0))
-    obsv, env_state, rewards, dones, info = step_env_vmap(rng_step, env_state, [(actions[0], None) for actions in all_actions])
+    obsv, env_state, rewards, dones, info = env.step_env(rng_step[0], env_state[0], actions_agg[0])
+
+    # step_env_vmap = jax.vmap(env.step_env, in_axes=(0, 0, 0))
+    # obsv, env_state, rewards, dones, info = step_env_vmap(rng_step, env_state, actions_agg)
 
 
     # obsv, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0))(    # TODO: Need to work on this.
@@ -184,7 +211,7 @@ def env_step(runner_state, env, config):
 
 def test_rollout_execution(config, rng):
     env = define_env(config)
-    env = LogWrapper(env)
+    env = SimpSigGameLogWrapper(env)
 
     config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]
     config["NUM_UPDATES"] = (
@@ -210,7 +237,15 @@ def test_rollout_execution(config, rng):
     # INIT ENV
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-    obsv, env_state = jax.vmap(env.reset)(reset_rng)
+    obsv, log_env_state = env.reset(reset_rng)    # These should now be length config["NUM_ENVS"]
+
+    # TODO: These do not seem to be the right shape.
+    jax.debug.print("obsv prior: {y}", y=obsv)
+    jax.debug.print("env_state: {y}", y=log_env_state)
+
+    # Let's run a single step of env_step for now
+
+    
 
     def collect_rollouts(runner_state, env, config):
         runner_state, _ = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
@@ -218,10 +253,12 @@ def test_rollout_execution(config, rng):
     
 
     rng, _rng = jax.random.split(rng)
-    runner_state = (listener_train_states, env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
+    runner_state = (listener_train_states, log_env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
     # We don't need to include the networks, the apply function is stored in the train states.
 
-    runner_state = collect_rollouts(runner_state, env, config)
+    runner_state = env_step(runner_state, env, config)
+
+    # runner_state = collect_rollouts(runner_state, env, config)
     return {"runner_state": runner_state}   # Return the updated runner state
 
 

@@ -145,22 +145,26 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # Generate a reward vector containing all the rewards for each speaker and listener
         speaker_rewards = jnp.zeros(self.num_speakers + self.num_channels)
         listener_rewards = jnp.zeros(self.num_listeners)
+        initial_rewards_tuple = (speaker_rewards, listener_rewards, speaker_indices, listener_indices, rewards)
+        
+        def update_rewards(loop_idx, rewards_tuple):
+            speaker_rewards, listener_rewards, speaker_indices, listener_indices, rewards = rewards_tuple
+            # Update speaker and listener rewards
+            reward = rewards[loop_idx]
+            new_speaker_rewards = speaker_rewards.at[speaker_indices[loop_idx]].add(reward)
+            new_listener_rewards = listener_rewards.at[listener_indices[loop_idx]].add(reward)
+            return new_speaker_rewards, new_listener_rewards, speaker_indices, listener_indices, rewards
 
-        ##### This may also not be jittable #####
-        # Iterate over the speaker_indices and listener_indices and add the rewards to the correct indices
-        for i in range(self.num_channels):
-            speaker_rewards = speaker_rewards.at[speaker_indices[i]].add(rewards[i])
-            listener_rewards = listener_rewards.at[listener_indices[i]].add(rewards[i])
-        ##### This may also not be jittable #####
+        speaker_rewards_final, listener_rewards_final, _, _, _ = jax.lax.fori_loop(0, self.num_channels, update_rewards, initial_rewards_tuple)
+        speaker_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_speakers + self.num_channels), speaker_rewards_final)
+        listener_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_listeners), listener_rewards_final)
 
-        rewards = {**{agent: speaker_rewards[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards[i] for i, agent in enumerate(self.listener_agents)}}
+        rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
         rewards["__all__"] = sum(rewards.values())
         dones = {agent: False for agent in self.agents}
         dones["__all__"] = False
 
-
         ######## Then, update the state.
-
         key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
         
         next_env_images, next_env_labels = self.load_images(k5)
