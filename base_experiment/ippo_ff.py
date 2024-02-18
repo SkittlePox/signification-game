@@ -110,15 +110,13 @@ class ActorCriticListener(nn.Module):
 
 class Transition(NamedTuple):
     done: jnp.ndarray
-    action: jnp.ndarray
-    value: jnp.ndarray
+    speaker_action: jnp.ndarray
+    listener_action: jnp.ndarray
     reward: jnp.ndarray
-    log_prob: jnp.ndarray
+    speaker_log_prob: jnp.ndarray
+    listener_log_prob: jnp.ndarray
     speaker_obs: jnp.ndarray
     listener_obs: jnp.ndarray
-    info: jnp.ndarray
-    speaker_avail_actions: jnp.ndarray
-    listener_avail_actions: jnp.ndarray
 
 def initialize_listener(env, rng, config, learning_rate):
     listener_network = ActorCriticListener(action_dim=env.num_classes, image_dim=env.image_dim, config=config)
@@ -165,8 +163,8 @@ def define_env(config):
 
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
-    listener_train_states, log_env_state, obs, last_done, rng = runner_state
-    speaker_obs, listener_obs = obs  # These are batched properly
+    listener_train_states, log_env_state, obs, last_done, last_transition, rng = runner_state
+    speaker_obs, listener_obs = obs
 
     speaker_obs = speaker_obs.ravel()
     listener_obs = listener_obs.reshape((listener_obs.shape[0]*listener_obs.shape[1], listener_obs.shape[2]*listener_obs.shape[3]))
@@ -183,39 +181,44 @@ def env_step(runner_state, env, config):
     
     env_rngs = jax.random.split(_rng, len(listener_train_states))
 
-    out = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
+    # COLLECT LISTENER ACTIONS
+    listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
+    a = jnp.array([jnp.array([*o]) for o in listener_outputs])
+    listener_actions = jnp.asarray(a[:, 0], jnp.int32)
+    listener_log_probs = a[:, 1]
 
-    a = jnp.array([jnp.array([*o]) for o in out])
-    actions = jnp.asarray(a[:, 0], jnp.int32)
-    log_probs = a[:, 1]
+    listener_actions = listener_actions.reshape(config["NUM_ENVS"], -1)
+    listener_log_probs = listener_log_probs.reshape(config["NUM_ENVS"], -1)
 
-    actions = actions.reshape(config["NUM_ENVS"], -1)
-    log_probs = log_probs.reshape(config["NUM_ENVS"], -1)
-
-    # STEP ENV
+    # SIMULATE SPEAKER ACTIONS. TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-
-    # TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
     speaker_actions = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
     speaker_actions = jnp.expand_dims(speaker_actions, 0).repeat(config["NUM_ENVS"], axis=0)
     ###############################################
 
-    obsv, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_actions, actions))
+    # STEP ENV
+    new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_actions, listener_actions))
 
-    # IDK what this does but it may be important
-    # info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
-    # done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
-    # transition = Transition(
-    #     dones,
-    #     action.squeeze(),
-    #     value.squeeze(),
-    #     batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze(),
-    #     log_prob.squeeze(),
-    #     obs_batch,
-    #     info,
-    #     avail_actions
-    # )
-    runner_state = (listener_train_states, env_state, obsv, dones, _rng)
+    # rewards is a dictionary but it needs to be a jnp array
+    r = jnp.array([v for k,v in rewards.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
+    d = jnp.array([v for k,v in dones.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
+    # These appear to be in listener-speaker order!!! listeneres first, speakers second
+
+    r = r.reshape(config["NUM_ENVS"], -1)
+    d = d.reshape(config["NUM_ENVS"], -1)
+    
+    transition = Transition(
+        d,
+        speaker_actions,
+        listener_actions,
+        r,
+        jnp.zeros_like(speaker_actions),    # This will eventually be replaced by real speaker logprobs
+        listener_log_probs,
+        new_obs[0],
+        new_obs[1]
+    )
+
+    runner_state = (listener_train_states, env_state, new_obs, d, transition, _rng)
     return runner_state
 
 
@@ -237,7 +240,6 @@ def test_rollout_execution(config, rng):
         return config["LR"] * frac
 
     # MAKE AGENTS
-    """This is definitely wrong, the number of listener agents should be len(env.listener_agents) * config["NUM_ENVS"]"""
     rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
     listener_rngs = jax.random.split(rng_l, len(env.listener_agents) * config["NUM_ENVS"])   # Make an rng key for each listener
     
@@ -248,28 +250,30 @@ def test_rollout_execution(config, rng):
     # INIT ENV
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-    obsv, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
+    obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
 
-    # jax.debug.print("obsv prior: {y}", y=obsv)
-    # jax.debug.print("env_state: {y}", y=log_env_state)
-
-    # Let's run a single step of env_step for now
 
     def collect_rollouts(runner_state, env, config):
         runner_state, _ = jax.lax.scan(lambda rs, _: (env_step(rs, env, config), None), runner_state, None, config['NUM_STEPS'])
-        jax.lax.scan(env_step, )
-
         return runner_state
     
-
     rng, _rng = jax.random.split(rng)
-    runner_state = (listener_train_states, log_env_state, obsv, jnp.zeros((config["NUM_ENVS"], config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
+    init_transition = Transition(
+        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
+        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
+        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),
+        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
+        obs[0],
+        obs[1]
+    )
+    runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), init_transition, _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
     # We don't need to include the networks, the apply function is stored in the train states.
 
     # runner_state = env_step(runner_state, env, config)
-
     runner_state = collect_rollouts(runner_state, env, config)
-    return {"runner_state": runner_state}   # Return the updated runner state
+    return {"runner_state": runner_state}
 
 
 def make_train(config):
@@ -466,7 +470,8 @@ def test(config):
 
     rng = jax.random.PRNGKey(50)
     out = test_rollout_execution(config, rng)
-    # print(out['runner_state'])
+    print(out['runner_state'])
+    print("sdfsdf")
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
