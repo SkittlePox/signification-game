@@ -113,6 +113,7 @@ class Transition(NamedTuple):
     speaker_action: jnp.ndarray
     listener_action: jnp.ndarray
     reward: jnp.ndarray
+    value: jnp.ndarray
     speaker_log_prob: jnp.ndarray
     listener_log_prob: jnp.ndarray
     speaker_obs: jnp.ndarray
@@ -165,6 +166,8 @@ def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, log_env_state, obs, last_done, last_transition, rng = runner_state
     speaker_obs, listener_obs = obs
+    old_speaker_obs = speaker_obs
+    old_listener_obs = listener_obs
 
     speaker_obs = speaker_obs.ravel()
     listener_obs = listener_obs.reshape((listener_obs.shape[0]*listener_obs.shape[1], listener_obs.shape[2]*listener_obs.shape[3]))
@@ -174,18 +177,19 @@ def env_step(runner_state, env, config):
 
     def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
         _listener_obs_i = _listener_obs_i.ravel()
-        policy, critic = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
+        policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
         action = policy.sample(seed=__rng)
         log_prob = policy.log_prob(action)
-        return action, log_prob
+        return action, log_prob, value
     
     env_rngs = jax.random.split(_rng, len(listener_train_states))
 
     # COLLECT LISTENER ACTIONS
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
-    a = jnp.array([jnp.array([*o]) for o in listener_outputs])
-    listener_actions = jnp.asarray(a[:, 0], jnp.int32)
-    listener_log_probs = a[:, 1]
+    l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
+    listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
+    listener_log_probs = l_a[:, 1]
+    listener_values = l_a[:, 2]
 
     listener_actions = listener_actions.reshape(config["NUM_ENVS"], -1)
     listener_log_probs = listener_log_probs.reshape(config["NUM_ENVS"], -1)
@@ -194,6 +198,11 @@ def env_step(runner_state, env, config):
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
     speaker_actions = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
     speaker_actions = jnp.expand_dims(speaker_actions, 0).repeat(config["NUM_ENVS"], axis=0)
+    speaker_values = jnp.zeros((config["NUM_ENVS"] * env.num_speakers), dtype=jnp.float32)
+    speaker_log_probs = jnp.zeros_like(speaker_actions)    # This will eventually be replaced by real speaker logprobs
+
+    values = jnp.concatenate((speaker_values, listener_values))
+    v = values.reshape(config["NUM_ENVS"], -1)
     ###############################################
 
     ##### STEP ENV
@@ -204,24 +213,27 @@ def env_step(runner_state, env, config):
     d = jnp.array([v for k,v in dones.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
     # These appear to be in listener-speaker order. listeners first, speakers second
     # I can easily flip the order around:
-    r = jnp.concatenate([r[env.num_listeners:], r[:env.num_listeners]], axis=1)
-    d = jnp.concatenate([d[env.num_listeners:], d[:env.num_listeners]], axis=1)
+    r = jnp.vstack([r[env.num_listeners:], r[:env.num_listeners]])
+    d = jnp.vstack([d[env.num_listeners:], d[:env.num_listeners]])
 
     r = r.reshape(config["NUM_ENVS"], -1)
     d = d.reshape(config["NUM_ENVS"], -1)
+
+    # How do I put values in here??? What is the value for this transition?
     
     transition = Transition(
         d,
         speaker_actions,
         listener_actions,
         r,
-        jnp.zeros_like(speaker_actions),    # This will eventually be replaced by real speaker logprobs
+        v,
+        speaker_log_probs,
         listener_log_probs,
-        new_obs[0],
-        new_obs[1]
+        old_speaker_obs,
+        old_listener_obs
     )
 
-    runner_state = (listener_train_states, env_state, new_obs, d, transition, _rng)
+    runner_state = (listener_train_states, env_state, new_obs, d, transition, _rng) # I'm not sure if we should return the new_obs or the old obs
     return runner_state
 
 
@@ -265,7 +277,8 @@ def test_rollout_execution(config, rng):
         jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
         jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
         jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
-        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),
+        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # rewards
+        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # values
         jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
         jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
         obs[0],
@@ -282,7 +295,7 @@ def test_rollout_execution(config, rng):
 
 def make_train(config):
     env = define_env(config)
-    env = LogWrapper(env)
+    env = SimpSigGameLogWrapper(env)
 
     config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]
     config["NUM_UPDATES"] = (
@@ -300,35 +313,38 @@ def make_train(config):
     def train(rng):
         # MAKE AGENTS
         rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
-        listener_rngs = jax.random.split(rng_l, len(env.listener_agents))   # Make an rng key for each listener
-        listeners_stuff = jax.lax.map(lambda x: initialize_listener(env, x[0], x[1], config, learning_rate=linear_schedule), (env.listener_agents, listener_rngs))
+        listener_rngs = jax.random.split(rng_l, len(env.listener_agents) * config["NUM_ENVS"])   # Make an rng key for each listener
+        
+        listeners_stuff = [initialize_listener(env, x_rng, config, linear_schedule) for x_rng in listener_rngs]
         listener_networks, listener_train_states = zip(*listeners_stuff)
-        # TODO: Add speaker networks and train states
+        # TODO eventually: Add speaker networks and train states
 
         # INIT ENV
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-        env = define_env(config)
-
-        obsv, env_state = jax.lax.map(lambda rng: env.reset(rng), reset_rng) # env.reset is currently not vmappable because it uses a dataloader, but if it were then this would be too
-
+        obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
+        
         # TRAIN LOOP
-        def _update_step(update_runner_state, unused):
-            # COLLECT TRAJECTORIES
+        def _update_step(update_runner_state, env, config):
             runner_state, update_steps = update_runner_state
-            runner_state, traj_batch = jax.lax.scan(
-                env_step, runner_state, None, config["NUM_STEPS"]
-            )
+            
+            # COLLECT TRAJECTORIES
+            runner_state, traj_batch = jax.lax.scan(lambda rs, _: (env_step(rs, env, config), None), runner_state, None, config['NUM_STEPS'])
 
             # CALCULATE ADVANTAGE
-            listener_train_states, env_state, last_obs, last_done, rng = runner_state
-            last_obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
-            avail_actions = jnp.ones((config["NUM_ACTORS"], env.action_space(env.agents[0]).n))
-            ac_in = (last_obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions)
-            _, last_val = network.apply(train_state.params, ac_in)
-            last_val = last_val.squeeze()
+            listener_train_states, log_env_state, obs, last_done, last_transition, rng = runner_state
 
-            # I believe we don't need to modify this
+
+            # last_obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
+            # avail_actions = jnp.ones((config["NUM_ACTORS"], env.action_space(env.agents[0]).n))
+            ac_in = (last_obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions)
+            _, last_val = network.apply(train_state.params, ac_in)  # I'm not sure why this is being done, I'm pretty sure we've already done this calculation in env_step, why not just use those calculations
+            # Ohhhh this appears to be calucating the value difference between the previous observations and the current observations.
+            last_val = last_val.squeeze()
+            # I think this is collecting logprobs? I think las_val is log_probs but I'm not sure
+            # Somehow we need to get the logprobs from the listener_train_states i think
+
+            # Where do the values come from???
             def _calculate_gae(traj_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
                     gae, next_value = gae_and_next_value
@@ -354,6 +370,8 @@ def make_train(config):
                 return advantages, advantages + traj_batch.value
 
             advantages, targets = _calculate_gae(traj_batch, last_val)
+
+            ##### Just get the above working for now.
 
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
@@ -459,11 +477,26 @@ def make_train(config):
             return (runner_state, update_steps), None
 
         rng, _rng = jax.random.split(rng)
-        runner_state = (listener_train_states, env_state, obsv, jnp.zeros((config["NUM_ACTORS"]), dtype=bool), _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for initial actions, and _rng
-        runner_state, _ = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
-            _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
+        init_transition = Transition(
+            jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
+            jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+            jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
+            jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),
+            jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+            jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
+            obs[0],
+            obs[1]
         )
-        return {"runner_state": runner_state}   # Return the updated runner state
+        # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
+        runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), init_transition, _rng)
+
+        # runner_state, _ = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+        #     _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
+        # )
+
+        runner_state = _update_step((runner_state, 0), env, config)
+        # runner_state = collect_rollouts(runner_state, env, config)
+        return {"runner_state": runner_state}
 
     return train
 
