@@ -169,7 +169,7 @@ def env_step(runner_state, env, config):
     speaker_obs = speaker_obs.ravel()
     listener_obs = listener_obs.reshape((listener_obs.shape[0]*listener_obs.shape[1], listener_obs.shape[2]*listener_obs.shape[3]))
 
-    # COLLECT ACTIONS FROM AGENTS
+    ##### COLLECT ACTIONS FROM AGENTS
     rng, _rng = jax.random.split(rng)
 
     def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
@@ -196,13 +196,16 @@ def env_step(runner_state, env, config):
     speaker_actions = jnp.expand_dims(speaker_actions, 0).repeat(config["NUM_ENVS"], axis=0)
     ###############################################
 
-    # STEP ENV
+    ##### STEP ENV
     new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_actions, listener_actions))
 
     # rewards is a dictionary but it needs to be a jnp array
     r = jnp.array([v for k,v in rewards.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
     d = jnp.array([v for k,v in dones.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
-    # These appear to be in listener-speaker order!!! listeneres first, speakers second
+    # These appear to be in listener-speaker order. listeners first, speakers second
+    # I can easily flip the order around:
+    r = jnp.concatenate([r[env.num_listeners:], r[:env.num_listeners]], axis=1)
+    d = jnp.concatenate([d[env.num_listeners:], d[:env.num_listeners]], axis=1)
 
     r = r.reshape(config["NUM_ENVS"], -1)
     d = d.reshape(config["NUM_ENVS"], -1)
@@ -268,10 +271,11 @@ def test_rollout_execution(config, rng):
         obs[0],
         obs[1]
     )
-    runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), init_transition, _rng) # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
+    # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
+    runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), init_transition, _rng)
     # We don't need to include the networks, the apply function is stored in the train states.
 
-    # runner_state = env_step(runner_state, env, config)
+    # runner_state = env_step(runner_state, env, config)    # This was for testing a single env_step
     runner_state = collect_rollouts(runner_state, env, config)
     return {"runner_state": runner_state}
 
