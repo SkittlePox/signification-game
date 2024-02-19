@@ -164,7 +164,7 @@ def define_env(config):
 
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
-    listener_train_states, log_env_state, obs, last_done, last_transition, rng = runner_state
+    listener_train_states, log_env_state, obs, last_done, rng = runner_state
     speaker_obs, listener_obs = obs
     old_speaker_obs = speaker_obs
     old_listener_obs = listener_obs
@@ -233,8 +233,8 @@ def env_step(runner_state, env, config):
         old_listener_obs
     )
 
-    runner_state = (listener_train_states, env_state, new_obs, d, transition, _rng) # I'm not sure if we should return the new_obs or the old obs
-    return runner_state
+    runner_state = (listener_train_states, env_state, new_obs, d, _rng) # I'm not sure if we should return the new_obs or the old obs
+    return runner_state, transition
 
 
 def test_rollout_execution(config, rng):
@@ -267,30 +267,26 @@ def test_rollout_execution(config, rng):
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
     obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
 
+    # init_transition = Transition( # This is no longer needed, but it may be helpful to know what types and shapes things are in the future.
+    #     jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
+    #     jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+    #     jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
+    #     jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # rewards
+    #     jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # values
+    #     jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+    #     jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
+    #     obs[0],
+    #     obs[1]
+    # )
 
-    def collect_rollouts(runner_state, env, config):
-        runner_state, _ = jax.lax.scan(lambda rs, _: (env_step(rs, env, config), None), runner_state, None, config['NUM_STEPS'])
-        return runner_state
-    
     rng, _rng = jax.random.split(rng)
-    init_transition = Transition(
-        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
-        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
-        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # rewards
-        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # values
-        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
-        obs[0],
-        obs[1]
-    )
-    # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
-    runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), init_transition, _rng)
-    # We don't need to include the networks, the apply function is stored in the train states.
+    runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
-    # runner_state = env_step(runner_state, env, config)    # This was for testing a single env_step
-    runner_state = collect_rollouts(runner_state, env, config)
-    return {"runner_state": runner_state}
+    # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
+    runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
+    # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
+    
+    return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 
 def make_train(config):
@@ -333,7 +329,6 @@ def make_train(config):
 
             # CALCULATE ADVANTAGE
             listener_train_states, log_env_state, obs, last_done, last_transition, rng = runner_state
-
 
             # last_obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
             # avail_actions = jnp.ones((config["NUM_ACTORS"], env.action_space(env.agents[0]).n))
@@ -488,15 +483,15 @@ def make_train(config):
             obs[1]
         )
         # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
-        runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), init_transition, _rng)
+        runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
         # runner_state, _ = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
         #     _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
         # )
 
-        runner_state = _update_step((runner_state, 0), env, config)
+        runner_state, traj_batch = _update_step((runner_state, 0), env, config)
         # runner_state = collect_rollouts(runner_state, env, config)
-        return {"runner_state": runner_state}
+        return {"runner_state": runner_state, "traj_batch": traj_batch}
 
     return train
 
@@ -508,7 +503,6 @@ def test(config):
     rng = jax.random.PRNGKey(50)
     out = test_rollout_execution(config, rng)
     print(out['runner_state'])
-    print("sdfsdf")
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
