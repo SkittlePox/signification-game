@@ -289,14 +289,20 @@ def test_rollout_execution(config, rng):
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 
-def update_minbatch(train_state, batch_info, config):
-    listener_ts, traj_batch, advantages, targets = batch_info
+def update_minbatch(batch, train_state, config, rng):
+    trans_batch, advantages, targets = batch
 
-    def _loss_fn(params, traj_batch, gae, targets):
+    def _loss_fn(train_state, traj_batch, gae, targets):
+        # TODO: This needs to be re-worked. It should be written on a per-agent basis!
+
         # RERUN NETWORK
-        pi, value = network.apply(params,
-                                    (traj_batch.obs, traj_batch.done, traj_batch.avail_actions))
-        log_prob = pi.log_prob(traj_batch.action)
+        # pi, value = network.apply(params,
+        #                             (traj_batch.obs, traj_batch.done, traj_batch.avail_actions))
+        # log_prob = pi.log_prob(traj_batch.action) # importantly this is a different action than the one from the policy
+
+
+        listener_actions = listener_actions.reshape(config["NUM_ENVS"], -1)
+        listener_log_probs = listener_log_probs.reshape(config["NUM_ENVS"], -1)
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = traj_batch.value + (
@@ -333,7 +339,7 @@ def update_minbatch(train_state, batch_info, config):
 
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
     total_loss, grads = grad_fn(
-        train_state.params, traj_batch, advantages, targets
+        train_state, trans_batch, advantages, targets
     )
     train_state = train_state.apply_gradients(grads=grads)
     return train_state, total_loss
@@ -431,8 +437,6 @@ def make_train(config):
                 # I need to now isolate out the speaker and listener transitions, advantages, and targets
                 speaker_train_state, listener_train_state = train_state
 
-                listener_train_state = listener_train_state.reshape((config["NUM_ENVS"]))
-
                 listener_trans_batch = Transition(
                     done=trans_batch.done[..., env.num_speakers:],
                     speaker_action=trans_batch.speaker_action[..., env.num_speakers:],
@@ -448,8 +452,25 @@ def make_train(config):
                 listener_advantages = advantages[..., env.num_speakers:]
                 listener_targets = targets[..., env.num_speakers:]
 
-                # This isn't going to work because listener_train_state is not batched the same way as the other variables.
-                listener_batch = (listener_train_state, listener_trans_batch, listener_advantages.squeeze(), listener_targets.squeeze())
+                listener_train_state_minibatch = tuple(listener_train_state[i:i + env.num_listeners] for i in range(0, len(listener_train_state), env.num_listeners))
+
+                listener_trans_minibatch = Transition(
+                    done=listener_trans_batch.done.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.done.shape[1:])),
+                    speaker_action=listener_trans_batch.speaker_action.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.speaker_action.shape[1:])),
+                    listener_action=listener_trans_batch.listener_action.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.listener_action.shape[1:])),
+                    reward=listener_trans_batch.reward.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.reward.shape[1:])),
+                    value=listener_trans_batch.value.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.value.shape[1:])),
+                    speaker_log_prob=listener_trans_batch.speaker_log_prob,
+                    listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.listener_log_prob.shape[1:])),
+                    speaker_obs=listener_trans_batch.speaker_obs,
+                    listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.listener_obs.shape[1:]))
+                )
+
+                listener_advantages_minibatch = listener_advantages.reshape((config["NUM_MINIBATCHES"], -1, config["NUM_ENVS"], env.num_listeners))
+                listener_targets_minibatch = listener_targets.reshape((config["NUM_MINIBATCHES"], -1, config["NUM_ENVS"], env.num_listeners))
+
+                # I'm going to reshape everything
+                listener_minibatch = (listener_trans_minibatch, listener_advantages_minibatch, listener_targets_minibatch)
 
                 # batch = (trans_batch, advantages.squeeze(), targets.squeeze())
                 # permutation = jax.random.permutation(_rng, env.num_listeners)
@@ -474,17 +495,21 @@ def make_train(config):
                 # )
 
                 # Let's also ignore minibatching for now
+                # We are definitely going to need to minibatch actually.
 
                 # I'm going to have to re-write _update_minbatch, since it executes the agents
 
-                train_state, total_loss = jax.lax.scan(
-                    update_minbatch, train_state, minibatches
-                )
+                # train_state, total_loss = jax.lax.scan(
+                #     lambda mb, ls: update_minbatch, train_state, minibatches
+                # )
+                train_state, total_loss = jax.lax.scan(lambda lb, _: update_minbatch(lb, listener_train_state_minibatch, config, _rng), listener_minibatch, None, config['NUM_STEPS'] - 1)
                 update_state = (train_state, trans_batch, advantages, targets, rng)
                 return update_state, total_loss
 
             train_state = (None, listener_train_states) # In the future this will be a tuple containing also speaker_train_state
             update_state = (train_state, trimmed_transition_batch, advantages, targets, rng)
+
+            update_state, total_loss = _update_epoch(update_state)
             
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config["UPDATE_EPOCHS"]
