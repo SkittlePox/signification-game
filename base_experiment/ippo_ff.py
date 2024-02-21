@@ -162,6 +162,7 @@ def define_env(config):
         
         return env
 
+
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, log_env_state, obs, last_done, rng = runner_state
@@ -233,7 +234,8 @@ def env_step(runner_state, env, config):
         old_listener_obs
     )
 
-    runner_state = (listener_train_states, env_state, new_obs, d, _rng) # I'm not sure if we should return the new_obs or the old obs
+    runner_state = (listener_train_states, env_state, new_obs, d, _rng) # We should be returning the new_obs, the agents haven't seen it yet.
+    # I'm not sure if d here is correct
     return runner_state, transition
 
 
@@ -325,22 +327,29 @@ def make_train(config):
             runner_state, update_steps = update_runner_state
             
             # COLLECT TRAJECTORIES
-            runner_state, traj_batch = jax.lax.scan(lambda rs, _: (env_step(rs, env, config), None), runner_state, None, config['NUM_STEPS'])
+            runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
+            # transition_batch is an instance of Transition with batched sub-objects
+            # The shape of transition_batch is (num_steps, num_envs, ...) because it's the output of jax.lax.scan, which enumerates over steps
+
+            # Instead of executing the agents on the final observation to get their values, we are simply going to ignore the last observation from traj_batch.
+            # We'll need to get the final value in transition_batch and cut off the last index
+            # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
+            trimmed_transition_batch = Transition(
+                done=transition_batch.done[:-1, ...],
+                speaker_action=transition_batch.speaker_action[:-1, ...],
+                listener_action=transition_batch.listener_action[:-1, ...],
+                reward=transition_batch.reward[:-1, ...],
+                value=transition_batch.value[:-1, ...],
+                speaker_log_prob=transition_batch.speaker_log_prob[:-1, ...],
+                listener_log_prob=transition_batch.listener_log_prob[:-1, ...],
+                speaker_obs=transition_batch.speaker_obs[:-1, ...],
+                listener_obs=transition_batch.listener_obs[:-1, ...]
+            )
 
             # CALCULATE ADVANTAGE
-            listener_train_states, log_env_state, obs, last_done, last_transition, rng = runner_state
+            listener_train_state, log_env_state, last_obs, last_done, rng = runner_state
 
-            # last_obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
-            # avail_actions = jnp.ones((config["NUM_ACTORS"], env.action_space(env.agents[0]).n))
-            ac_in = (last_obs_batch[np.newaxis, :], last_done[np.newaxis, :], avail_actions)
-            _, last_val = network.apply(train_state.params, ac_in)  # I'm not sure why this is being done, I'm pretty sure we've already done this calculation in env_step, why not just use those calculations
-            # Ohhhh this appears to be calucating the value difference between the previous observations and the current observations.
-            last_val = last_val.squeeze()
-            # I think this is collecting logprobs? I think las_val is log_probs but I'm not sure
-            # Somehow we need to get the logprobs from the listener_train_states i think
-
-            # Where do the values come from???
-            def _calculate_gae(traj_batch, last_val):
+            def _calculate_gae(trans_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
                     gae, next_value = gae_and_next_value
                     done, value, reward = (
@@ -349,22 +358,19 @@ def make_train(config):
                         transition.reward,
                     )
                     delta = reward + config["GAMMA"] * next_value * (1 - done) - value
-                    gae = (
-                            delta
-                            + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
-                    )
+                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
                     return (gae, value), gae
 
                 _, advantages = jax.lax.scan(
                     _get_advantages,
                     (jnp.zeros_like(last_val), last_val),
-                    traj_batch,
+                    trans_batch,
                     reverse=True,
                     unroll=16,
                 )
-                return advantages, advantages + traj_batch.value
+                return advantages, advantages + trans_batch.value
 
-            advantages, targets = _calculate_gae(traj_batch, last_val)
+            advantages, targets = _calculate_gae(trimmed_transition_batch, transition_batch.value[-1])
 
             ##### Just get the above working for now.
 
@@ -419,15 +425,37 @@ def make_train(config):
                     train_state = train_state.apply_gradients(grads=grads)
                     return train_state, total_loss
 
-                train_state, traj_batch, advantages, targets, rng = update_state
+                train_state, trans_batch, advantages, targets, rng = update_state
                 rng, _rng = jax.random.split(rng)
 
-                batch = (traj_batch, advantages.squeeze(), targets.squeeze())
-                permutation = jax.random.permutation(_rng, config["NUM_ACTORS"])
+                # I need to now isolate out the speaker and listener transitions, advantages, and targets
+                speaker_train_state, listener_train_state = train_state
 
-                shuffled_batch = jax.tree_util.tree_map(
-                    lambda x: jnp.take(x, permutation, axis=1), batch
+                listener_trans_batch = Transition(
+                    done=trans_batch.done[..., env.num_speakers:],
+                    speaker_action=trans_batch.speaker_action[..., env.num_speakers:],
+                    listener_action=trans_batch.listener_action[..., env.num_speakers:],
+                    reward=trans_batch.reward[..., env.num_speakers:],
+                    value=trans_batch.value[..., env.num_speakers:],
+                    speaker_log_prob=trans_batch.speaker_log_prob[..., env.num_speakers:],
+                    listener_log_prob=trans_batch.listener_log_prob[..., env.num_speakers:],
+                    speaker_obs=trans_batch.speaker_obs[..., env.num_speakers:],
+                    listener_obs=trans_batch.listener_obs[..., env.num_speakers:]
                 )
+                
+                listener_advantages = advantages[..., env.num_speakers:]
+                listener_targets = targets[..., env.num_speakers:]
+
+                listener_batch = (listener_trans_batch, listener_advantages.squeeze(), listener_targets.squeeze())
+
+                # batch = (trans_batch, advantages.squeeze(), targets.squeeze())
+                # permutation = jax.random.permutation(_rng, env.num_listeners)
+
+                # shuffled_batch = jax.tree_util.tree_map(
+                #     lambda x: jnp.take(x, permutation, axis=1), listener_batch
+                # )
+
+                # If we shuffle, then we may not be able to keep track of which agent to execute. So no shuffling for now.
 
                 minibatches = jax.tree_util.tree_map(
                     lambda x: jnp.swapaxes(
@@ -439,16 +467,20 @@ def make_train(config):
                         1,
                         0,
                     ),
-                    shuffled_batch,
+                    listener_batch,
                 )
+
+                # I'm going to have to re-write _update_minbatch, since it executes the agents
 
                 train_state, total_loss = jax.lax.scan(
                     _update_minbatch, train_state, minibatches
                 )
-                update_state = (train_state, traj_batch, advantages, targets, rng)
+                update_state = (train_state, trans_batch, advantages, targets, rng)
                 return update_state, total_loss
 
-            update_state = (train_state, traj_batch, advantages, targets, rng)
+            train_state = (None, listener_train_states) # In the future this will be a tuple containing also speaker_train_state
+            update_state = (train_state, trimmed_transition_batch, advantages, targets, rng)
+            
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config["UPDATE_EPOCHS"]
             )
@@ -472,16 +504,6 @@ def make_train(config):
             return (runner_state, update_steps), None
 
         rng, _rng = jax.random.split(rng)
-        init_transition = Transition(
-            jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
-            jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-            jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
-            jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),
-            jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-            jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
-            obs[0],
-            obs[1]
-        )
         # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
         runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
@@ -525,7 +547,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    test()
+    main()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
