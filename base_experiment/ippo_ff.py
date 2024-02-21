@@ -162,6 +162,12 @@ def define_env(config):
         
         return env
 
+def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
+    _listener_obs_i = _listener_obs_i.ravel()
+    policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
+    action = policy.sample(seed=__rng)
+    log_prob = policy.log_prob(action)
+    return action, log_prob, value
 
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
@@ -175,14 +181,6 @@ def env_step(runner_state, env, config):
 
     ##### COLLECT ACTIONS FROM AGENTS
     rng, _rng = jax.random.split(rng)
-
-    def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
-        _listener_obs_i = _listener_obs_i.ravel()
-        policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
-        action = policy.sample(seed=__rng)
-        log_prob = policy.log_prob(action)
-        return action, log_prob, value
-    
     env_rngs = jax.random.split(_rng, len(listener_train_states))
 
     # COLLECT LISTENER ACTIONS
@@ -291,6 +289,56 @@ def test_rollout_execution(config, rng):
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 
+def update_minbatch(train_state, batch_info, config):
+    listener_ts, traj_batch, advantages, targets = batch_info
+
+    def _loss_fn(params, traj_batch, gae, targets):
+        # RERUN NETWORK
+        pi, value = network.apply(params,
+                                    (traj_batch.obs, traj_batch.done, traj_batch.avail_actions))
+        log_prob = pi.log_prob(traj_batch.action)
+
+        # CALCULATE VALUE LOSS
+        value_pred_clipped = traj_batch.value + (
+                value - traj_batch.value
+        ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
+        value_losses = jnp.square(value - targets)
+        value_losses_clipped = jnp.square(value_pred_clipped - targets)
+        value_loss = (
+                0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()
+        )
+
+        # CALCULATE ACTOR LOSS
+        ratio = jnp.exp(log_prob - traj_batch.log_prob)
+        gae = (gae - gae.mean()) / (gae.std() + 1e-8)
+        loss_actor1 = ratio * gae
+        loss_actor2 = (
+                jnp.clip(
+                    ratio,
+                    1.0 - config["CLIP_EPS"],
+                    1.0 + config["CLIP_EPS"],
+                )
+                * gae
+        )
+        loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
+        loss_actor = loss_actor.mean()
+        entropy = pi.entropy().mean()
+
+        total_loss = (
+                loss_actor
+                + config["VF_COEF"] * value_loss
+                - config["ENT_COEF"] * entropy
+        )
+        return total_loss, (value_loss, loss_actor, entropy)
+
+    grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
+    total_loss, grads = grad_fn(
+        train_state.params, traj_batch, advantages, targets
+    )
+    train_state = train_state.apply_gradients(grads=grads)
+    return train_state, total_loss
+
+
 def make_train(config):
     env = define_env(config)
     env = SimpSigGameLogWrapper(env)
@@ -348,6 +396,7 @@ def make_train(config):
 
             # CALCULATE ADVANTAGE
             listener_train_state, log_env_state, last_obs, last_done, rng = runner_state
+            # listener_train_state is a tuple of TrainStates of length num_envs * env.num_listeners
 
             def _calculate_gae(trans_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
@@ -376,60 +425,13 @@ def make_train(config):
 
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
-                def _update_minbatch(train_state, batch_info):
-                    traj_batch, advantages, targets = batch_info
-
-                    def _loss_fn(params, traj_batch, gae, targets):
-                        # RERUN NETWORK
-                        pi, value = network.apply(params,
-                                                  (traj_batch.obs, traj_batch.done, traj_batch.avail_actions))
-                        log_prob = pi.log_prob(traj_batch.action)
-
-                        # CALCULATE VALUE LOSS
-                        value_pred_clipped = traj_batch.value + (
-                                value - traj_batch.value
-                        ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
-                        value_losses = jnp.square(value - targets)
-                        value_losses_clipped = jnp.square(value_pred_clipped - targets)
-                        value_loss = (
-                                0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()
-                        )
-
-                        # CALCULATE ACTOR LOSS
-                        ratio = jnp.exp(log_prob - traj_batch.log_prob)
-                        gae = (gae - gae.mean()) / (gae.std() + 1e-8)
-                        loss_actor1 = ratio * gae
-                        loss_actor2 = (
-                                jnp.clip(
-                                    ratio,
-                                    1.0 - config["CLIP_EPS"],
-                                    1.0 + config["CLIP_EPS"],
-                                )
-                                * gae
-                        )
-                        loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
-                        loss_actor = loss_actor.mean()
-                        entropy = pi.entropy().mean()
-
-                        total_loss = (
-                                loss_actor
-                                + config["VF_COEF"] * value_loss
-                                - config["ENT_COEF"] * entropy
-                        )
-                        return total_loss, (value_loss, loss_actor, entropy)
-
-                    grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
-                    total_loss, grads = grad_fn(
-                        train_state.params, traj_batch, advantages, targets
-                    )
-                    train_state = train_state.apply_gradients(grads=grads)
-                    return train_state, total_loss
-
                 train_state, trans_batch, advantages, targets, rng = update_state
                 rng, _rng = jax.random.split(rng)
 
                 # I need to now isolate out the speaker and listener transitions, advantages, and targets
                 speaker_train_state, listener_train_state = train_state
+
+                listener_train_state = listener_train_state.reshape((config["NUM_ENVS"]))
 
                 listener_trans_batch = Transition(
                     done=trans_batch.done[..., env.num_speakers:],
@@ -446,7 +448,8 @@ def make_train(config):
                 listener_advantages = advantages[..., env.num_speakers:]
                 listener_targets = targets[..., env.num_speakers:]
 
-                listener_batch = (listener_trans_batch, listener_advantages.squeeze(), listener_targets.squeeze())
+                # This isn't going to work because listener_train_state is not batched the same way as the other variables.
+                listener_batch = (listener_train_state, listener_trans_batch, listener_advantages.squeeze(), listener_targets.squeeze())
 
                 # batch = (trans_batch, advantages.squeeze(), targets.squeeze())
                 # permutation = jax.random.permutation(_rng, env.num_listeners)
@@ -457,23 +460,25 @@ def make_train(config):
 
                 # If we shuffle, then we may not be able to keep track of which agent to execute. So no shuffling for now.
 
-                minibatches = jax.tree_util.tree_map(
-                    lambda x: jnp.swapaxes(
-                        jnp.reshape(
-                            x,
-                            [x.shape[0], config["NUM_MINIBATCHES"], -1]
-                            + list(x.shape[2:]),
-                        ),
-                        1,
-                        0,
-                    ),
-                    listener_batch,
-                )
+                # minibatches = jax.tree_util.tree_map(
+                #     lambda x: jnp.swapaxes(
+                #         jnp.reshape(
+                #             x,
+                #             [x.shape[0], config["NUM_MINIBATCHES"], -1]
+                #             + list(x.shape[2:]),
+                #         ),
+                #         1,
+                #         0,
+                #     ),
+                #     listener_batch,
+                # )
+
+                # Let's also ignore minibatching for now
 
                 # I'm going to have to re-write _update_minbatch, since it executes the agents
 
                 train_state, total_loss = jax.lax.scan(
-                    _update_minbatch, train_state, minibatches
+                    update_minbatch, train_state, minibatches
                 )
                 update_state = (train_state, trans_batch, advantages, targets, rng)
                 return update_state, total_loss
