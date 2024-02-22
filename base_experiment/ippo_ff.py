@@ -315,17 +315,6 @@ def update_minbatch(batch, train_state, config, rng):
         lo = traj_batch.listener_obs[0][:, :, 0, ...].reshape((*traj_batch.listener_obs.shape[1:-3], traj_batch.listener_obs.shape[-2]*traj_batch.listener_obs.shape[-1]))
         la = traj_batch.listener_action[0][..., 0]
         o = _get_individual_listener_logprobs_for_traj_action(train_state[0][0], lo, la)    # Hopefull this will work just fine
-        # log_prob_out = [_get]
-        # policy, value = [ for _listener_train_state_i, _listener_obs_i in zip(train_state, traj_batch.obs)]
-        
-        listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
-        l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
-        listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
-        listener_log_probs = l_a[:, 1]
-        listener_values = l_a[:, 2]
-
-        listener_actions = listener_actions.reshape(config["NUM_ENVS"], -1)
-        listener_log_probs = listener_log_probs.reshape(config["NUM_ENVS"], -1)
 
 
         # CALCULATE VALUE LOSS
