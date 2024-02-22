@@ -303,21 +303,18 @@ def update_minbatch(batch, train_state, config, rng):
         # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ actions
 
         # An important difference here than above is that the obs and traj_actions should actually be batched, while the train state is not.
+        # def _get_batched_listener_logprobs_for_traj_action(traj_minibatch):
         def _get_individual_listener_logprobs_for_traj_action(_listener_train_state_i, _listener_obs_i, _traj_action_i):
             policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
             log_prob = policy.log_prob(_traj_action_i)
             return log_prob
 
         # I can't do a vmap call here because I need to manually iterate through train_state.
-
-        # log_probs = jax.vmap(_get_individual_listener_logprobs_for_traj_action)(train_state, traj_batch.listener_obs, traj_batch.listener_action)
-
-        # I need to iterate over batches too! 
-        # The first two zeroes are for the minibatch items. The second indexing are for selecting the agent
-        # We also have to reshape the observations
-        lo = traj_batch.listener_obs[0][0][:, 0, ...].reshape((-1, traj_batch.listener_obs.shape[-1]*traj_batch.listener_obs.shape[-1]))
-        la = traj_batch.listener_action[0][0][:, 0, ...]
-        o = _get_individual_listener_logprobs_for_traj_action(train_state[0][0], lo, la)
+        # I can iterate through a double-nested for loop
+        # The first zeros for the following three lines correspond to batches, and the second zeros correspond to agents.
+        lo = traj_batch.listener_obs[0][:, :, 0, ...].reshape((*traj_batch.listener_obs.shape[1:-3], traj_batch.listener_obs.shape[-2]*traj_batch.listener_obs.shape[-1]))
+        la = traj_batch.listener_action[0][..., 0]
+        o = _get_individual_listener_logprobs_for_traj_action(train_state[0][0], lo, la)    # Hopefull this will work just fine
         # log_prob_out = [_get]
         # policy, value = [ for _listener_train_state_i, _listener_obs_i in zip(train_state, traj_batch.obs)]
         
