@@ -300,9 +300,36 @@ def update_minbatch(batch, train_state, config, rng):
         #                             (traj_batch.obs, traj_batch.done, traj_batch.avail_actions))
         # log_prob = pi.log_prob(traj_batch.action) # importantly this is a different action than the one from the policy
 
+        # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ actions
+
+        # An important difference here than above is that the obs and traj_actions should actually be batched, while the train state is not.
+        def _get_individual_listener_logprobs_for_traj_action(_listener_train_state_i, _listener_obs_i, _traj_action_i):
+            policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
+            log_prob = policy.log_prob(_traj_action_i)
+            return log_prob
+
+        # I can't do a vmap call here because I need to manually iterate through train_state.
+
+        # log_probs = jax.vmap(_get_individual_listener_logprobs_for_traj_action)(train_state, traj_batch.listener_obs, traj_batch.listener_action)
+
+        # I need to iterate over batches too! 
+        # The first two zeroes are for the minibatch items. The second indexing are for selecting the agent
+        # We also have to reshape the observations
+        lo = traj_batch.listener_obs[0][0][:, 0, ...].reshape((-1, traj_batch.listener_obs.shape[-1]*traj_batch.listener_obs.shape[-1]))
+        la = traj_batch.listener_action[0][0][:, 0, ...]
+        o = _get_individual_listener_logprobs_for_traj_action(train_state[0][0], lo, la)
+        # log_prob_out = [_get]
+        # policy, value = [ for _listener_train_state_i, _listener_obs_i in zip(train_state, traj_batch.obs)]
+        
+        listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
+        l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
+        listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
+        listener_log_probs = l_a[:, 1]
+        listener_values = l_a[:, 2]
 
         listener_actions = listener_actions.reshape(config["NUM_ENVS"], -1)
         listener_log_probs = listener_log_probs.reshape(config["NUM_ENVS"], -1)
+
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = traj_batch.value + (
@@ -337,7 +364,7 @@ def update_minbatch(batch, train_state, config, rng):
         )
         return total_loss, (value_loss, loss_actor, entropy)
 
-    grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
+    grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=True)
     total_loss, grads = grad_fn(
         train_state, trans_batch, advantages, targets
     )
@@ -439,14 +466,14 @@ def make_train(config):
 
                 listener_trans_batch = Transition(
                     done=trans_batch.done[..., env.num_speakers:],
-                    speaker_action=trans_batch.speaker_action[..., env.num_speakers:],
-                    listener_action=trans_batch.listener_action[..., env.num_speakers:],
+                    speaker_action=trans_batch.speaker_action,
+                    listener_action=trans_batch.listener_action,
                     reward=trans_batch.reward[..., env.num_speakers:],
                     value=trans_batch.value[..., env.num_speakers:],
-                    speaker_log_prob=trans_batch.speaker_log_prob[..., env.num_speakers:],
-                    listener_log_prob=trans_batch.listener_log_prob[..., env.num_speakers:],
-                    speaker_obs=trans_batch.speaker_obs[..., env.num_speakers:],
-                    listener_obs=trans_batch.listener_obs[..., env.num_speakers:]
+                    speaker_log_prob=trans_batch.speaker_log_prob,
+                    listener_log_prob=trans_batch.listener_log_prob,
+                    speaker_obs=trans_batch.speaker_obs,
+                    listener_obs=trans_batch.listener_obs
                 )
                 
                 listener_advantages = advantages[..., env.num_speakers:]
@@ -509,7 +536,7 @@ def make_train(config):
             train_state = (None, listener_train_states) # In the future this will be a tuple containing also speaker_train_state
             update_state = (train_state, trimmed_transition_batch, advantages, targets, rng)
 
-            update_state, total_loss = _update_epoch(update_state)
+            update_state, total_loss = _update_epoch(update_state, None)
             
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config["UPDATE_EPOCHS"]
