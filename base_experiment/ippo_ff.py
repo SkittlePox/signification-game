@@ -292,56 +292,34 @@ def test_rollout_execution(config, rng):
 def update_minbatch(batch, train_state, config, rng):
     trans_batch, advantages, targets = batch
 
-    def _loss_fn(train_state, traj_batch, gae, targets):
-        # TODO: This needs to be re-worked. It should be written on a per-agent basis!
-
-        # RERUN NETWORK
-        # pi, value = network.apply(params,
-        #                             (traj_batch.obs, traj_batch.done, traj_batch.avail_actions))
-        # log_prob = pi.log_prob(traj_batch.action) # importantly this is a different action than the one from the policy
-
-        # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ actions
-
-        # An important difference here than above is that the obs and traj_actions should actually be batched, while the train state is not.
-        # def _get_batched_listener_logprobs_for_traj_action(traj_minibatch):
-        def _get_individual_listener_logprobs_for_traj_action(_listener_train_state_i, _listener_obs_i, _traj_action_i):
-            policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
-            log_prob = policy.log_prob(_traj_action_i)
-            return log_prob
-
-        # I can't do a vmap call here because I need to manually iterate through train_state.
-        # I can iterate through a double-nested for loop
-        # The first zeros for the following three lines correspond to batches, and the second zeros correspond to agents.
-        lo = traj_batch.listener_obs[0][:, :, 0, ...].reshape((*traj_batch.listener_obs.shape[1:-3], traj_batch.listener_obs.shape[-2]*traj_batch.listener_obs.shape[-1]))
-        la = traj_batch.listener_action[0][..., 0]
-        o = _get_individual_listener_logprobs_for_traj_action(train_state[0][0], lo, la)    # Hopefull this will work just fine
-
+    def _loss_fn(listener_i_train_state, listener_i_obs, listener_i_action, traj_batch_value_for_i, traj_batch_log_prob_for_i, targets_for_i, gae_for_i):    # I actually think I need to move the for loop outside of the function!!! I'll do it after I get proper loss calculations I guess
+        # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
+        listener_i_policy, listener_i_value = listener_i_train_state.apply_fn(listener_i_train_state.params, listener_i_obs)
+        listener_i_log_prob = listener_i_policy.log_prob(listener_i_action)
 
         # CALCULATE VALUE LOSS
-        value_pred_clipped = traj_batch.value + (
-                value - traj_batch.value
+        value_pred_clipped = traj_batch_value_for_i + (
+                listener_i_value - traj_batch_value_for_i
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
-        value_losses = jnp.square(value - targets)
-        value_losses_clipped = jnp.square(value_pred_clipped - targets)
-        value_loss = (
-                0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()
-        )
+        value_losses = jnp.square(traj_batch_value_for_i - targets_for_i)
+        value_losses_clipped = jnp.square(value_pred_clipped - targets_for_i)
+        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()) # This is throwing an error
 
         # CALCULATE ACTOR LOSS
-        ratio = jnp.exp(log_prob - traj_batch.log_prob)
-        gae = (gae - gae.mean()) / (gae.std() + 1e-8)
-        loss_actor1 = ratio * gae
+        ratio = jnp.exp(listener_i_log_prob - traj_batch_log_prob_for_i)
+        gae_for_i = (gae_for_i - gae_for_i.mean()) / (gae_for_i.std() + 1e-8)
+        loss_actor1 = ratio * gae_for_i
         loss_actor2 = (
                 jnp.clip(
                     ratio,
                     1.0 - config["CLIP_EPS"],
                     1.0 + config["CLIP_EPS"],
                 )
-                * gae
+                * gae_for_i
         )
         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
         loss_actor = loss_actor.mean()
-        entropy = pi.entropy().mean()
+        entropy = listener_i_policy.entropy().mean()
 
         total_loss = (
                 loss_actor
@@ -349,12 +327,29 @@ def update_minbatch(batch, train_state, config, rng):
                 - config["ENT_COEF"] * entropy
         )
         return total_loss, (value_loss, loss_actor, entropy)
+        
 
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=True)
+    # for b in range(len(train_state)):   # Iterate over minibatches
+    #     for l in range(len(train_state[0])):    # Iterate over listeners
+    b, l = 0, 0
+    
+    listener_i_train_state = train_state[b][l]
+    trans_batch_obs_for_i = trans_batch.listener_obs[b][:, :, l, ...].reshape((*trans_batch.listener_obs.shape[1:-3], trans_batch.listener_obs.shape[-2]*trans_batch.listener_obs.shape[-1]))
+    trans_batch_action_for_i = trans_batch.listener_action[b][..., l]
+
+    trans_batch_value_for_i = trans_batch.value[b, :, :, l]
+    trans_batch_log_prob_for_i = trans_batch.listener_log_prob[b, :, :, l] # I'm not sure this is the right shape
+    targets_for_i = targets[b, :, :, l]
+    gae_for_i = advantages[b, :, :, l]
+
     total_loss, grads = grad_fn(
-        train_state, trans_batch, advantages, targets
+        listener_i_train_state, trans_batch_obs_for_i, trans_batch_action_for_i, trans_batch_value_for_i, trans_batch_log_prob_for_i, targets_for_i, gae_for_i
     )
-    train_state = train_state.apply_gradients(grads=grads)
+    
+    # I don't know why the line below is failing
+    listener_i_train_state = listener_i_train_state.apply_gradients(grads=grads)
+
     return train_state, total_loss
 
 
@@ -493,6 +488,7 @@ def make_train(config):
                 # )
 
                 # If we shuffle, then we may not be able to keep track of which agent to execute. So no shuffling for now.
+                # Also, shuffling really shouldn't matter in this setting, but it will matter for the full experiment. SimplifiedSigGame is just a bandit.
 
                 # minibatches = jax.tree_util.tree_map(
                 #     lambda x: jnp.swapaxes(
