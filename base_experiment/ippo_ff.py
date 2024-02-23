@@ -289,7 +289,7 @@ def test_rollout_execution(config, rng):
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 
-def update_minbatch(batch, train_state, config, rng):
+def update_minibatch(batch, train_state, config, rng):
     trans_batch, advantages, targets = batch
 
     def _loss_fn(listener_i_train_state, listener_i_obs, listener_i_action, traj_batch_value_for_i, traj_batch_log_prob_for_i, targets_for_i, gae_for_i):    # I actually think I need to move the for loop outside of the function!!! I'll do it after I get proper loss calculations I guess
@@ -435,8 +435,6 @@ def make_train(config):
 
             advantages, targets = _calculate_gae(trimmed_transition_batch, transition_batch.value[-1])
 
-            ##### Just get the above working for now.
-
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
                 train_state, trans_batch, advantages, targets, rng = update_state
@@ -476,42 +474,23 @@ def make_train(config):
 
                 listener_advantages_minibatch = listener_advantages.reshape((config["NUM_MINIBATCHES"], -1, config["NUM_ENVS"], env.num_listeners))
                 listener_targets_minibatch = listener_targets.reshape((config["NUM_MINIBATCHES"], -1, config["NUM_ENVS"], env.num_listeners))
-
-                # I'm going to reshape everything
                 listener_minibatch = (listener_trans_minibatch, listener_advantages_minibatch, listener_targets_minibatch)
 
                 # batch = (trans_batch, advantages.squeeze(), targets.squeeze())
                 # permutation = jax.random.permutation(_rng, env.num_listeners)
-
                 # shuffled_batch = jax.tree_util.tree_map(
                 #     lambda x: jnp.take(x, permutation, axis=1), listener_batch
                 # )
-
                 # If we shuffle, then we may not be able to keep track of which agent to execute. So no shuffling for now.
                 # Also, shuffling really shouldn't matter in this setting, but it will matter for the full experiment. SimplifiedSigGame is just a bandit.
-
-                # minibatches = jax.tree_util.tree_map(
-                #     lambda x: jnp.swapaxes(
-                #         jnp.reshape(
-                #             x,
-                #             [x.shape[0], config["NUM_MINIBATCHES"], -1]
-                #             + list(x.shape[2:]),
-                #         ),
-                #         1,
-                #         0,
-                #     ),
-                #     listener_batch,
-                # )
-
-                # Let's also ignore minibatching for now
-                # We are definitely going to need to minibatch actually.
-
-                # I'm going to have to re-write _update_minbatch, since it executes the agents
-
-                # train_state, total_loss = jax.lax.scan(
-                #     lambda mb, ls: update_minbatch, train_state, minibatches
-                # )
-                train_state, total_loss = jax.lax.scan(lambda lb, _: update_minbatch(lb, listener_train_state_minibatch, config, _rng), listener_minibatch, None, config['NUM_STEPS'] - 1)
+                
+                # Wait maybe this call needs to be done on a per-agent basis!! I actually think that could make sense! The interior function should be scannable! Single train state per call to update_minibatch!
+                # Yeah so I can pass whole batches in, but I need to do it once per listener! So there will be two for loops here iterating over batches and listeners. 
+                # In the inner-most loop there will be a call to jax.lax.scan which updates each train_state (one train state for each listener)
+                # Maybe _update_epoch could be for a single train state then. I think that makes sense. However, I'll be re-doing some computation (mostly just lines 446-477)
+                # I don't totally understand what this scan call is about. It seems to be iterating over steps.
+                # The below line fails
+                train_state, total_loss = jax.lax.scan(lambda lb, _: update_minibatch(lb, listener_train_state_minibatch, config, _rng), listener_minibatch, None, config['NUM_STEPS'] - 1)
                 update_state = (train_state, trans_batch, advantages, targets, rng)
                 return update_state, total_loss
 
@@ -550,7 +529,7 @@ def make_train(config):
         #     _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
         # )
 
-        runner_state, traj_batch = _update_step((runner_state, 0), env, config)
+        runner_state, traj_batch = _update_step((runner_state, 0), env, config) # This performs a single update step, obviously, for testing purposes
         # runner_state = collect_rollouts(runner_state, env, config)
         return {"runner_state": runner_state, "traj_batch": traj_batch}
 
