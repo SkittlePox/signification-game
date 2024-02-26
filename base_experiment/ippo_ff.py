@@ -544,25 +544,25 @@ def test_rollout_execution(config, rng):
     return train
 
 
-def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config, rng):
+def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config, rng):
     # j is for iterating through the steps, the leftmost shape
-    
-    def _loss_fn(listener_i_train_state, trans_batch, advantages, targets):    # I actually think I need to move the for loop outside of the function!!! I'll do it after I get proper loss calculations I guess
+
+    def _loss_fn(j, train_state, trans_batch, advantages, targets):
         # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
-        listener_i_policy, listener_i_value = listener_i_train_state.apply_fn(listener_i_train_state.params, listener_i_obs)
-        listener_i_log_prob = listener_i_policy.log_prob(listener_i_action)
+        listener_i_policy, listener_i_value = train_state.apply_fn(train_state.params, trans_batch.listener_obs[j].ravel())
+        listener_i_log_prob = listener_i_policy.log_prob(trans_batch.listener_action[j])
 
         # CALCULATE VALUE LOSS
-        value_pred_clipped = traj_batch_value_for_i + (
-                listener_i_value - traj_batch_value_for_i
+        value_pred_clipped = trans_batch.value[j] + (
+                listener_i_value - trans_batch.value[j]
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
-        value_losses = jnp.square(traj_batch_value_for_i - targets_for_i)
-        value_losses_clipped = jnp.square(value_pred_clipped - targets_for_i)
-        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()) # This is throwing an error
+        value_losses = jnp.square(trans_batch.value[j] - targets[j])
+        value_losses_clipped = jnp.square(value_pred_clipped - targets[j])
+        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean())
 
         # CALCULATE ACTOR LOSS
-        ratio = jnp.exp(listener_i_log_prob - traj_batch_log_prob_for_i)
-        gae_for_i = (gae_for_i - gae_for_i.mean()) / (gae_for_i.std() + 1e-8)
+        ratio = jnp.exp(listener_i_log_prob - trans_batch.listener_log_prob[j])
+        gae_for_i = (advantages[j] - advantages[j].mean()) / (advantages[j].std() + 1e-8)
         loss_actor1 = ratio * gae_for_i
         loss_actor2 = (
                 jnp.clip(
@@ -583,10 +583,8 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
         )
         return total_loss, (value_loss, loss_actor, entropy)
         
-
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=True)
-    # for b in range(len(train_state)):   # Iterate over minibatches
-    #     for l in range(len(train_state[0])):    # Iterate over listeners
+
     
     # listener_i_train_state = train_state[b][l]
     # trans_batch_obs_for_i = trans_batch.listener_obs[b][:, :, l, ...].reshape((*trans_batch.listener_obs.shape[1:-3], trans_batch.listener_obs.shape[-2]*trans_batch.listener_obs.shape[-1]))
@@ -598,17 +596,16 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
     # gae_for_i = advantages[b, :, :, l]
 
     total_loss, grads = grad_fn(
-        listener_i_train_state, 
+        j, listener_train_state, listener_trans_batch_i, listener_advantages_i, listener_targets_i
     )
 
     jax.debug.print("Before applying gradients")
     
-    # I'm so dumb, grads is not iterable for some reason.
-    listener_i_train_state = listener_i_train_state.apply_gradients(grads=grads)
+    listener_train_state = listener_train_state.apply_gradients(grads=grads)
 
     jax.debug.print("Getting through first iteration!!!")
 
-    return listener_i_train_state, total_loss
+    return listener_train_state, total_loss
 
 
 def make_train(config):
@@ -768,6 +765,10 @@ def make_train(config):
 
                 # update_minibatch has two jobs: 1) to handle things in a batched way and 2) to do it over the number of steps-1
                 o1 = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config, rng)
+                
+                # Eventually there will be a lax.scan call of update_minibatch I think
+
+
                 # _update_epoch should be run on a per-agent basis I think
                 # update_state, total_loss = _update_epoch_listener(update_state, None)
                 # update_state, loss_info = jax.lax.scan(
