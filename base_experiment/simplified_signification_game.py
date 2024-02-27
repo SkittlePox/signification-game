@@ -322,9 +322,16 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             return image, label, label_is_from_speaker
         
         images, labels, labels_are_from_speaker = get_image_label(jnp.arange(num_channels), state)
-
+ 
+        fig.set_dpi(300)  
+        fig.suptitle("Signification Game Round\nTop Label: Source, Destination (Listener, Speaker, or Environment) \n Bottom Label: Previous Channel Mapping", fontsize=10)
         for i in range(num_channels):
-            ax = fig.add_subplot(2, num_channels, i+1)
+            if i < num_channels // 2:
+                row = 0
+            else:
+                row = 1
+    
+            ax = fig.add_subplot(2, num_channels // 2, (i % (num_channels // 2)) + 1 + (row * (num_channels // 2)))
             ax.imshow(
                 images[i],
                 cmap="Greys",
@@ -334,22 +341,26 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 interpolation="none"
             )
             ax.set_aspect("equal")
-            ax.margins(0)
+            ax.margins(0.05)  
             ax.annotate(
                 ('S' if labels_are_from_speaker[i] else 'E') + str(labels[i]) + ('' if actions is None else ' L' + str(actions[f"listener_{i}"])),
                 fontsize=12,
                 color="black",
-                xy=(0, 0),
-                xycoords="axes pixels",
-                xytext=(0, 60),
+                xy=(0.5, 0), 
+                xycoords="axes fraction",
+                xytext=(0, -15), 
+                textcoords="offset points",
+                ha='center'  
             )
             ax.annotate(
                 str(state.previous_channel_map[i]),
                 fontsize=10,
                 color="black",
-                xy=(0, 0),
-                xycoords="axes pixels",
-                xytext=(0, -25),
+                xy=(0.5, 0),  
+                xycoords="axes fraction",
+                xytext=(0, -30),  
+                textcoords="offset points",
+                ha='center'  
             )
             ax.set_xticks([])
             ax.set_yticks([])
