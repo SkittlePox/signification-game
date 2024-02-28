@@ -544,8 +544,8 @@ def test_rollout_execution(config, rng):
     return train
 
 
-def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config, rng):
-    # j is for iterating through the steps, the leftmost shape
+def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config):
+    # j is for iterating through batches
 
     def _loss_fn(params, listener_obs, listener_actions, values, log_probs, advantages, targets):
         # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
@@ -556,13 +556,13 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
         value_pred_clipped = values + (
                 listener_i_value - values
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
-        value_losses = jnp.square(values - targets[j])
-        value_losses_clipped = jnp.square(value_pred_clipped - targets[j])
+        value_losses = jnp.square(values - targets)
+        value_losses_clipped = jnp.square(value_pred_clipped - targets)
         value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean())
 
         # CALCULATE ACTOR LOSS
         ratio = jnp.exp(listener_i_log_prob - log_probs)
-        gae_for_i = (advantages[j] - advantages[j].mean()) / (advantages[j].std() + 1e-8)
+        gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         loss_actor1 = ratio * gae_for_i
         loss_actor2 = (
                 jnp.clip(
@@ -582,34 +582,20 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
                 - config["ENT_COEF"] * entropy
         )
         return total_loss, (value_loss, loss_actor, entropy)
-        
+
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
-
-    
-    # listener_i_train_state = train_state[b][l]
-    # trans_batch_obs_for_i = trans_batch.listener_obs[b][:, :, l, ...].reshape((*trans_batch.listener_obs.shape[1:-3], trans_batch.listener_obs.shape[-2]*trans_batch.listener_obs.shape[-1]))
-    # trans_batch_action_for_i = trans_batch.listener_action[b][..., l]
-
-    # trans_batch_value_for_i = trans_batch.value[b, :, :, l]
-    # trans_batch_log_prob_for_i = trans_batch.listener_log_prob[b, :, :, l] # I'm not sure this is the right shape
-    # targets_for_i = targets[b, :, :, l]
-    # gae_for_i = advantages[b, :, :, l]
 
     total_loss, grads = grad_fn(
         listener_train_state.params,
-        listener_trans_batch_i.listener_obs[j].ravel(),
+        listener_trans_batch_i.listener_obs[j],
         listener_trans_batch_i.listener_action[j], 
         listener_trans_batch_i.value[j], 
         listener_trans_batch_i.listener_log_prob[j],
-        listener_advantages_i, 
-        listener_targets_i
+        listener_advantages_i[j], 
+        listener_targets_i[j]
     )
-
-    jax.debug.print("Before applying gradients")
     
     listener_train_state = listener_train_state.apply_gradients(grads=grads)
-
-    jax.debug.print("Getting through first iteration!!!")
 
     return listener_train_state, total_loss
 
@@ -650,7 +636,7 @@ def make_train(config):
             runner_state, update_steps = update_runner_state
             
             # COLLECT TRAJECTORIES
-            runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
+            runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)
             # transition_batch is an instance of Transition with batched sub-objects
             # The shape of transition_batch is (num_steps, num_envs, ...) because it's the output of jax.lax.scan, which enumerates over steps
 
@@ -696,142 +682,85 @@ def make_train(config):
 
             advantages, targets = _calculate_gae(trimmed_transition_batch, transition_batch.value[-1])
 
-            # I want to know what the shapes are of things at this point. I will split up by agent!
-
             # UPDATE NETWORK (this is listener-specific)
-
-            # I don't think we need this function anymore...
-            def _update_epoch_listener(update_state, unused):
-                listener_train_state_i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, rng = update_state
-                rng, _rng = jax.random.split(rng)
-                
-
-                # listener_train_state_minibatch = tuple(listener_train_state[i:i + env.num_listeners] for i in range(0, len(listener_train_state), env.num_listeners))
-
-                # listener_trans_minibatch = Transition(
-                #     done=listener_trans_batch.done.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.done.shape[1:])),
-                #     speaker_action=listener_trans_batch.speaker_action.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.speaker_action.shape[1:])),
-                #     listener_action=listener_trans_batch.listener_action.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.listener_action.shape[1:])),
-                #     reward=listener_trans_batch.reward.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.reward.shape[1:])),
-                #     value=listener_trans_batch.value.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.value.shape[1:])),
-                #     speaker_log_prob=listener_trans_batch.speaker_log_prob,
-                #     listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.listener_log_prob.shape[1:])),
-                #     speaker_obs=listener_trans_batch.speaker_obs,
-                #     listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.listener_obs.shape[1:]))
-                # )
-
-                # listener_advantages_minibatch = listener_advantages.reshape((config["NUM_MINIBATCHES"], -1, config["NUM_ENVS"], env.num_listeners))
-                # listener_targets_minibatch = listener_targets.reshape((config["NUM_MINIBATCHES"], -1, config["NUM_ENVS"], env.num_listeners))
-                # listener_minibatch = (listener_trans_minibatch, listener_advantages_minibatch, listener_targets_minibatch)
-
-                # batch = (trans_batch, advantages.squeeze(), targets.squeeze())
-                # permutation = jax.random.permutation(_rng, env.num_listeners)
-                # shuffled_batch = jax.tree_util.tree_map(
-                #     lambda x: jnp.take(x, permutation, axis=1), listener_batch
-                # )
-                # If we shuffle, then we may not be able to keep track of which agent to execute. So no shuffling for now.
-                # Also, shuffling really shouldn't matter in this setting, but it will matter for the full experiment. SimplifiedSigGame is just a bandit.
-                
-                # I'm going to split the batc
-
-
-                # Wait maybe this call needs to be done on a per-agent basis!! I actually think that could make sense! The interior function should be scannable! Single train state per call to update_minibatch!
-                # Yeah so I can pass whole batches in, but I need to do it once per listener! So there will be two for loops here iterating over batches and listeners. 
-                # In the inner-most loop there will be a call to jax.lax.scan which updates each train_state (one train state for each listener)
-                # Maybe _update_epoch could be for a single train state then. I think that makes sense. However, I'll be re-doing some computation (mostly just lines 446-477)
-                # I think _update_epoch should actually be for a single train state, i.e. a single agent. That means we need to cut up the Transitions.
-                # I don't totally understand what this scan call is about. It seems to be iterating over steps.
-                # Actually idk, maybe I can just fix this bug.
-                # The below line fails
-                listener_train_state, total_loss = jax.lax.scan(lambda lb, _: update_minibatch(lb, listener_train_state_minibatch, config, _rng), listener_minibatch, None, config['NUM_STEPS'] - 1)
-                update_state = (listener_train_state, trans_batch, advantages, targets, rng)
-                return update_state, total_loss
-
-            def _update_a_listener(i_rng, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):
-                i, rng = i_rng
-                
+            def _update_a_listener(i, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):                
                 listener_train_state_i = listener_train_states[i]
-                listener_advantages_i = listener_advantages[:, i]
-                listener_targets_i = listener_targets[:, i]
+                listener_advantages_i = listener_advantages[:, i].reshape((config["NUM_MINIBATCHES"], -1))
+                listener_targets_i = listener_targets[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 
                 listener_trans_batch_i = Transition(
-                    done=listener_trans_batch.done[:, i],
+                    done=listener_trans_batch.done[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_action=listener_trans_batch.speaker_action,
-                    listener_action=jnp.float32(listener_trans_batch.listener_action[:, i]),
-                    reward=listener_trans_batch.reward[:, i],
-                    value=listener_trans_batch.value[:, i],
+                    listener_action=jnp.float32(listener_trans_batch.listener_action[:, i].reshape((config["NUM_MINIBATCHES"], -1))),
+                    reward=listener_trans_batch.reward[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    value=listener_trans_batch.value[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_log_prob=listener_trans_batch.speaker_log_prob,
-                    listener_log_prob=listener_trans_batch.listener_log_prob[:, i],
-                    speaker_obs=jnp.float32(listener_trans_batch.speaker_obs),
-                    listener_obs=listener_trans_batch.listener_obs[:, i, ...]
+                    listener_log_prob=listener_trans_batch.listener_log_prob[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    speaker_obs=jnp.float32(listener_trans_batch.speaker_obs.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.speaker_obs.shape[1:]))),
+                    listener_obs=listener_trans_batch.listener_obs[:, i, ...].reshape((config["NUM_MINIBATCHES"], -1, listener_trans_batch.listener_obs[:, i, ...].shape[1] * listener_trans_batch.listener_obs[:, i, ...].shape[2]))
                 )
 
-                # update_state = (listener_train_state_i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, rng)
+                # new_listener_train_state_i, total_loss = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config)                
+                # Iterate through batches
+                new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
-                # update_minibatch has two jobs: 1) to handle things in a batched way and 2) to do it over the number of steps-1
-                # Okay this works now. Eventually there will be a lax.scan call of update_minibatch I think
-                new_listener_train_state_i, total_loss = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config, rng)
-                
                 return new_listener_train_state_i, total_loss
 
-                # _update_epoch should be run on a per-agent basis I think
-                # update_state, total_loss = _update_epoch_listener(update_state, None)
-                # update_state, loss_info = jax.lax.scan(
-                #     _update_epoch, update_state, None, config["UPDATE_EPOCHS"]
-                # )
-
+ 
                 # metric = traj_batch.info
                 # rng = update_state[-1]
 
-                def callback(metric):
-                    wandb.log(
-                        {
-                            "returns": metric["returned_episode_returns"][-1, :].mean(),
-                            "env_step": metric["update_steps"]
-                            * config["NUM_ENVS"]
-                            * config["NUM_STEPS"],
-                        }
-                    )
+                # def callback(metric):
+                #     wandb.log(
+                #         {
+                #             "returns": metric["returned_episode_returns"][-1, :].mean(),
+                #             "env_step": metric["update_steps"]
+                #             * config["NUM_ENVS"]
+                #             * config["NUM_STEPS"],
+                #         }
+                #     )
                 # metric["update_steps"] = update_steps
                 # jax.experimental.io_callback(callback, None, metric)
-                update_steps = update_steps + 1
-                runner_state = (listener_train_state_i, env_state, last_obs, last_done, rng)
-                return (runner_state, update_steps), None
             
             # For the below comments on the shapes of things:
             # "NUM_ENVS": 8
-            # "NUM_STEPS": 37
+            # "NUM_STEPS": 36
             # env.image_dim: 28
             # env.num_listeners: 10
             # env.num_speakers: 5
             listener_trans_batch = Transition(
-                done=trimmed_transition_batch.done[..., env.num_speakers:].reshape((config["NUM_STEPS"] - 1, -1)),
+                done=trimmed_transition_batch.done[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1)),
                 speaker_action=trimmed_transition_batch.speaker_action, # This is shape (36, 8, 5, 28, 28) but I'm not going to bother reshaping
-                listener_action=trimmed_transition_batch.listener_action.reshape((config["NUM_STEPS"] - 1, -1)),
-                reward=trimmed_transition_batch.reward[..., env.num_speakers:].reshape((config["NUM_STEPS"] - 1, -1)),
-                value=trimmed_transition_batch.value[..., env.num_speakers:].reshape((config["NUM_STEPS"] - 1, -1)),
+                listener_action=trimmed_transition_batch.listener_action.reshape((config["NUM_STEPS"], -1)),
+                reward=trimmed_transition_batch.reward[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1)),
+                value=trimmed_transition_batch.value[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1)),
                 speaker_log_prob=trimmed_transition_batch.speaker_log_prob, # This is shape (36, 8, 5, 28, 28) but I'm not going to bother reshaping
-                listener_log_prob=trimmed_transition_batch.listener_log_prob.reshape((config["NUM_STEPS"] - 1, -1)),
+                listener_log_prob=trimmed_transition_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1)),
                 speaker_obs=trimmed_transition_batch.speaker_obs,   # This is shape (36, 8, 5) but I'm not going to bother reshaping
-                listener_obs=trimmed_transition_batch.listener_obs.reshape((config["NUM_STEPS"] - 1, -1, env.image_dim, env.image_dim)),
+                listener_obs=trimmed_transition_batch.listener_obs.reshape((config["NUM_STEPS"], -1, env.image_dim, env.image_dim)),
             )
 
-            listener_advantages = advantages[..., env.num_speakers:].reshape((config["NUM_STEPS"] - 1, -1))
-            listener_targets = targets[..., env.num_speakers:].reshape((config["NUM_STEPS"] - 1, -1))
+            listener_advantages = advantages[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1))
+            listener_targets = targets[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1))
+            
+            # TODO: In the future I think we can actually move the listener outside of the _update_step. Then we could make the entire _update_step function scannable
+            # listener_train_state, losses = _update_a_listener(0, listener_train_state, listener_trans_batch, listener_advantages, listener_targets)
+            listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, listener_trans_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
+            listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
 
-            # I can pass the above three variables to _update_a_listener and then index them properly before calling _update_epoch
-            # I'll need to iterate through the listeners and rngs and pass them into the first tuple. I'll get back a bunch of train_states I guess
-            o = _update_a_listener((0, rng), listener_train_state, listener_trans_batch, listener_advantages, listener_targets)
+            runner_state = (listener_train_state, log_env_state, last_obs, last_done, rng)
+            return runner_state, update_steps + 1
 
         rng, _rng = jax.random.split(rng)
         # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
         runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
-        # runner_state, _ = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
-        #     _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
-        # )
+        runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+            lambda us, _: _update_step(us, env, config), (runner_state, 0), None, config["NUM_UPDATES"]
+        )
 
-        runner_state, traj_batch = _update_step((runner_state, 0), env, config) # This performs a single update step, obviously, for testing purposes
+        # runner_state, traj_batch = _update_step((runner_state, 0), env, config) # This performs a single update step, obviously, for testing purposes
+        # TODO: iterate through multuple _update_step calls. First using a regular for loop, but eventually using scan once we've migrated the train_states out.
         # runner_state = collect_rollouts(runner_state, env, config)
         return {"runner_state": runner_state, "traj_batch": traj_batch}
 
