@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import hydra
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
-
+import timeit
 
 
 def batchify(x: dict, agent_list, num_actors):
@@ -186,6 +186,8 @@ def env_step(runner_state, env, config):
     # COLLECT LISTENER ACTIONS
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
     l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
+    time_taken = timeit.timeit(lambda: [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)], number=1)
+    print(f"Time taken for execute_individual_listener: {time_taken} seconds")
     listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
     listener_log_probs = l_a[:, 1]
     listener_values = l_a[:, 2]
@@ -284,8 +286,8 @@ def test_rollout_execution(config, rng):
 
     # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
     runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
-    # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
-    
+    # time_taken = timeit.timeit(lambda: env_step(runner_state, env, config), number=config['NUM_STEPS'])
+    # print(f"Time taken for env_step: {time_taken} seconds")
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config):
@@ -519,7 +521,9 @@ def test(config):
 
     rng = jax.random.PRNGKey(50)
     out = test_rollout_execution(config, rng)
-    print(out['runner_state'])
+    # time_taken = timeit.timeit(lambda: test_rollout_execution(config, rng), number=1)
+    # print(f"Time taken for test_rollout_execution: {time_taken} seconds")
+    # print(out['runner_state'])
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
@@ -542,7 +546,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
+    test()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
