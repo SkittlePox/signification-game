@@ -286,6 +286,8 @@ def test_rollout_execution(config, rng):
     #     obs[1]
     # )
 
+    print(f"Number of Listener Agents: {env.num_listeners}")
+    print(f"Number of Environments: {config['NUM_ENVS']}")
     rng, _rng = jax.random.split(rng)
     runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
