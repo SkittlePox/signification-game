@@ -187,7 +187,12 @@ def env_step(runner_state, env, config):
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
     l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
     time_taken = timeit.timeit(lambda: [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)], number=1)
-    print(f"Time taken for execute_individual_listener: {time_taken} seconds")
+    print(f"Time taken for execute_individual_listener for all: {time_taken} seconds")
+
+    single_time_taken = timeit.timeit(lambda: execute_individual_listener(*next(zip(env_rngs, listener_train_states, listener_obs))), number=1)
+    print(f"Time taken for execute_individual_listener for one: {single_time_taken} seconds")
+
+
     listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
     listener_log_probs = l_a[:, 1]
     listener_values = l_a[:, 2]
