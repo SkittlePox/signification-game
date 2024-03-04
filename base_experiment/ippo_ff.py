@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import hydra
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
-
+import time 
 
 
 def batchify(x: dict, agent_list, num_actors):
@@ -163,14 +163,21 @@ def define_env(config):
         return env
 
 def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
+    ravel_start = time.time()
     _listener_obs_i = _listener_obs_i.ravel()
+    print("execute individual_listener ravel took: {:.6f} seconds".format(time.time() - ravel_start))
+    train_state_start = time.time()
     policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
+    print("execute_individual_listener listener_train_state took: {:.6f} seconds".format(time.time() - train_state_start))
+    action_log_prob_start = time.time()
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
+    print("execute_individual_listener action and log probs took: {:.6f} seconds".format(time.time() - action_log_prob_start))
     return action, log_prob, value
 
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
+    # env_step_initialization_start = time.time()
     listener_train_states, log_env_state, obs, last_done, rng = runner_state
     speaker_obs, listener_obs = obs
     old_speaker_obs = speaker_obs
@@ -182,8 +189,10 @@ def env_step(runner_state, env, config):
     ##### COLLECT ACTIONS FROM AGENTS
     rng, _rng = jax.random.split(rng)
     env_rngs = jax.random.split(_rng, len(listener_train_states))
-
+    # print("env_step initialization took: {:.6f} seconds".format(time.time() - env_step_initialization_start))
+    
     # COLLECT LISTENER ACTIONS
+    # collect_listener_actions_start = time.time()
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
     l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
     listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
@@ -192,8 +201,11 @@ def env_step(runner_state, env, config):
 
     listener_actions = listener_actions.reshape(config["NUM_ENVS"], -1)
     listener_log_probs = listener_log_probs.reshape(config["NUM_ENVS"], -1)
+    # print("env_step collecting listener actions took: {:.6f} seconds".format(time.time() - collect_listener_actions_start))
+
 
     # SIMULATE SPEAKER ACTIONS. TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
+    # simulate_speaker_actions_start = time.time()
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
     speaker_actions = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
     speaker_actions = jnp.expand_dims(speaker_actions, 0).repeat(config["NUM_ENVS"], axis=0)
@@ -202,8 +214,10 @@ def env_step(runner_state, env, config):
 
     values = jnp.concatenate((speaker_values, listener_values))
     v = values.reshape(config["NUM_ENVS"], -1)
+    # print("env_step simulating speaker actions took: {:.6f} seconds".format(time.time() - simulate_speaker_actions_start))
     ###############################################
 
+    # step_env_start = time.time()
     ##### STEP ENV
     new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_actions, listener_actions))
 
@@ -217,9 +231,10 @@ def env_step(runner_state, env, config):
 
     r = r.reshape(config["NUM_ENVS"], -1)
     d = d.reshape(config["NUM_ENVS"], -1)
+    # print("env_step actually stepping the env took: {:.6f} seconds".format(time.time() - step_env_start))
 
     # How do I put values in here??? What is the value for this transition?
-    
+    transition_and_runner_state_start = time.time()
     transition = Transition(
         d,
         speaker_actions,
@@ -233,6 +248,7 @@ def env_step(runner_state, env, config):
     )
 
     runner_state = (listener_train_states, env_state, new_obs, d, _rng) # We should be returning the new_obs, the agents haven't seen it yet.
+    # print("env_step transition and runner state updating took: {:.6f} seconds".format(time.time() - transition_and_runner_state_start))
     # I'm not sure if d here is correct
     return runner_state, transition
 
@@ -249,24 +265,27 @@ def test_rollout_execution(config, rng):
             config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
     )
     
+        
     # For the learning rate
     def linear_schedule(count):
         frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
         return config["LR"] * frac
 
     # MAKE AGENTS
+    # make_agents_start = time.time()
     rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
     listener_rngs = jax.random.split(rng_l, len(env.listener_agents) * config["NUM_ENVS"])   # Make an rng key for each listener
     
     listeners_stuff = [initialize_listener(env, x_rng, config, linear_schedule) for x_rng in listener_rngs]
     listener_networks, listener_train_states = zip(*listeners_stuff)
     # TODO eventually: Add speaker networks and train states
-
+    # print("test_rollout_execution making_agents took: {:.6f} seconds".format(time.time() - make_agents_start))
     # INIT ENV
+    # init_env_start = time.time()
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
     obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
-
+    # print("test_rollout_execution init_env took: {:.6f} seconds".format(time.time() - init_env_start))
     # init_transition = Transition( # This is no longer needed, but it may be helpful to know what types and shapes things are in the future.
     #     jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
     #     jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
@@ -279,6 +298,7 @@ def test_rollout_execution(config, rng):
     #     obs[1]
     # )
 
+    # runner_start_time = time.time()
     rng, _rng = jax.random.split(rng)
     runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
@@ -286,6 +306,7 @@ def test_rollout_execution(config, rng):
     runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
     # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
     
+    # print("test_rollout_execution time to start runner and initialize state took: {:.6f} seconds".format(time.time() - runner_start_time))
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config):
@@ -519,7 +540,7 @@ def test(config):
 
     rng = jax.random.PRNGKey(50)
     out = test_rollout_execution(config, rng)
-    print(out['runner_state'])
+    # print(out['runner_state'])
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
@@ -542,7 +563,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
+    test()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
