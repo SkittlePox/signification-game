@@ -291,6 +291,9 @@ def test_rollout_execution(config, rng):
     rng, _rng = jax.random.split(rng)
     runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
+
+    time_taken = timeit.timeit(lambda: env_step(runner_state, env, config), number=1)
+    print(f"Warmup env step,: {time_taken} seconds")
     time_taken = timeit.timeit(lambda: env_step(runner_state, env, config), number=1)
     print(f"Time taken for single env_step: {time_taken} seconds")
     runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
