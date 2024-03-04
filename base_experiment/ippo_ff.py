@@ -186,11 +186,11 @@ def env_step(runner_state, env, config):
     # COLLECT LISTENER ACTIONS
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
     l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
-    time_taken = timeit.timeit(lambda: [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)], number=1)
-    print(f"Time taken for execute_individual_listener for all: {time_taken} seconds")
+    # time_taken = timeit.timeit(lambda: [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)], number=1)
+    # print(f"Time taken for execute_individual_listener for all: {time_taken} seconds")
 
-    single_time_taken = timeit.timeit(lambda: execute_individual_listener(*next(zip(env_rngs, listener_train_states, listener_obs))), number=1)
-    print(f"Time taken for execute_individual_listener for one: {single_time_taken} seconds")
+    # single_time_taken = timeit.timeit(lambda: execute_individual_listener(*next(zip(env_rngs, listener_train_states, listener_obs))), number=1)
+    # print(f"Time taken for execute_individual_listener for one: {single_time_taken} seconds")
 
 
     listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
@@ -291,10 +291,12 @@ def test_rollout_execution(config, rng):
     rng, _rng = jax.random.split(rng)
     runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
-    # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
+    time_taken = timeit.timeit(lambda: env_step(runner_state, env, config), number=1)
+    print(f"Time taken for single env_step: {time_taken} seconds")
     runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
-    # time_taken = timeit.timeit(lambda: env_step(runner_state, env, config), number=config['NUM_STEPS'])
-    # print(f"Time taken for env_step: {time_taken} seconds")
+    total_env_step_time = timeit.timeit(lambda: env_step(runner_state, env, config), number=config['NUM_STEPS'])
+    print(f"Time taken for all env steps: {total_env_step_time} seconds")
+    print(f"Number of env_steps: {config['NUM_STEPS']}")
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config):
