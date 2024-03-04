@@ -376,8 +376,6 @@ def make_train(config):
         obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
         
         # TRAIN LOOP
-        # def _update_step(update_runner_state, env, config):
-        #     runner_state, update_steps = update_runner_state
         def _update_step(runner_state, update_step, env, config):
             
             # COLLECT TRAJECTORIES
@@ -505,9 +503,6 @@ def make_train(config):
             partial_update_fn, runner_state, jnp.arange(config['NUM_UPDATES']), config["NUM_UPDATES"]
         )
 
-        # runner_state, traj_batch = _update_step((runner_state, 0), env, config) # This performs a single update step, obviously, for testing purposes
-        # TODO: iterate through multuple _update_step calls. First using a regular for loop, but eventually using scan once we've migrated the train_states out.
-        # runner_state = collect_rollouts(runner_state, env, config)
         return {"runner_state": runner_state, "traj_batch": traj_batch}
 
     return train
