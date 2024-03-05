@@ -523,6 +523,14 @@ def test(config):
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
+def benchmark(config):
+    with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+        config = OmegaConf.to_container(config) 
+        rng = jax.random.PRNGKey(50)
+        out = test_rollout_execution(config, rng).block_until_ready()
+        print('Bench complete')
+
+@hydra.main(version_base=None, config_path="config", config_name="test")
 def main(config):
     config = OmegaConf.to_container(config) 
 
@@ -543,7 +551,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
+    benchmark()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
