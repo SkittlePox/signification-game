@@ -22,15 +22,6 @@ from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 
 
-
-# def batchify(x: dict, agent_list, num_actors):
-#     x = jnp.stack([x[a] for a in agent_list])
-#     return x.reshape((num_actors, -1))
-
-# def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
-#     x = x.reshape((num_actors, num_envs, -1))
-#     return {a: x[i] for i, a in enumerate(agent_list)}
-
 class SimpSigGameLogWrapper(LogWrapper):
     @partial(jax.jit, static_argnums=(0,))
     def reset(self, keys: chex.PRNGKey) -> Tuple[chex.Array, State]:
@@ -169,7 +160,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
     log_prob = policy.log_prob(action)
     return action, log_prob, value
 
-@jax.jit
+# @jax.jit
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, log_env_state, obs, last_done, rng = runner_state
@@ -246,13 +237,14 @@ def test_rollout_execution(config, rng):
     config["NUM_UPDATES"] = (
             config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
-    config["MINIBATCH_SIZE"] = (
-            config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
-    )
+    # config["MINIBATCH_SIZE"] = (
+    #         config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
+    # )
+    config["NUM_MINIBATCHES"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE"]
     
     # For the learning rate
     def linear_schedule(count):
-        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
+        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]   # This calculation may be wrong
         return config["LR"] * frac
 
     # MAKE AGENTS
@@ -355,9 +347,10 @@ def make_train(config):
     config["NUM_UPDATES"] = (
             config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
-    config["MINIBATCH_SIZE"] = (
-            config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
-    )
+    # config["MINIBATCH_SIZE"] = (
+    #         config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
+    # )
+    config["NUM_MINIBATCHES"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE"]
     
     # For the learning rate
     def linear_schedule(count):
@@ -516,11 +509,11 @@ def make_train(config):
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def test(config):
-    config = OmegaConf.to_container(config) 
-
-    rng = jax.random.PRNGKey(50)
-    out = test_rollout_execution(config, rng)
-    print(out['runner_state'])
+    with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+        config = OmegaConf.to_container(config) 
+        rng = jax.random.PRNGKey(50)
+        out = test_rollout_execution(config, rng)
+        print(out['runner_state'])
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
