@@ -169,6 +169,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
     log_prob = policy.log_prob(action)
     return action, log_prob, value
 
+@jax.jit
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, log_env_state, obs, last_done, rng = runner_state
@@ -543,7 +544,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
+    test()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
