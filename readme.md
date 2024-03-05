@@ -1,7 +1,7 @@
 # Readme
 
-## Setting up the environment
-Our goal is to run `jaxmarl_testdrive.py`. This is a basic script that you should only be able to run if you have everything installed correctly, which should be the case by the end of this section. I've only tested this out on macOS with an M1 chip.
+## Setting up the environment (M1 Chip)
+Our goal is to run `jaxmarl_testdrive.py`. This is a basic script that you should only be able to run if you have everything installed correctly, which should be the case by the end of this section. I've only tested this out on macOS with an M1 chip. I suggest using mamba instead of conda.
 
 1. Make a conda environment with `conda create -n siggame python=3.9`
 2. Activate the environment with `conda activate siggame`
@@ -67,6 +67,12 @@ Finally, we should be able to run `jaxmarl_testdrive.py` with:
 ```shell
 python jaxmarl_testdrive.py
 ```
+
+## Setting up the environment (Oscar)
+
+1. In Oscar, run `module load miniforge/23.11.0-0s`
+2. Run `mamba create -n siggame python=3.9`
+3. `mamba activate siggame`
 
 ## Running experiments.
 Check the `readme.md` in the `base_experiment/` folder for more information on that experiment.

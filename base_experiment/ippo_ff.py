@@ -495,6 +495,7 @@ def make_train(config):
             
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, listener_trans_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
+            # Should probabyl be logging lmo[1] values, which is total loss per listener
 
             runner_state = (listener_train_state, log_env_state, last_obs, last_done, rng)
             return runner_state, update_step + 1
@@ -538,6 +539,7 @@ def main(config):
     # train_jit = jax.jit(make_train(config), device=jax.devices()[0]) # The environment may or may not be jittable.
     train = make_train(config)
     out = train(rng)
+    print("Done")
 
 
 if __name__ == "__main__":
