@@ -23,13 +23,13 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 
 
 
-def batchify(x: dict, agent_list, num_actors):
-    x = jnp.stack([x[a] for a in agent_list])
-    return x.reshape((num_actors, -1))
+# def batchify(x: dict, agent_list, num_actors):
+#     x = jnp.stack([x[a] for a in agent_list])
+#     return x.reshape((num_actors, -1))
 
-def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
-    x = x.reshape((num_actors, num_envs, -1))
-    return {a: x[i] for i, a in enumerate(agent_list)}
+# def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
+#     x = x.reshape((num_actors, num_envs, -1))
+#     return {a: x[i] for i, a in enumerate(agent_list)}
 
 class SimpSigGameLogWrapper(LogWrapper):
     @partial(jax.jit, static_argnums=(0,))
@@ -148,9 +148,9 @@ def define_env(config):
             return 0.5
         
         # Define parameters for a signification game
-        num_speakers = 5
-        num_listeners = 10
-        num_channels = 10
+        num_speakers = 2
+        num_listeners = 5
+        num_channels = 5
         num_classes = 10
 
         from torchvision.datasets import MNIST
@@ -267,17 +267,19 @@ def test_rollout_execution(config, rng):
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
     obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
 
-    # init_transition = Transition( # This is no longer needed, but it may be helpful to know what types and shapes things are in the future.
-    #     jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
-    #     jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-    #     jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
-    #     jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # rewards
-    #     jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # values
-    #     jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-    #     jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
-    #     obs[0],
-    #     obs[1]
-    # )
+    """
+    init_transition = Transition( # This is no longer needed, but it may be helpful to know what types and shapes things are in the future.
+        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
+        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
+        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # rewards
+        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # values
+        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
+        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
+        obs[0],
+        obs[1]
+    )
+    """
 
     rng, _rng = jax.random.split(rng)
     runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
@@ -443,13 +445,13 @@ def make_train(config):
                     listener_obs=listener_trans_batch.listener_obs[:, i, ...].reshape((config["NUM_MINIBATCHES"], -1, listener_trans_batch.listener_obs[:, i, ...].shape[1] * listener_trans_batch.listener_obs[:, i, ...].shape[2]))
                 )
 
+                # This line tests a single update
                 # new_listener_train_state_i, total_loss = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config)                
+                
                 # Iterate through batches
                 new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
-                return new_listener_train_state_i, total_loss
-
- 
+                # This code is from the source codebase and does not work. Keeping it here for future work.
                 # metric = traj_batch.info
                 # rng = update_state[-1]
 
@@ -464,13 +466,18 @@ def make_train(config):
                 #     )
                 # metric["update_steps"] = update_steps
                 # jax.experimental.io_callback(callback, None, metric)
-            
-            # For the below comments on the shapes of things:
-            # "NUM_ENVS": 8
-            # "NUM_STEPS": 36
-            # env.image_dim: 28
-            # env.num_listeners: 10
-            # env.num_speakers: 5
+
+                return new_listener_train_state_i, total_loss
+
+                
+            """
+            For the below comments on the shapes of things (these numbers change based on the yaml):
+            "NUM_ENVS": 8
+            "NUM_STEPS": 36
+            env.image_dim: 28
+            env.num_listeners: 10
+            env.num_speakers: 5
+            """
             listener_trans_batch = Transition(
                 done=trimmed_transition_batch.done[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1)),
                 speaker_action=trimmed_transition_batch.speaker_action, # This is shape (36, 8, 5, 28, 28) but I'm not going to bother reshaping
@@ -486,8 +493,6 @@ def make_train(config):
             listener_advantages = advantages[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1))
             listener_targets = targets[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1))
             
-            # TODO: In the future I think we can actually move the listener outside of the _update_step. Then we could make the entire _update_step function scannable
-            # listener_train_state, losses = _update_a_listener(0, listener_train_state, listener_trans_batch, listener_advantages, listener_targets)
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, listener_trans_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
 
@@ -495,7 +500,6 @@ def make_train(config):
             return runner_state, update_step + 1
 
         rng, _rng = jax.random.split(rng)
-        # Initialize the runner state with listener_train_states, env_state, obsv, a zero vector for whether the env is done (currently unused and probably the wrong shape), and _rng
         runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
         partial_update_fn = partial(_update_step, env=env, config=config)
