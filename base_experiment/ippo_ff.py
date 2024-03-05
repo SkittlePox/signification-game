@@ -527,7 +527,7 @@ def benchmark(config):
     with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
         config = OmegaConf.to_container(config) 
         rng = jax.random.PRNGKey(50)
-        out = test_rollout_execution(config, rng).block_until_ready()
+        out = test_rollout_execution(config, rng)
         print('Bench complete')
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
