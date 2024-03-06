@@ -183,7 +183,7 @@ def env_step(runner_state, env, config):
     l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
     listener_action = jnp.asarray(l_a[:, 0], jnp.int32)
     listener_log_prob = l_a[:, 1]
-    listener_value = l_a[:, 2]
+    listener_value = l_a[:, 2].reshape(config["NUM_ENVS"], -1)
 
     listener_action = listener_action.reshape(config["NUM_ENVS"], -1)
     listener_log_prob = listener_log_prob.reshape(config["NUM_ENVS"], -1)
@@ -192,11 +192,11 @@ def env_step(runner_state, env, config):
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
     speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
     speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
-    speaker_value = jnp.zeros((config["NUM_ENVS"] * env.num_speakers), dtype=jnp.float32)
+    speaker_value = jnp.zeros((config["NUM_ENVS"], env.num_speakers), dtype=jnp.float32)
     speaker_log_prob = jnp.zeros_like(speaker_action)    # This will eventually be replaced by real speaker logprobs
 
-    values = jnp.concatenate((speaker_value, listener_value))
-    v = values.reshape(config["NUM_ENVS"], -1)
+    # values = jnp.concatenate((speaker_value, listener_value))
+    # v = values.reshape(config["NUM_ENVS"], -1)
     ###############################################
 
     ##### STEP ENV
@@ -220,6 +220,11 @@ def env_step(runner_state, env, config):
     # d = d.reshape(config["NUM_ENVS"], -1)
 
     # How do I put values in here??? What is the value for this transition?
+
+
+    speaker_obs = speaker_obs.reshape((config["NUM_ENVS"], -1))
+    listener_obs = listener_obs.reshape((config["NUM_ENVS"], env.num_channels, env.image_dim, env.image_dim))
+
     
     transition = Transition(
         speaker_action,
@@ -340,7 +345,7 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
         listener_train_state.params,
         listener_trans_batch_i.listener_obs[j],
         listener_trans_batch_i.listener_action[j], 
-        listener_trans_batch_i.value[j], 
+        listener_trans_batch_i.listener_value[j], 
         listener_trans_batch_i.listener_log_prob[j],
         listener_advantages_i[j], 
         listener_targets_i[j]
@@ -397,28 +402,31 @@ def make_train(config):
             # We'll need to get the final value in transition_batch and cut off the last index
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
             trimmed_transition_batch = Transition(
-                done=transition_batch.done[:-1, ...],
                 speaker_action=transition_batch.speaker_action[:-1, ...],
-                listener_action=transition_batch.listener_action[:-1, ...],
-                reward=transition_batch.reward[:-1, ...],
-                value=transition_batch.value[:-1, ...],
+                speaker_reward=transition_batch.speaker_reward[:-1, ...],
+                speaker_value=transition_batch.speaker_value[:-1, ...],
                 speaker_log_prob=transition_batch.speaker_log_prob[:-1, ...],
-                listener_log_prob=transition_batch.listener_log_prob[:-1, ...],
                 speaker_obs=transition_batch.speaker_obs[:-1, ...],
-                listener_obs=transition_batch.listener_obs[:-1, ...]
-            )
+                speaker_alive=transition_batch.speaker_alive[:-1, ...],
+                listener_action=transition_batch.listener_action[:-1, ...],
+                listener_reward=transition_batch.listener_reward[:-1, ...],
+                listener_value=transition_batch.listener_value[:-1, ...],
+                listener_log_prob=transition_batch.listener_log_prob[:-1, ...],
+                listener_obs=transition_batch.listener_obs[:-1, ...],
+                listener_alive=transition_batch.listener_alive[:-1, ...]
+            )   # There's probably a cleaner way to write this
 
             # CALCULATE ADVANTAGE
             listener_train_state, log_env_state, last_obs, last_done, rng = runner_state
             # listener_train_state is a tuple of TrainStates of length num_envs * env.num_listeners
 
-            def _calculate_gae(trans_batch, last_val):
+            def _calculate_gae_listeners(trans_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
                     gae, next_value = gae_and_next_value
                     done, value, reward = (
-                        transition.done,
-                        transition.value,
-                        transition.reward,
+                        transition.listener_alive,
+                        transition.listener_value,
+                        transition.listener_reward,
                     )
                     delta = reward + config["GAMMA"] * next_value * (1 - done) - value
                     gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
@@ -431,26 +439,29 @@ def make_train(config):
                     reverse=True,
                     unroll=16,
                 )
-                return advantages, advantages + trans_batch.value
+                return advantages, advantages + trans_batch.listener_value
 
-            advantages, targets = _calculate_gae(trimmed_transition_batch, transition_batch.value[-1])
+            listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
 
             # UPDATE NETWORK (this is listener-specific)
             def _update_a_listener(i, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):                
                 listener_train_state_i = listener_train_states[i]
-                listener_advantages_i = listener_advantages[:, i].reshape((config["NUM_MINIBATCHES"], -1))
-                listener_targets_i = listener_targets[:, i].reshape((config["NUM_MINIBATCHES"], -1))
+                listener_advantages_i = listener_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
+                listener_targets_i = listener_targets.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 
                 listener_trans_batch_i = Transition(
-                    done=listener_trans_batch.done[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_action=listener_trans_batch.speaker_action,
-                    listener_action=jnp.float32(listener_trans_batch.listener_action[:, i].reshape((config["NUM_MINIBATCHES"], -1))),
-                    reward=listener_trans_batch.reward[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    value=listener_trans_batch.value[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    speaker_reward=listener_trans_batch.speaker_reward,
+                    speaker_value=listener_trans_batch.speaker_value,
                     speaker_log_prob=listener_trans_batch.speaker_log_prob,
-                    listener_log_prob=listener_trans_batch.listener_log_prob[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    speaker_obs=jnp.float32(listener_trans_batch.speaker_obs.reshape((config["NUM_MINIBATCHES"], -1, *listener_trans_batch.speaker_obs.shape[1:]))),
-                    listener_obs=listener_trans_batch.listener_obs[:, i, ...].reshape((config["NUM_MINIBATCHES"], -1, listener_trans_batch.listener_obs[:, i, ...].shape[1] * listener_trans_batch.listener_obs[:, i, ...].shape[2]))
+                    speaker_obs=listener_trans_batch.speaker_obs,
+                    speaker_alive=listener_trans_batch.speaker_alive,
+                    listener_action=jnp.float32(listener_trans_batch.listener_action.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))),
+                    listener_reward=listener_trans_batch.listener_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    listener_value=listener_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], listener_trans_batch.listener_obs.shape[1]*listener_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES"], -1, listener_trans_batch.listener_obs.shape[3]**2)),   # This should certainly be re-written using the new config.
+                    listener_alive=listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 )
 
                 # This line tests a single update
@@ -461,31 +472,7 @@ def make_train(config):
 
                 return new_listener_train_state_i, total_loss
 
-                
-            """
-            For the below comments on the shapes of things (these numbers change based on the yaml):
-            "NUM_ENVS": 8
-            "NUM_STEPS": 36
-            env.image_dim: 28
-            env.num_listeners: 10
-            env.num_speakers: 5
-            """
-            listener_trans_batch = Transition(
-                done=trimmed_transition_batch.done[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1)),
-                speaker_action=trimmed_transition_batch.speaker_action, # This is shape (36, 8, 5, 28, 28) but I'm not going to bother reshaping
-                listener_action=trimmed_transition_batch.listener_action.reshape((config["NUM_STEPS"], -1)),
-                reward=trimmed_transition_batch.reward[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1)),
-                value=trimmed_transition_batch.value[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1)),
-                speaker_log_prob=trimmed_transition_batch.speaker_log_prob, # This is shape (36, 8, 5, 28, 28) but I'm not going to bother reshaping
-                listener_log_prob=trimmed_transition_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1)),
-                speaker_obs=trimmed_transition_batch.speaker_obs,   # This is shape (36, 8, 5) but I'm not going to bother reshaping
-                listener_obs=trimmed_transition_batch.listener_obs.reshape((config["NUM_STEPS"], -1, env.image_dim, env.image_dim)),
-            )
-
-            listener_advantages = advantages[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1))
-            listener_targets = targets[..., env.num_speakers:].reshape((config["NUM_STEPS"], -1))
-            
-            listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, listener_trans_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
+            listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
 
@@ -505,7 +492,7 @@ def make_train(config):
                 
                 wandb.log(metric_dict)
 
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, listener_trans_batch.reward))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch.listener_reward))
 
             runner_state = (listener_train_state, log_env_state, last_obs, last_done, rng)
             return runner_state, update_step + 1
@@ -561,7 +548,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    test()
+    main()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
