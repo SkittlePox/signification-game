@@ -371,8 +371,8 @@ def make_train(config):
     
     # For the learning rate
     def linear_schedule(count):
-        frac = 1.0 - (count // config["NUM_MINIBATCHES"] // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
-        # jax.debug.print(count)
+        frac = 1.0 - (count // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
+        # jax.debug.print(str(count))
         return config["LR"] * frac
 
     def train(rng):
@@ -489,12 +489,14 @@ def make_train(config):
 
                 r = r.T
                 metric_dict.update({f"cumulative reward for listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
+                metric_dict.update({f"average reward for listener {i}": jnp.mean(r[i]).item() for i in range(len(r))})
                 
                 wandb.log(metric_dict)
 
             jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch.listener_reward))
 
             runner_state = (listener_train_state, log_env_state, last_obs, last_done, rng)
+            # jax.debug.print(str(update_step))
             return runner_state, update_step + 1
 
         rng, _rng = jax.random.split(rng)
@@ -529,12 +531,12 @@ def test(config):
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def main(config):
-    # print(config)
+    simple_config = {k: v for k, v in config.items() if isinstance(v, (int, float, str, bool, type(None)))}
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=["main"],
-        # config=config,
+        config=simple_config,
         mode=config["WANDB_MODE"],
         save_code=True
     )
