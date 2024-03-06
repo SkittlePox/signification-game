@@ -2,3 +2,4 @@
 .DS_Store
 **/outputs/
 **/__pycache__/
+**/wandb/
