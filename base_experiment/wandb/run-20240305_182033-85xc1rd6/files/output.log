@@ -1,0 +1,75 @@
+[2024-03-05 18:22:21,304][jax._src.profiler][INFO] - Loading trace.json.gz and removing its metadata...
+[2024-03-05 18:22:22,585][jax._src.profiler][INFO] - Writing perfetto_trace.json.gz...
+Open URL in browser: https://ui.perfetto.dev/#!/?url=http://127.0.0.1:9001/perfetto_trace.json.gz
+jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py", line 257, in trace
+    yield
+  File "/Users/benjamin/code/signification-game/base_experiment/ippo_ff.py", line 551, in main
+    rng = jax.random.PRNGKey(50)
+  File "/Users/benjamin/code/signification-game/base_experiment/ippo_ff.py", line 509, in train
+    runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
+jaxlib.xla_extension.XlaRuntimeError: INTERNAL: Generated function failed: CpuCallback error: KeyboardInterrupt: <EMPTY MESSAGE>
+At:
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/interpreters/mlir.py(2366): _wrapped_callback
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/interpreters/pxla.py(1151): __call__
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py(336): wrapper
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/pjit.py(1185): _pjit_call_impl_python
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/pjit.py(1229): call_impl_cache_miss
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/pjit.py(1245): _pjit_call_impl
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/core.py(935): process_primitive
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/core.py(447): bind_with_trace
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/core.py(2740): bind
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/pjit.py(168): _python_pjit_helper
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/pjit.py(257): cache_miss
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/traceback_util.py(179): reraise_with_filtered_traceback
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/dispatch.py(87): apply_primitive
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/core.py(935): process_primitive
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/core.py(447): bind_with_trace
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/core.py(2740): bind
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/lax/control_flow/loops.py(1130): scan_bind
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/lax/control_flow/loops.py(273): scan
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/traceback_util.py(179): reraise_with_filtered_traceback
+  /Users/benjamin/code/signification-game/base_experiment/ippo_ff.py(509): train
+  /Users/benjamin/code/signification-game/base_experiment/ippo_ff.py(551): main
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/core/utils.py(186): run_job
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/hydra.py(119): run
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py(458): <lambda>
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py(220): run_and_report
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py(457): _run_app
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py(394): _run_hydra
+  /Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/main.py(94): decorated_main
+  /Users/benjamin/code/signification-game/base_experiment/ippo_ff.py(556): <module>
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/Users/benjamin/code/signification-game/base_experiment/ippo_ff.py", line 556, in <module>
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/hydra.py", line 119, in run
+    ret = run_job(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+  File "/Users/benjamin/code/signification-game/base_experiment/ippo_ff.py", line 552, in main
+    # train_jit = jax.jit(make_train(config), device=jax.devices()[0]) # The environment may or may not be jittable.
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/contextlib.py", line 137, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py", line 259, in trace
+    stop_trace()
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py", line 210, in stop_trace
+    _host_perfetto_trace_file(abs_filename)
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py", line 192, in _host_perfetto_trace_file
+    httpd.handle_request()
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/socketserver.py", line 294, in handle_request
+    ready = selector.select(timeout)
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/selectors.py", line 416, in select
+    fd_event_list = self._selector.poll(timeout)
+KeyboardInterrupt

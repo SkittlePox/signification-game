@@ -1,0 +1,37 @@
+
+Done
+[2024-03-05 19:16:17,969][jax._src.profiler][INFO] - Loading trace.json.gz and removing its metadata...
+[2024-03-05 19:16:19,250][jax._src.profiler][INFO] - Writing perfetto_trace.json.gz...
+Open URL in browser: https://ui.perfetto.dev/#!/?url=http://127.0.0.1:9001/perfetto_trace.json.gz
+Traceback (most recent call last):
+  File "/Users/benjamin/code/signification-game/base_experiment/ippo_ff.py", line 566, in <module>
+    main()
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/_internal/hydra.py", line 119, in run
+    ret = run_job(
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+  File "/Users/benjamin/code/signification-game/base_experiment/ippo_ff.py", line 562, in main
+    print("Done")
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/contextlib.py", line 126, in __exit__
+    next(self.gen)
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py", line 259, in trace
+    stop_trace()
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py", line 210, in stop_trace
+    _host_perfetto_trace_file(abs_filename)
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/site-packages/jax/_src/profiler.py", line 192, in _host_perfetto_trace_file
+    httpd.handle_request()
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/socketserver.py", line 294, in handle_request
+    ready = selector.select(timeout)
+  File "/Users/benjamin/miniforge3/envs/siggame/lib/python3.9/selectors.py", line 416, in select
+    fd_event_list = self._selector.poll(timeout)
+KeyboardInterrupt

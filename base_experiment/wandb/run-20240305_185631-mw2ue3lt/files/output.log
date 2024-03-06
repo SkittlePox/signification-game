@@ -1,0 +1,8 @@
+
+Done
+[2024-03-05 18:59:04,160][jax._src.profiler][INFO] - Loading trace.json.gz and removing its metadata...
+[2024-03-05 18:59:05,485][jax._src.profiler][INFO] - Writing perfetto_trace.json.gz...
+Open URL in browser: https://ui.perfetto.dev/#!/?url=http://127.0.0.1:9001/perfetto_trace.json.gz
+127.0.0.1 - - [05/Mar/2024 19:00:02] code 404, message File not found
+127.0.0.1 - - [05/Mar/2024 19:00:02] "POST /status HTTP/1.1" 404 -
+127.0.0.1 - - [05/Mar/2024 19:00:02] "GET /perfetto_trace.json.gz HTTP/1.1" 200 -

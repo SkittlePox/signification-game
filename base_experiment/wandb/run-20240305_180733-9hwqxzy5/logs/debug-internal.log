@@ -1,0 +1,5 @@
+2024-03-05 18:07:33,474 INFO    StreamThr :17534 [internal.py:wandb_internal():86] W&B internal server running at pid: 17534, started at: 2024-03-05 18:07:33.473227
+2024-03-05 18:07:33,476 DEBUG   HandlerThread:17534 [handler.py:handle_request():146] handle_request: status
+2024-03-05 18:07:33,993 DEBUG   HandlerThread:17534 [handler.py:handle_request():146] handle_request: shutdown
+2024-03-05 18:07:33,993 INFO    HandlerThread:17534 [handler.py:finish():866] shutting down handler
+2024-03-05 18:07:34,481 INFO    SenderThread:17534 [sender.py:finish():1548] shutting down sender

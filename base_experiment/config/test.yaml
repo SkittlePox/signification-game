@@ -1,9 +1,9 @@
 "LR": 5e-4
-"NUM_ENVS": 3
-"NUM_STEPS": 360
-"TOTAL_TIMESTEPS": 1e5
-"UPDATE_EPOCHS": 4
-"MINIBATCH_SIZE": 30
+"NUM_ENVS": 1
+"NUM_STEPS": 640
+"TOTAL_TIMESTEPS": 1e6
+"UPDATE_EPOCHS": 12
+"MINIBATCH_SIZE": 128
 # "NUM_MINIBATCHES": 3  # This must be a whole divisor of NUM_STEPS # Deprecated, doing this programmatically as NUM_STEPS/MINIBATCH_SIZE
 "GAMMA": 0.99
 "GAE_LAMBDA": 0.95
@@ -17,6 +17,6 @@
 "ANNEAL_LR": False
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": ""
 "PROJECT": "signification-game"

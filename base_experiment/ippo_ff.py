@@ -136,7 +136,7 @@ def initialize_listener(env, rng, config, learning_rate):
 def define_env(config):
     if config["ENV_DATASET"] == 'mnist':
         def ret_0(iteration):
-            return 0.5
+            return 0.0
         
         # Define parameters for a signification game
         num_speakers = 2
@@ -148,7 +148,7 @@ def define_env(config):
         from utils import to_jax
 
         mnist_dataset = MNIST('/tmp/mnist/', download=True)
-        images, labels = to_jax(mnist_dataset, num_datapoints=100)
+        images, labels = to_jax(mnist_dataset, num_datapoints=100)  # This should also be in ENV_KWARGS
         env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
         
         return env
@@ -354,7 +354,7 @@ def make_train(config):
     
     # For the learning rate
     def linear_schedule(count):
-        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]
+        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]   # I don't know exactly how this works.
         return config["LR"] * frac
 
     def train(rng):
@@ -373,6 +373,7 @@ def make_train(config):
         
         # TRAIN LOOP
         def _update_step(runner_state, update_step, env, config):
+            # runner_state is actually a tuple of runner_states, one per agent
             
             # COLLECT TRAJECTORIES
             runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)
@@ -445,22 +446,6 @@ def make_train(config):
                 # Iterate through batches
                 new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
-                # This code is from the source codebase and does not work. Keeping it here for future work.
-                # metric = traj_batch.info
-                # rng = update_state[-1]
-
-                # def callback(metric):
-                #     wandb.log(
-                #         {
-                #             "returns": metric["returned_episode_returns"][-1, :].mean(),
-                #             "env_step": metric["update_steps"]
-                #             * config["NUM_ENVS"]
-                #             * config["NUM_STEPS"],
-                #         }
-                #     )
-                # metric["update_steps"] = update_steps
-                # jax.experimental.io_callback(callback, None, metric)
-
                 return new_listener_train_state_i, total_loss
 
                 
@@ -489,7 +474,25 @@ def make_train(config):
             
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, listener_trans_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
-            # Should probabyl be logging lmo[1] values, which is total loss per listener
+            listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
+
+            # wandb logging
+            def callback(metrics):
+                # agent, total_loss, (value_loss, loss_actor, entropy)
+                ll, r = metrics
+
+                metric_dict = {f"total loss for listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))}
+                metric_dict.update({f"value loss for listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
+                metric_dict.update({f"actor loss for listener {i}": jnp.mean(ll[i][1][1]).item() for i in range(len(ll))})
+                metric_dict.update({f"entropy for listener {i}": jnp.mean(ll[i][1][2]).item() for i in range(len(ll))})
+
+
+                r = r.T
+                metric_dict.update({f"cumulative reward for listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
+                # loss_dict["average_loss"] = jnp.mean(ll)
+                wandb.log(metric_dict)
+
+            jax.experimental.io_callback(callback, None, (listener_loss, listener_trans_batch.reward))
 
             runner_state = (listener_train_state, log_env_state, last_obs, last_done, rng)
             return runner_state, update_step + 1
@@ -509,6 +512,14 @@ def make_train(config):
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def test(config):
+    wandb.init(
+        # entity=config["ENTITY"],
+        project=config["PROJECT"],
+        tags=["test"],
+        config=config,
+        mode=config["WANDB_MODE"],
+        save_code=True
+    )
     with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
         config = OmegaConf.to_container(config) 
         rng = jax.random.PRNGKey(50)
@@ -518,17 +529,17 @@ def test(config):
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def main(config):
+    # print(config)
+    wandb.init(
+        # entity=config["ENTITY"],
+        project=config["PROJECT"],
+        tags=["main"],
+        # config=config,
+        mode=config["WANDB_MODE"],
+        save_code=True
+    )
+    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     config = OmegaConf.to_container(config) 
-
-    # Setting aside wandb for now.
-    # wandb.init(
-    #     entity=config["ENTITY"],
-    #     project=config["PROJECT"],
-    #     tags=["IPPO", "FF", config["ENV_NAME"]],
-    #     config=config,
-    #     mode=config["WANDB_MODE"],
-    # )
-    
     rng = jax.random.PRNGKey(50)
     # train_jit = jax.jit(make_train(config), device=jax.devices()[0]) # The environment may or may not be jittable.
     train = make_train(config)
@@ -537,7 +548,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    test()
+    main()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
