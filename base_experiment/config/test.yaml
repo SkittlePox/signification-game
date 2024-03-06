@@ -18,5 +18,5 @@
 
 # WandB Params
 "WANDB_MODE": "online"
-"ENTITY": ""
+"ENTITY": "signification-team"
 "PROJECT": "signification-game"

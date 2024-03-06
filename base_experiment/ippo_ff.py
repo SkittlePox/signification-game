@@ -531,7 +531,7 @@ def test(config):
 def main(config):
     # print(config)
     wandb.init(
-        # entity=config["ENTITY"],
+        entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=["main"],
         # config=config,
