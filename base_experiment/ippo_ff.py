@@ -100,15 +100,18 @@ class ActorCriticListener(nn.Module):
 
 
 class Transition(NamedTuple):
-    done: jnp.ndarray
     speaker_action: jnp.ndarray
-    listener_action: jnp.ndarray
-    reward: jnp.ndarray
-    value: jnp.ndarray
+    speaker_reward: jnp.ndarray
+    speaker_value: jnp.ndarray
     speaker_log_prob: jnp.ndarray
-    listener_log_prob: jnp.ndarray
     speaker_obs: jnp.ndarray
+    speaker_alive: jnp.ndarray
+    listener_action: jnp.ndarray
+    listener_reward: jnp.ndarray
+    listener_value: jnp.ndarray
+    listener_log_prob: jnp.ndarray
     listener_obs: jnp.ndarray
+    listener_alive: jnp.ndarray
 
 def initialize_listener(env, rng, config, learning_rate):
     listener_network = ActorCriticListener(action_dim=env.num_classes, image_dim=env.image_dim, config=config)
@@ -178,50 +181,59 @@ def env_step(runner_state, env, config):
     # COLLECT LISTENER ACTIONS
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
     l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
-    listener_actions = jnp.asarray(l_a[:, 0], jnp.int32)
-    listener_log_probs = l_a[:, 1]
-    listener_values = l_a[:, 2]
+    listener_action = jnp.asarray(l_a[:, 0], jnp.int32)
+    listener_log_prob = l_a[:, 1]
+    listener_value = l_a[:, 2]
 
-    listener_actions = listener_actions.reshape(config["NUM_ENVS"], -1)
-    listener_log_probs = listener_log_probs.reshape(config["NUM_ENVS"], -1)
+    listener_action = listener_action.reshape(config["NUM_ENVS"], -1)
+    listener_log_prob = listener_log_prob.reshape(config["NUM_ENVS"], -1)
 
     # SIMULATE SPEAKER ACTIONS. TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-    speaker_actions = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
-    speaker_actions = jnp.expand_dims(speaker_actions, 0).repeat(config["NUM_ENVS"], axis=0)
-    speaker_values = jnp.zeros((config["NUM_ENVS"] * env.num_speakers), dtype=jnp.float32)
-    speaker_log_probs = jnp.zeros_like(speaker_actions)    # This will eventually be replaced by real speaker logprobs
+    speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
+    speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
+    speaker_value = jnp.zeros((config["NUM_ENVS"] * env.num_speakers), dtype=jnp.float32)
+    speaker_log_prob = jnp.zeros_like(speaker_action)    # This will eventually be replaced by real speaker logprobs
 
-    values = jnp.concatenate((speaker_values, listener_values))
+    values = jnp.concatenate((speaker_value, listener_value))
     v = values.reshape(config["NUM_ENVS"], -1)
     ###############################################
 
     ##### STEP ENV
-    new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_actions, listener_actions))
+    new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_action, listener_action))
 
-    # rewards is a dictionary but it needs to be a jnp array
-    r = jnp.array([v for k,v in rewards.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
-    d = jnp.array([v for k,v in dones.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
-    # These appear to be in listener-speaker order. listeners first, speakers second
-    # I can easily flip the order around:
-    r = jnp.vstack([r[env.num_listeners:], r[:env.num_listeners]])
-    d = jnp.vstack([d[env.num_listeners:], d[:env.num_listeners]])
+    speaker_alive = jnp.array([v for k,v in dones.items() if k != "__all__" and k.startswith("speaker")]).reshape(config["NUM_ENVS"], -1)
+    listener_alive = jnp.array([v for k,v in dones.items() if k != "__all__" and k.startswith("listener")]).reshape(config["NUM_ENVS"], -1)
+    
+    speaker_reward = jnp.array([v for k,v in rewards.items() if k != "__all__" and k.startswith("speaker")]).reshape(config["NUM_ENVS"], -1)
+    listener_reward = jnp.array([v for k,v in rewards.items() if k != "__all__" and k.startswith("listener")]).reshape(config["NUM_ENVS"], -1)
 
-    r = r.reshape(config["NUM_ENVS"], -1)
-    d = d.reshape(config["NUM_ENVS"], -1)
+    # # rewards is a dictionary but it needs to be a jnp array
+    # r = jnp.array([v for k,v in rewards.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
+    d = jnp.array([v for k,v in dones.items() if k != "__all__"]).reshape(config["NUM_ENVS"], -1) # Right now this doesn't ensure the correct ordering though
+    # # These appear to be in listener-speaker order. listeners first, speakers second
+    # # I can easily flip the order around:
+    # r = jnp.vstack([r[env.num_listeners:], r[:env.num_listeners]])
+    # d = jnp.vstack([d[env.num_listeners:], d[:env.num_listeners]])
+
+    # r = r.reshape(config["NUM_ENVS"], -1)
+    # d = d.reshape(config["NUM_ENVS"], -1)
 
     # How do I put values in here??? What is the value for this transition?
     
     transition = Transition(
-        d,
-        speaker_actions,
-        listener_actions,
-        r,
-        v,
-        speaker_log_probs,
-        listener_log_probs,
-        old_speaker_obs,
-        old_listener_obs
+        speaker_action,
+        speaker_reward,
+        speaker_value,
+        speaker_log_prob,
+        speaker_obs,
+        speaker_alive,
+        listener_action,
+        listener_reward,
+        listener_value,
+        listener_log_prob,
+        listener_obs,
+        listener_alive
     )
 
     runner_state = (listener_train_states, env_state, new_obs, d, _rng) # We should be returning the new_obs, the agents haven't seen it yet.
@@ -343,10 +355,10 @@ def make_train(config):
     env = define_env(config)
     env = SimpSigGameLogWrapper(env)
 
-    config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]
-    config["NUM_UPDATES"] = (
-            config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
-    )
+    config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]  # TODO Lucas: please change this to not reference env.num_agents
+    # config["NUM_UPDATES"] = (
+    #         config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
+    # )
     # config["MINIBATCH_SIZE"] = (
     #         config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
     # )
@@ -354,7 +366,8 @@ def make_train(config):
     
     # For the learning rate
     def linear_schedule(count):
-        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]   # I don't know exactly how this works.
+        frac = 1.0 - (count // config["NUM_MINIBATCHES"] // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
+        # jax.debug.print(count)
         return config["LR"] * frac
 
     def train(rng):
@@ -477,7 +490,7 @@ def make_train(config):
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
 
             # wandb logging
-            def callback(metrics):
+            def wandb_callback(metrics):
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 ll, r = metrics
 
@@ -485,14 +498,14 @@ def make_train(config):
                 metric_dict.update({f"value loss for listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
                 metric_dict.update({f"actor loss for listener {i}": jnp.mean(ll[i][1][1]).item() for i in range(len(ll))})
                 metric_dict.update({f"entropy for listener {i}": jnp.mean(ll[i][1][2]).item() for i in range(len(ll))})
-
+                # loss_dict["average_loss"] = jnp.mean(ll)
 
                 r = r.T
                 metric_dict.update({f"cumulative reward for listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
-                # loss_dict["average_loss"] = jnp.mean(ll)
+                
                 wandb.log(metric_dict)
 
-            jax.experimental.io_callback(callback, None, (listener_loss, listener_trans_batch.reward))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, listener_trans_batch.reward))
 
             runner_state = (listener_train_state, log_env_state, last_obs, last_done, rng)
             return runner_state, update_step + 1
@@ -502,7 +515,7 @@ def make_train(config):
 
         partial_update_fn = partial(_update_step, env=env, config=config)
         runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
-            partial_update_fn, runner_state, jnp.arange(config['NUM_UPDATES']), config["NUM_UPDATES"]
+            partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS']), config["UPDATE_EPOCHS"]
         )
 
         return {"runner_state": runner_state, "traj_batch": traj_batch}
@@ -513,18 +526,18 @@ def make_train(config):
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def test(config):
     wandb.init(
-        # entity=config["ENTITY"],
+        entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=["test"],
-        config=config,
+        # config=config,
         mode=config["WANDB_MODE"],
         save_code=True
     )
-    with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-        config = OmegaConf.to_container(config) 
-        rng = jax.random.PRNGKey(50)
-        out = test_rollout_execution(config, rng)
-        print(out['runner_state'])
+    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+    config = OmegaConf.to_container(config) 
+    rng = jax.random.PRNGKey(50)
+    out = test_rollout_execution(config, rng)
+    print(out['runner_state'])
 
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
@@ -548,7 +561,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
+    test()
     '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
     jnp.save('hanabi_results', results)
     plt.plot(results)
