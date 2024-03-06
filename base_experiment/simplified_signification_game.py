@@ -2,13 +2,14 @@ from functools import partial
 from typing import Tuple, Dict, Callable
 import numpy as np
 import jax, chex
+import time
+import timeit 
 import jax.numpy as jnp
 from jax import lax
 from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-
 from utils import to_jax
 
 
@@ -122,6 +123,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         ######## First, evaluate the current state.
 
+        current_state_evaluation_start_time = time.time()
+
         @partial(jax.vmap, in_axes=[0, None])
         def _evaluate_channel_rewards(c: int, listener_actions: jnp.ndarray) -> jnp.ndarray:
             channel = state.channel_map[c]
@@ -142,6 +145,14 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         speaker_indices, listener_indices, rewards = _evaluate_channel_rewards(jnp.arange(self.num_channels), listener_actions)
 
+        current_state_evaluation_end_time = time.time()
+        print(f"_evaluate_channel_rewards execution time: {current_state_evaluation_end_time - current_state_evaluation_start_time} seconds")
+        timeit_result = timeit.timeit(lambda: _evaluate_channel_rewards(jnp.arange(self.num_channels), listener_actions), number=100)
+        print(f"_evaluate_channel_rewards average execution time over 100 runs: {timeit_result / 100} seconds")
+
+
+        generate_speaker_rewards_start_time = time.time()  # Start timing the generation of speaker rewards
+
         # Generate a reward vector containing all the rewards for each speaker and listener
         speaker_rewards = jnp.zeros(self.num_speakers + self.num_channels)
         listener_rewards = jnp.zeros(self.num_listeners)
@@ -157,6 +168,10 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         speaker_rewards_final, listener_rewards_final, _, _, _ = jax.lax.fori_loop(0, self.num_channels, update_rewards, initial_rewards_tuple)
         speaker_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_speakers + self.num_channels), speaker_rewards_final)
+        
+        # Run timeit on the updated section and print the result
+        # timeit_result_updated_section = timeit.timeit(lambda: jax.lax.fori_loop(0, self.num_channels, update_rewards, initial_rewards_tuple), number=100)
+        # print(f"Update_rewards section average execution time over 100 runs: {timeit_result_updated_section / 100} seconds")
         listener_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_listeners), listener_rewards_final)
 
         rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
@@ -164,14 +179,23 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         dones = {agent: False for agent in self.agents}
         dones["__all__"] = False
 
+        generate_speaker_rewards_end_time = time.time()  # End timing the generation of speaker rewards
+        print(f"Total runtime for generating speaker and listener rewards: {generate_speaker_rewards_end_time - generate_speaker_rewards_start_time} seconds")
         ######## Then, update the state.
+        update_state_start_time = time.time()  # Start timing the update state process
+
         key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
         
         next_env_images, next_env_labels = self.load_images(k5)
 
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
-        
+
+        update_state_end_time = time.time()  # End timing the update state process
+        print(f"State update execution time: {update_state_end_time - update_state_start_time} seconds")
+
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
+        masking_and_state_creation_start_time = time.time()  # Start timing the masking and state creation process
+
         requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(state.iteration)).astype(int)
         # requested_num_speaker_images should not be greater than self.num_speakers
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
@@ -213,7 +237,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             iteration=state.iteration + 1
         )
-        
+
+        masking_and_state_creation_end_time = time.time()  # End timing the masking and state creation process
+        print(f"Masking and state creation execution time: {masking_and_state_creation_end_time - masking_and_state_creation_start_time} seconds")
         return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, dones, {}
     
     @partial(jax.jit, static_argnums=[0, 2])
