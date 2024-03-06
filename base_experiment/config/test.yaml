@@ -1,9 +1,9 @@
-"LR": 5e-3
+"LR": 5e-6
 "NUM_ENVS": 1
-"NUM_STEPS": 64
-"TOTAL_TIMESTEPS": 1e6
-"UPDATE_EPOCHS": 10000
-"MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
+"NUM_STEPS": 640
+"TOTAL_TIMESTEPS": 1e6  # I think this is never used
+"UPDATE_EPOCHS": 2000
+"MINIBATCH_SIZE": 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.99
 "GAE_LAMBDA": 0.95
 "CLIP_EPS": 0.2
@@ -13,7 +13,7 @@
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_KWARGS": {}
-"ANNEAL_LR": True
+"ANNEAL_LR": False
 
 # WandB Params
 "WANDB_MODE": "online"

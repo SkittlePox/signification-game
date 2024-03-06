@@ -143,15 +143,15 @@ def define_env(config):
         
         # Define parameters for a signification game
         num_speakers = 2
-        num_listeners = 5
-        num_channels = 5
+        num_listeners = 2
+        num_channels = 2
         num_classes = 10
 
         from torchvision.datasets import MNIST
         from utils import to_jax
 
         mnist_dataset = MNIST('/tmp/mnist/', download=True)
-        images, labels = to_jax(mnist_dataset, num_datapoints=100)  # This should also be in ENV_KWARGS
+        images, labels = to_jax(mnist_dataset, num_datapoints=1000)  # This should also be in ENV_KWARGS
         env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
         
         return env
@@ -202,11 +202,11 @@ def env_step(runner_state, env, config):
     ##### STEP ENV
     new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_action, listener_action))
 
-    speaker_alive = jnp.array([v for k,v in dones.items() if k != "__all__" and k.startswith("speaker")]).reshape(config["NUM_ENVS"], -1)
-    listener_alive = jnp.array([v for k,v in dones.items() if k != "__all__" and k.startswith("listener")]).reshape(config["NUM_ENVS"], -1)
-    
-    speaker_reward = jnp.array([v for k,v in rewards.items() if k != "__all__" and k.startswith("speaker")]).reshape(config["NUM_ENVS"], -1)
-    listener_reward = jnp.array([v for k,v in rewards.items() if k != "__all__" and k.startswith("listener")]).reshape(config["NUM_ENVS"], -1)
+    speaker_alive = jnp.array([dones[f"speaker_{v}"] for v in range(env.num_speakers)]).reshape(config["NUM_ENVS"], -1)
+    listener_alive = jnp.array([dones[f"listener_{v}"] for v in range(env.num_listeners)]).reshape(config["NUM_ENVS"], -1)
+
+    speaker_reward = jnp.array([rewards[f"speaker_{v}"] for v in range(env.num_speakers)]).reshape(config["NUM_ENVS"], -1)
+    listener_reward = jnp.array([rewards[f"listener_{v}"] for v in range(env.num_listeners)]).reshape(config["NUM_ENVS"], -1)
 
     # # rewards is a dictionary but it needs to be a jnp array
     # r = jnp.array([v for k,v in rewards.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
@@ -241,6 +241,7 @@ def env_step(runner_state, env, config):
         listener_alive
     )
 
+    # d is a remnant, it's technically contained in the transition, we should get rid of it
     runner_state = (listener_train_states, env_state, new_obs, d, _rng) # We should be returning the new_obs, the agents haven't seen it yet.
     # I'm not sure if d here is correct
     return runner_state, transition
@@ -401,20 +402,21 @@ def make_train(config):
             # Instead of executing the agents on the final observation to get their values, we are simply going to ignore the last observation from traj_batch.
             # We'll need to get the final value in transition_batch and cut off the last index
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
-            trimmed_transition_batch = Transition(
-                speaker_action=transition_batch.speaker_action[:-1, ...],
-                speaker_reward=transition_batch.speaker_reward[:-1, ...],
-                speaker_value=transition_batch.speaker_value[:-1, ...],
-                speaker_log_prob=transition_batch.speaker_log_prob[:-1, ...],
-                speaker_obs=transition_batch.speaker_obs[:-1, ...],
-                speaker_alive=transition_batch.speaker_alive[:-1, ...],
-                listener_action=transition_batch.listener_action[:-1, ...],
-                listener_reward=transition_batch.listener_reward[:-1, ...],
-                listener_value=transition_batch.listener_value[:-1, ...],
-                listener_log_prob=transition_batch.listener_log_prob[:-1, ...],
-                listener_obs=transition_batch.listener_obs[:-1, ...],
-                listener_alive=transition_batch.listener_alive[:-1, ...]
-            )   # There's probably a cleaner way to write this
+            # trimmed_transition_batch = Transition(
+            #     speaker_action=transition_batch.speaker_action[:-1, ...],
+            #     speaker_reward=transition_batch.speaker_reward[:-1, ...],
+            #     speaker_value=transition_batch.speaker_value[:-1, ...],
+            #     speaker_log_prob=transition_batch.speaker_log_prob[:-1, ...],
+            #     speaker_obs=transition_batch.speaker_obs[:-1, ...],
+            #     speaker_alive=transition_batch.speaker_alive[:-1, ...],
+            #     listener_action=transition_batch.listener_action[:-1, ...],
+            #     listener_reward=transition_batch.listener_reward[:-1, ...],
+            #     listener_value=transition_batch.listener_value[:-1, ...],
+            #     listener_log_prob=transition_batch.listener_log_prob[:-1, ...],
+            #     listener_obs=transition_batch.listener_obs[:-1, ...],
+            #     listener_alive=transition_batch.listener_alive[:-1, ...]
+            # )
+            trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
 
             # CALCULATE ADVANTAGE
             listener_train_state, log_env_state, last_obs, last_done, rng = runner_state
