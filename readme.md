@@ -86,6 +86,12 @@ In general see [Oscar Jax Instructions](https://docs.ccv.brown.edu/oscar/gpu-com
     git clone https://github.com/FLAIROx/JaxMARL.git && cd JaxMARL
     pip install -e .
     ```
+6. Install torchvision (this may take a while):
+    ```shell
+    mamba install torchvision
+    ```
+
+You should be able to run `jaxmarl_testdrive.py`.
     
 
 ## Running experiments.

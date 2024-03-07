@@ -561,10 +561,4 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
-    '''results = out["metrics"]["returned_episode_returns"].mean(-1).reshape(-1)
-    jnp.save('hanabi_results', results)
-    plt.plot(results)
-    plt.xlabel("Update Step")
-    plt.ylabel("Return")
-    plt.savefig(f'IPPO_{config["ENV_NAME"]}.png')'''
+    test()
