@@ -136,7 +136,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             listener_correct = (listener_actions[listener_index] == label).astype(int)
 
             # Return reward based on whether the listener was correct
-            reward = 2 * listener_correct - 1
+            reward = jnp.where(listener_correct, 1, -0.05)  # TODO: Include these as parameters in yaml
 
             return speaker_index, listener_index, reward
 

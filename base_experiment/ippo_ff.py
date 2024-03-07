@@ -242,7 +242,7 @@ def env_step(runner_state, env, config):
     )
 
     # d is a remnant, it's technically contained in the transition, we should get rid of it
-    runner_state = (listener_train_states, env_state, new_obs, d, _rng) # We should be returning the new_obs, the agents haven't seen it yet.
+    runner_state = (listener_train_states, env_state, new_obs, d, rng) # We should be returning the new_obs, the agents haven't seen it yet.
     # I'm not sure if d here is correct
     return runner_state, transition
 
@@ -296,8 +296,16 @@ def test_rollout_execution(config, rng):
     runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool), _rng)
 
     # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
-    runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
+    # runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
     # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
+
+    ############ Debugging so that we can look into env_step
+    traj_batch = []
+    for _ in range(config['NUM_STEPS']):
+        runner_state, traj = env_step(runner_state, env, config)
+        traj_batch.append(traj)
+    #######################
+    
     
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
@@ -492,6 +500,7 @@ def make_train(config):
                 r = r.T
                 metric_dict.update({f"cumulative reward for listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
                 metric_dict.update({f"average reward for listener {i}": jnp.mean(r[i]).item() for i in range(len(r))})
+                # TODO: Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
                 wandb.log(metric_dict)
 
