@@ -4,7 +4,7 @@
 "TOTAL_TIMESTEPS": 1e6  # I think this is never used
 "UPDATE_EPOCHS": 2000
 "MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
-"GAMMA": 0.99
+"GAMMA": 0.9
 "GAE_LAMBDA": 0.95
 "CLIP_EPS": 0.4
 "ENT_COEF": 0.01
@@ -12,11 +12,11 @@
 "MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
-"ENV_NUM_DATAPOINTS": 100
+"ENV_NUM_DATAPOINTS": 20
 "ENV_KWARGS":
-  "num_speakers": 2
-  "num_listeners": 3
-  "num_channels": 3
+  "num_speakers": 1
+  "num_listeners": 1
+  "num_channels": 1
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0

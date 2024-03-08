@@ -498,7 +498,10 @@ def make_train(config):
                 r = r.T
                 metric_dict.update({f"cumulative reward for listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
                 metric_dict.update({f"average reward for listener {i}": jnp.mean(r[i]).item() for i in range(len(r))})
-                # TODO: Average reward over random - based on (num_classes-1)*fail_reward + success_reward
+
+                if (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"] != 0:
+                    metric_dict.update({f"average reward over random for listener {i}": jnp.mean(r[i]).item()/((env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]) for i in range(len(r))})
+                    # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
                 wandb.log(metric_dict)
 
@@ -541,6 +544,8 @@ def test(config):
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def main(config):
     simple_config = {k: v for k, v in config.items() if isinstance(v, (int, float, str, bool, type(None)))}
+    simple_config.update({f"ENV_KWARGS_{k}": v for k, v in config["ENV_KWARGS"].items()})
+    
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
