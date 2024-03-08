@@ -7,7 +7,7 @@
 "GAMMA": 0.9
 "GAE_LAMBDA": 0.95
 "CLIP_EPS": 0.4
-"ENT_COEF": 0.01
+"ENT_COEF": 0.02
 "VF_COEF": 0.5
 "MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
@@ -24,6 +24,6 @@
 "ANNEAL_LR": False
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"

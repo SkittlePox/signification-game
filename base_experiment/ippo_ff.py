@@ -543,19 +543,19 @@ def test(config):
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def main(config):
-    simple_config = {k: v for k, v in config.items() if isinstance(v, (int, float, str, bool, type(None)))}
-    simple_config.update({f"ENV_KWARGS_{k}": v for k, v in config["ENV_KWARGS"].items()})
+    config = OmegaConf.to_container(
+        config, resolve=True, throw_on_missing=True
+    )
     
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=["main"],
-        config=simple_config,
+        config=config,
         mode=config["WANDB_MODE"],
         save_code=True
     )
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    config = OmegaConf.to_container(config) 
     rng = jax.random.PRNGKey(50)
     # train_jit = jax.jit(make_train(config), device=jax.devices()[0]) # The environment may or may not be jittable.
     train = make_train(config)
