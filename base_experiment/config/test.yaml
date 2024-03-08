@@ -2,7 +2,7 @@
 "NUM_ENVS": 1
 "NUM_STEPS": 640
 "TOTAL_TIMESTEPS": 1e6  # I think this is never used
-"UPDATE_EPOCHS": 2000
+"UPDATE_EPOCHS": 10000
 "MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.9
 "GAE_LAMBDA": 0.95
@@ -24,6 +24,6 @@
 "ANNEAL_LR": False
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"

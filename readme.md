@@ -71,9 +71,12 @@ python jaxmarl_testdrive.py
 ## Setting up the environment (Oscar)
 In general see [Oscar Jax Instructions](https://docs.ccv.brown.edu/oscar/gpu-computing/installing-frameworks-pytorch-tensorflow-jax/installing-jax).
 
-1. In Oscar, run `module load miniforge/23.11.0-0s`
-2. Create a mamba environment: `mamba create -n siggame python=3.9`
-3. Activate it: `mamba activate siggame`
+1. `module load python`
+2. In a separate directory, create a python virtual environment:
+    ```shell
+        python3.9 -m venv siggame
+    ```
+3. Activate it: `source siggame/bin/activate`
 4. Load jax:
     ```shell
         pip install --upgrade pip
@@ -88,7 +91,7 @@ In general see [Oscar Jax Instructions](https://docs.ccv.brown.edu/oscar/gpu-com
     ```
 6. Install torchvision (this may take a while):
     ```shell
-    mamba install torchvision
+    pip install torchvision
     ```
 
 You should be able to run `jaxmarl_testdrive.py`.
