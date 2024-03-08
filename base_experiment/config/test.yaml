@@ -12,7 +12,15 @@
 "MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
-"ENV_KWARGS": {}
+"ENV_NUM_DATAPOINTS": 100
+"ENV_KWARGS":
+  "num_speakers": 2
+  "num_listeners": 3
+  "num_channels": 3
+  "num_classes": 10
+  "image_dim": 28
+  "reward_success": 1.0
+  "reward_failure": -0.1
 "ANNEAL_LR": False
 
 # WandB Params

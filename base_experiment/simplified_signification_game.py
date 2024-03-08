@@ -39,7 +39,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Callable, dataset: tuple, image_dim: int, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Callable, dataset: tuple, image_dim: int, reward_success: float = 1.0, reward_failure: float = -0.1, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -49,6 +49,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.env_images = dataset[0]
         self.env_labels = dataset[1]
         self.image_dim = image_dim
+        self.reward_success = reward_success
+        self.reward_failure = reward_failure
         self.kwargs = kwargs
         # TODO: Move the above comments to an actual docstring
 
@@ -136,7 +138,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             listener_correct = (listener_actions[listener_index] == label).astype(int)
 
             # Return reward based on whether the listener was correct
-            reward = jnp.where(listener_correct, 1, -0.05)  # TODO: Include these as parameters in yaml
+            reward = jnp.where(listener_correct, self.reward_success, self.reward_failure)
 
             return speaker_index, listener_index, reward
 
