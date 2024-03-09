@@ -160,7 +160,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
 # @jax.jit
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
-    listener_train_states, log_env_state, obs, last_done, rng = runner_state
+    listener_train_states, log_env_state, obs, rng = runner_state
     speaker_obs, listener_obs = obs
     # old_speaker_obs = speaker_obs
     # old_listener_obs = listener_obs
@@ -206,7 +206,7 @@ def env_step(runner_state, env, config):
 
     # # rewards is a dictionary but it needs to be a jnp array
     # r = jnp.array([v for k,v in rewards.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
-    d = jnp.array([v for k,v in dones.items() if k != "__all__"]).reshape(config["NUM_ENVS"], -1) # Right now this doesn't ensure the correct ordering though
+    # d = jnp.array([v for k,v in dones.items() if k != "__all__"]).reshape(config["NUM_ENVS"], -1) # Right now this doesn't ensure the correct ordering though
     # # These appear to be in listener-speaker order. listeners first, speakers second
     # # I can easily flip the order around:
     # r = jnp.vstack([r[env.num_listeners:], r[:env.num_listeners]])
@@ -238,7 +238,7 @@ def env_step(runner_state, env, config):
     )
 
     # d is a remnant, it's technically contained in the transition, we should get rid of it
-    runner_state = (listener_train_states, env_state, new_obs, d, rng) # We should be returning the new_obs, the agents haven't seen it yet.
+    runner_state = (listener_train_states, env_state, new_obs, rng) # We should be returning the new_obs, the agents haven't seen it yet.
     # I'm not sure if d here is correct
     return runner_state, transition
 
@@ -401,7 +401,7 @@ def make_train(config):
             trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
 
             # CALCULATE ADVANTAGE
-            listener_train_state, log_env_state, last_obs, last_done, rng = runner_state
+            listener_train_state, log_env_state, last_obs, rng = runner_state
             # listener_train_state is a tuple of TrainStates of length num_envs * env.num_listeners
 
             def _calculate_gae_listeners(trans_batch, last_val):
@@ -444,7 +444,7 @@ def make_train(config):
                     listener_reward=listener_trans_batch.listener_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_value=listener_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], env_kwargs["image_dim"]**2, -1))[:, i, :].reshape((config["NUM_MINIBATCHES"], -1, env_kwargs["image_dim"]**2)),
+                    listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], listener_trans_batch.listener_obs.shape[1]*listener_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES"], -1, env_kwargs["image_dim"]**2)),
                     listener_alive=listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 )
 
@@ -463,7 +463,7 @@ def make_train(config):
             # wandb logging
             def wandb_callback(metrics):
                 # agent, total_loss, (value_loss, loss_actor, entropy)
-                ll, r = metrics
+                ll, r, la = metrics
 
                 metric_dict = {f"total loss for listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))}
                 metric_dict.update({f"value loss for listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
@@ -480,16 +480,19 @@ def make_train(config):
                     metric_dict.update({f"average reward over random for listener {i}": jnp.mean(r[i]).item()/random_expected_reward for i in range(len(r))})
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
+                # la = la.T
+                # metric_dict.update({""})
+                
                 wandb.log(metric_dict)
 
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch.listener_reward))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch.listener_reward, trimmed_transition_batch.listener_action))
 
-            runner_state = (listener_train_state, log_env_state, last_obs, last_done, rng)
+            runner_state = (listener_train_state, log_env_state, last_obs, rng)
             # jax.debug.print(str(update_step))
             return runner_state, update_step + 1
 
         rng, _rng = jax.random.split(rng)
-        runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], env_kwargs["num_speakers"] + env_kwargs["num_listeners"]), dtype=bool), _rng)
+        runner_state = (listener_train_states, log_env_state, obs, _rng)
 
         partial_update_fn = partial(_update_step, env=env, config=config)
         runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
