@@ -8,11 +8,9 @@ parameters:
     max: 5e-5
     min: 5e-8
     distribution: uniform
-  GAMMA:
-    values: [0.99, 0.9]
   CLIP_EPS:
     max: 0.5
-    min: 0.1
+    min: 0.01
     distribution: uniform
   ENT_COEF:
     max: 0.05
@@ -20,16 +18,14 @@ parameters:
     distribution: uniform
   VF_COEF:
     max: 1.0
-    min: 0.1
+    min: 0.01
     distribution: uniform
   MAX_GRAD_NORM:
     max: 1.0
-    min: 0.1
+    min: 0.01
     distribution: uniform
-  GAE_LAMBDA:
-    values: [0.9, 0.95, 1.0]
   MINIBATCH_SIZE:
-    values: [16, 32, 64]
+    values: [32, 64, 128]
   ANNEAL_LR:
     values: [True, False]
 

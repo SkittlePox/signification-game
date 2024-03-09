@@ -541,7 +541,7 @@ def test(config):
     print(out['runner_state'])
 
 
-@hydra.main(version_base=None, config_path="config", config_name="test")
+@hydra.main(version_base=None, config_path="config", config_name="default")
 def main(config):
     config = OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
@@ -564,4 +564,4 @@ def main(config):
 
 
 if __name__ == "__main__":
-    test()
+    main()
