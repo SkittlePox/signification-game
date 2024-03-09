@@ -1,6 +1,6 @@
 program: ippo_ff.py
 method: bayes
-name: bandit-sweep
+name: bandit-sweep-conv
 metric:
   goal: maximize
   name: average reward for listener 0
