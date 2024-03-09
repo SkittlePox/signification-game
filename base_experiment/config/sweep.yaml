@@ -33,6 +33,8 @@ parameters:
     values: [20, 200, 2000]
   WANDB_MODE:
     value: online
+  ENV_LISTENER_ARCH:
+    value: conv
 
 
 command:

@@ -69,7 +69,49 @@ class SimpSigGameLogWrapper(LogWrapper):
 
 
 # There should be two kinds of ActorCritics, one for listeners and one for speakers. For now, this will be for listeners.
-class ActorCriticListener(nn.Module):
+class ActorCriticListenerConv(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0))(actor_mean)
+
+        # Action Logits
+        # unavail_actions = 1 - avail_actions
+        # action_logits = actor_mean - (unavail_actions * 1e10)
+        pi = distrax.Categorical(logits=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+
+class ActorCriticListenerDense(nn.Module):
     action_dim: Sequence[int]
     image_dim: Sequence[int]
     config: Dict
@@ -114,7 +156,10 @@ class Transition(NamedTuple):
     listener_alive: jnp.ndarray
 
 def initialize_listener(env, rng, config, learning_rate):
-    listener_network = ActorCriticListener(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    if config["ENV_LISTENER_ARCH"] == 'conv':
+        listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["ENV_LISTENER_ARCH"] == 'dense':
+        listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_x = jnp.zeros(

@@ -11,6 +11,7 @@
 "MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
+"ENV_LISTENER_ARCH": 'conv'
 "ENV_NUM_DATAPOINTS": 20
 "ENV_KWARGS":
   "num_speakers": 1
