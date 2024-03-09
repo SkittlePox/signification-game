@@ -248,17 +248,12 @@ def test_rollout_execution(config, rng):
     env = SimpSigGameLogWrapper(env)
 
     config["NUM_ACTORS"] = (config["ENV_KWARGS"]["num_speakers"] + config["ENV_KWARGS"]["num_listeners"]) * config["NUM_ENVS"]
-    config["NUM_UPDATES"] = (
-            config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
-    )
-    # config["MINIBATCH_SIZE"] = (
-    #         config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
-    # )
     config["NUM_MINIBATCHES"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE"]
     
     # For the learning rate
     def linear_schedule(count):
-        frac = 1.0 - (count // (config["NUM_MINIBATCHES"] * config["UPDATE_EPOCHS"])) / config["NUM_UPDATES"]   # This calculation may be wrong
+        frac = 1.0 - (count // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
+        # jax.debug.print(str(count))
         return config["LR"] * frac
 
     # MAKE AGENTS
@@ -292,21 +287,21 @@ def test_rollout_execution(config, rng):
     runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], config["ENV_KWARGS"]["num_speakers"] + config["ENV_KWARGS"]["num_listeners"]), dtype=bool), _rng)
 
     # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
-    # runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'])
+    runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS']) # This is if everything is working
     # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
 
     ############ Debugging so that we can look into env_step
-    traj_batch = []
-    for _ in range(config['NUM_STEPS']):
-        runner_state, traj = env_step(runner_state, env, config)
-        traj_batch.append(traj)
+    # traj_batch = []
+    # for _ in range(config['NUM_STEPS']):
+    #     runner_state, traj = env_step(runner_state, env, config)
+    #     traj_batch.append(traj)
     #######################
     
     
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config):
-    # j is for iterating through batches
+    # j is for iterating through minibatches
 
     def _loss_fn(params, listener_obs, listener_actions, values, log_probs, advantages, targets):
         # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
@@ -317,6 +312,7 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
         value_pred_clipped = values + (
                 listener_i_value - values
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
+
         value_losses = jnp.square(values - targets)
         value_losses_clipped = jnp.square(value_pred_clipped - targets)
         value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean())
@@ -347,7 +343,7 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
 
     total_loss, grads = grad_fn(
-        listener_train_state.params,
+        listener_train_state.params,    # params don't change across minibatches, they are for the same listener.
         listener_trans_batch_i.listener_obs[j],
         listener_trans_batch_i.listener_action[j], 
         listener_trans_batch_i.listener_value[j], 
@@ -368,12 +364,6 @@ def make_train(config):
     env_kwargs = config["ENV_KWARGS"]
 
     config["NUM_ACTORS"] = (env_kwargs["num_speakers"] + env_kwargs["num_listeners"]) * config["NUM_ENVS"]
-    # config["NUM_UPDATES"] = (
-    #         config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
-    # )
-    # config["MINIBATCH_SIZE"] = (
-    #         config["NUM_ACTORS"] * config["NUM_STEPS"] // config["NUM_MINIBATCHES"]
-    # )
     config["NUM_MINIBATCHES"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE"]
     
     # For the learning rate
@@ -408,20 +398,6 @@ def make_train(config):
             # Instead of executing the agents on the final observation to get their values, we are simply going to ignore the last observation from traj_batch.
             # We'll need to get the final value in transition_batch and cut off the last index
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
-            # trimmed_transition_batch = Transition(
-            #     speaker_action=transition_batch.speaker_action[:-1, ...],
-            #     speaker_reward=transition_batch.speaker_reward[:-1, ...],
-            #     speaker_value=transition_batch.speaker_value[:-1, ...],
-            #     speaker_log_prob=transition_batch.speaker_log_prob[:-1, ...],
-            #     speaker_obs=transition_batch.speaker_obs[:-1, ...],
-            #     speaker_alive=transition_batch.speaker_alive[:-1, ...],
-            #     listener_action=transition_batch.listener_action[:-1, ...],
-            #     listener_reward=transition_batch.listener_reward[:-1, ...],
-            #     listener_value=transition_batch.listener_value[:-1, ...],
-            #     listener_log_prob=transition_batch.listener_log_prob[:-1, ...],
-            #     listener_obs=transition_batch.listener_obs[:-1, ...],
-            #     listener_alive=transition_batch.listener_alive[:-1, ...]
-            # )
             trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
 
             # CALCULATE ADVANTAGE
@@ -468,7 +444,7 @@ def make_train(config):
                     listener_reward=listener_trans_batch.listener_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_value=listener_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], listener_trans_batch.listener_obs.shape[1]*listener_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES"], -1, listener_trans_batch.listener_obs.shape[3]**2)),   # This should certainly be re-written using the new config.
+                    listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], env_kwargs["image_dim"]**2, -1))[:, i, :].reshape((config["NUM_MINIBATCHES"], -1, env_kwargs["image_dim"]**2)),
                     listener_alive=listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 )
 
@@ -499,8 +475,9 @@ def make_train(config):
                 metric_dict.update({f"cumulative reward for listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
                 metric_dict.update({f"average reward for listener {i}": jnp.mean(r[i]).item() for i in range(len(r))})
 
-                if (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"] != 0:
-                    metric_dict.update({f"average reward over random for listener {i}": jnp.mean(r[i]).item()/((env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]) for i in range(len(r))})
+                random_expected_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]
+                if random_expected_reward != 0:
+                    metric_dict.update({f"average reward over random for listener {i}": jnp.mean(r[i]).item()/random_expected_reward for i in range(len(r))})
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
                 wandb.log(metric_dict)
@@ -526,16 +503,18 @@ def make_train(config):
 
 @hydra.main(version_base=None, config_path="config", config_name="test")
 def test(config):
+    config = OmegaConf.to_container(
+        config, resolve=True, throw_on_missing=True
+    )
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=["test"],
-        # config=config,
+        config=config,
         mode=config["WANDB_MODE"],
         save_code=True
     )
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    config = OmegaConf.to_container(config) 
     rng = jax.random.PRNGKey(50)
     out = test_rollout_execution(config, rng)
     print(out['runner_state'])
@@ -546,7 +525,6 @@ def main(config):
     config = OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
-    
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
