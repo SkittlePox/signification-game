@@ -1,5 +1,6 @@
 program: ippo_ff.py
 method: bayes
+name: bandit-sweep
 metric:
   goal: maximize
   name: average reward for listener 0
@@ -28,6 +29,10 @@ parameters:
     values: [32, 64, 128]
   ANNEAL_LR:
     values: [True, False]
+  ENV_NUM_DATAPOINTS:
+    values: [20, 200, 2000]
+  WANDB_MODE:
+    value: online
 
 
 command:
