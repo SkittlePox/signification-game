@@ -1,8 +1,8 @@
-"LR": 5e-5
+"LR": 1e-3
 "NUM_ENVS": 1
 "NUM_STEPS": 640
 "UPDATE_EPOCHS": 10000
-"MINIBATCH_SIZE": 128  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02

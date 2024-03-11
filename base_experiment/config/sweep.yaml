@@ -6,7 +6,7 @@ metric:
   name: average reward for listener 0
 parameters:
   LR:
-    max: 5e-5
+    max: 1e-3
     min: 5e-8
     distribution: uniform
   CLIP_EPS:
