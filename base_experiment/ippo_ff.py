@@ -191,6 +191,8 @@ def define_env(config):
 
         mnist_dataset = MNIST('/tmp/mnist/', download=True)
         images, labels = to_jax(mnist_dataset, num_datapoints=config["ENV_NUM_DATAPOINTS"])  # This should also be in ENV_KWARGS
+        images = images.astype('float32') / 255.0
+        
         # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], channel_ratio_fn=ret_0, dataset=(images, labels))
         return env
@@ -540,9 +542,12 @@ def make_train(config):
         runner_state = (listener_train_states, log_env_state, obs, _rng)
 
         partial_update_fn = partial(_update_step, env=env, config=config)
-        runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
-            partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS']), config["UPDATE_EPOCHS"]
-        )
+        # runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+        #     partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS']), config["UPDATE_EPOCHS"]
+        # )
+
+        # Single update
+        o = partial_update_fn(runner_state, 0)
 
         return {"runner_state": runner_state, "traj_batch": traj_batch}
 
