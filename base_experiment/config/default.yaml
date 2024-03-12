@@ -11,7 +11,7 @@
 "MAX_GRAD_NORM": 0.95
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
-"ENV_LISTENER_ARCH": 'conv'
+"ENV_LISTENER_ARCH": 'dense'
 "ENV_NUM_DATAPOINTS": 5
 "ENV_KWARGS":
   "num_speakers": 1
@@ -24,6 +24,6 @@
 "ANNEAL_LR": False
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"

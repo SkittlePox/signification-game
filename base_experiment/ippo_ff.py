@@ -121,11 +121,11 @@ class ActorCriticListenerDense(nn.Module):
         obs = x
         # Embedding Layer
         embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(obs)
-        embedding = nn.relu(embedding)
+        embedding = nn.sigmoid(embedding)
 
         # Actor Layer
         actor_mean = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.sigmoid(actor_mean)
         actor_mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0))(actor_mean)
 
         # Action Logits
@@ -135,7 +135,7 @@ class ActorCriticListenerDense(nn.Module):
 
         # Critic Layer
         critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        critic = nn.relu(critic)
+        critic = nn.sigmoid(critic)
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
@@ -234,7 +234,7 @@ def env_step(runner_state, env, config):
     speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
     speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
     speaker_value = jnp.zeros((config["NUM_ENVS"], env_kwargs["num_speakers"]), dtype=jnp.float32)
-    speaker_log_prob = jnp.zeros_like(speaker_action)    # This will eventually be replaced by real speaker logprobs
+    speaker_log_prob = jnp.zeros_like(speaker_action)    # This will eventually be replaced by real speaker logprobs which should actually be a single float per agent!
 
     # values = jnp.concatenate((speaker_value, listener_value))
     # v = values.reshape(config["NUM_ENVS"], -1)
@@ -252,7 +252,7 @@ def env_step(runner_state, env, config):
     speaker_obs = speaker_obs.reshape((config["NUM_ENVS"], -1))
     listener_obs = listener_obs.reshape((config["NUM_ENVS"], env_kwargs["num_channels"], env_kwargs["image_dim"], env_kwargs["image_dim"]))
 
-    transition = Transition(    # I believe this is correct. It's just the previous everything and the new rewards.
+    transition = Transition(
         speaker_action,
         speaker_reward,
         speaker_value,
@@ -267,7 +267,7 @@ def env_step(runner_state, env, config):
         listener_alive
     )
 
-    runner_state = (listener_train_states, env_state, new_obs, rng) # We should be returning the new_obs, the agents haven't seen it yet.
+    runner_state = (listener_train_states, env_state, new_obs, rng)
     
     return runner_state, transition
 
