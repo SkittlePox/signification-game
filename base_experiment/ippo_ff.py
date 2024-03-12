@@ -80,20 +80,20 @@ class ActorCriticListenerConv(nn.Module):
 
         # Convolutional layers
         x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
-        x = nn.relu(x)
+        x = nn.sigmoid(x)
         x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
-        x = nn.relu(x)
+        x = nn.sigmoid(x)
         x = x.reshape((x.shape[0], -1))  # Flatten
         
         # Embedding Layer
         embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
-        embedding = nn.relu(embedding)
+        embedding = nn.sigmoid(embedding)
         embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(embedding)
-        embedding = nn.relu(embedding)
+        embedding = nn.sigmoid(embedding)
 
         # Actor Layer
         actor_mean = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.sigmoid(actor_mean)
         actor_mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0))(actor_mean)
 
         # Action Logits
@@ -103,9 +103,9 @@ class ActorCriticListenerConv(nn.Module):
 
         # Critic Layer
         critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        critic = nn.relu(critic)
+        critic = nn.sigmoid(critic)
         critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
-        critic = nn.relu(critic)
+        critic = nn.sigmoid(critic)
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)

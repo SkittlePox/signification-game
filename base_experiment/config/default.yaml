@@ -1,7 +1,7 @@
-"LR": 1e-3
+"LR": 1e-4
 "NUM_ENVS": 1
-"NUM_STEPS": 640
-"UPDATE_EPOCHS": 10000
+"NUM_STEPS": 128
+"UPDATE_EPOCHS": 5000
 "MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
@@ -12,7 +12,7 @@
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_LISTENER_ARCH": 'conv'
-"ENV_NUM_DATAPOINTS": 20
+"ENV_NUM_DATAPOINTS": 5
 "ENV_KWARGS":
   "num_speakers": 1
   "num_listeners": 1
@@ -24,6 +24,6 @@
 "ANNEAL_LR": False
 
 # WandB Params
-"WANDB_MODE": "conv"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
