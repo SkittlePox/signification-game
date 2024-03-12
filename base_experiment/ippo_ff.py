@@ -498,25 +498,25 @@ def make_train(config):
                 logp = tb.listener_log_prob
                 v = tb.listener_value
 
-                metric_dict = {f"total loss for listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))}
-                metric_dict.update({f"value loss for listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
-                metric_dict.update({f"actor loss for listener {i}": jnp.mean(ll[i][1][1]).item() for i in range(len(ll))})
-                metric_dict.update({f"entropy for listener {i}": jnp.mean(ll[i][1][2]).item() for i in range(len(ll))})
+                metric_dict = {f"loss/total/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))}
+                metric_dict.update({f"loss/value/listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
+                metric_dict.update({f"loss/actor/listener {i}": jnp.mean(ll[i][1][1]).item() for i in range(len(ll))})
+                metric_dict.update({f"entropy/listener {i}": jnp.mean(ll[i][1][2]).item() for i in range(len(ll))})
                 # loss_dict["average_loss"] = jnp.mean(ll)
 
                 r = r.T
-                metric_dict.update({f"cumulative reward for listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
-                metric_dict.update({f"average reward for listener {i}": jnp.mean(r[i]).item() for i in range(len(r))})
+                # metric_dict.update({f"cumulative reward/listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
+                metric_dict.update({f"mean reward/listener {i}": jnp.mean(r[i]).item() for i in range(len(r))})
 
-                random_expected_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]
-                if random_expected_reward != 0:
-                    metric_dict.update({f"average reward over random for listener {i}": jnp.mean(r[i]).item()/random_expected_reward for i in range(len(r))})
+                # random_expected_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]
+                # if random_expected_reward != 0:
+                #     metric_dict.update({f"average reward over random for listener {i}": jnp.mean(r[i]).item()/random_expected_reward for i in range(len(r))})
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
                 logp = logp.T
-                metric_dict.update({f"average action log probs for listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
+                metric_dict.update({f"mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
                 v = v.T
-                metric_dict.update({f"average value estimate for listener {i}": jnp.mean(v[i]).item() for i in range(len(v))})
+                metric_dict.update({f"mean state value estimate/listener {i}": jnp.mean(v[i]).item() for i in range(len(v))})
 
                 # la = la.T
                 # metric_dict.update({""})
