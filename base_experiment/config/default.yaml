@@ -12,7 +12,7 @@
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_LISTENER_ARCH": 'dense'
-"ENV_NUM_DATAPOINTS": 5
+"ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
   "num_speakers": 1
   "num_listeners": 1
