@@ -89,7 +89,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_index = state.channel_map[:, aidx][0]
             image = lax.cond(speaker_index < self.num_speakers,
                              lambda _: state.speaker_images[speaker_index],
-                             lambda _: state.previous_env_images[speaker_index-self.num_speakers],
+                             lambda _: state.env_images[speaker_index-self.num_speakers],
                              operand=None)
             
             return image
@@ -252,6 +252,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             next_env_images=next_env_images,
             next_env_labels=next_env_labels,
             next_speaker_labels=next_speaker_labels,
+
+            # channel_map=next_channel_map,   # This is temporary, we'll obviously need to generate new ones different from the ones above prefixed next_
+            # env_images=next_env_images,
+            # env_labels=next_env_labels,
+            # speaker_labels=next_speaker_labels,
 
             channel_map=jnp.zeros_like(next_channel_map),
             env_images=jnp.zeros_like(next_env_images),

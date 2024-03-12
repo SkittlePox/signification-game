@@ -209,8 +209,6 @@ def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, log_env_state, obs, rng = runner_state
     speaker_obs, listener_obs = obs
-    # old_speaker_obs = speaker_obs
-    # old_listener_obs = listener_obs
 
     env_kwargs = config["ENV_KWARGS"]
 
@@ -251,25 +249,10 @@ def env_step(runner_state, env, config):
     speaker_reward = jnp.array([rewards[f"speaker_{v}"] for v in range(env_kwargs["num_speakers"])]).reshape(config["NUM_ENVS"], -1)
     listener_reward = jnp.array([rewards[f"listener_{v}"] for v in range(env_kwargs["num_listeners"])]).reshape(config["NUM_ENVS"], -1)
 
-    # # rewards is a dictionary but it needs to be a jnp array
-    # r = jnp.array([v for k,v in rewards.items() if k != "__all__"]) # Right now this doesn't ensure the correct ordering though
-    # d = jnp.array([v for k,v in dones.items() if k != "__all__"]).reshape(config["NUM_ENVS"], -1) # Right now this doesn't ensure the correct ordering though
-    # # These appear to be in listener-speaker order. listeners first, speakers second
-    # # I can easily flip the order around:
-    # r = jnp.vstack([r[env.num_listeners:], r[:env.num_listeners]])
-    # d = jnp.vstack([d[env.num_listeners:], d[:env.num_listeners]])
-
-    # r = r.reshape(config["NUM_ENVS"], -1)
-    # d = d.reshape(config["NUM_ENVS"], -1)
-
-    # How do I put values in here??? What is the value for this transition?
-
-
     speaker_obs = speaker_obs.reshape((config["NUM_ENVS"], -1))
     listener_obs = listener_obs.reshape((config["NUM_ENVS"], env_kwargs["num_channels"], env_kwargs["image_dim"], env_kwargs["image_dim"]))
 
-    
-    transition = Transition(
+    transition = Transition(    # I believe this is correct. It's just the previous everything and the new rewards.
         speaker_action,
         speaker_reward,
         speaker_value,
@@ -284,9 +267,8 @@ def env_step(runner_state, env, config):
         listener_alive
     )
 
-    # d is a remnant, it's technically contained in the transition, we should get rid of it
     runner_state = (listener_train_states, env_state, new_obs, rng) # We should be returning the new_obs, the agents haven't seen it yet.
-    # I'm not sure if d here is correct
+    
     return runner_state, transition
 
 
@@ -510,7 +492,11 @@ def make_train(config):
             # wandb logging
             def wandb_callback(metrics):
                 # agent, total_loss, (value_loss, loss_actor, entropy)
-                ll, r, la = metrics
+                ll, tb = metrics
+
+                r = tb.listener_action
+                logp = tb.listener_log_prob
+                v = tb.listener_value
 
                 metric_dict = {f"total loss for listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))}
                 metric_dict.update({f"value loss for listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
@@ -527,12 +513,17 @@ def make_train(config):
                     metric_dict.update({f"average reward over random for listener {i}": jnp.mean(r[i]).item()/random_expected_reward for i in range(len(r))})
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
+                logp = logp.T
+                metric_dict.update({f"average action log probs for listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
+                v = v.T
+                metric_dict.update({f"average value estimate for listener {i}": jnp.mean(v[i]).item() for i in range(len(v))})
+
                 # la = la.T
                 # metric_dict.update({""})
                 
                 wandb.log(metric_dict)
 
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch.listener_reward, trimmed_transition_batch.listener_action))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch))
 
             runner_state = (listener_train_state, log_env_state, last_obs, rng)
             # jax.debug.print(str(update_step))
