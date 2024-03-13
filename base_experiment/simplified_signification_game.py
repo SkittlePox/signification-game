@@ -255,7 +255,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             next_env_labels=next_env_labels,
             next_speaker_labels=next_speaker_labels,
 
-            channel_map=jnp.zeros_like(next_channel_map),
+            channel_map=next_channel_map,   # If we don't do this we get strange rewards
             env_images=jnp.zeros_like(next_env_images),
             env_labels=jnp.zeros_like(next_env_labels),
             speaker_labels=jnp.zeros_like(next_speaker_labels),
