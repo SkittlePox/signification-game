@@ -15,8 +15,8 @@
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
   "num_speakers": 1
-  "num_listeners": 1
-  "num_channels": 1
+  "num_listeners": 4
+  "num_channels": 4
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0

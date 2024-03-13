@@ -46,8 +46,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
         self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
-        self.env_images = dataset[0]
-        self.env_labels = dataset[1]
+        self.stored_env_images = dataset[0]
+        self.stored_env_labels = dataset[1]
         self.image_dim = image_dim
         self.reward_success = reward_success
         self.reward_failure = reward_failure
@@ -67,10 +67,10 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         num_imgs = self.num_channels if num_imgs == -1 else num_imgs
 
         key, subkey = jax.random.split(key)
-        indices = jax.random.randint(subkey, shape=(num_imgs,), minval=0, maxval=len(self.env_images))
+        indices = jax.random.randint(subkey, shape=(num_imgs,), minval=0, maxval=len(self.stored_env_images))
         
-        images = self.env_images[indices]
-        labels = self.env_labels[indices]
+        images = self.stored_env_images[indices]
+        labels = self.stored_env_labels[indices]
         return images, labels
     
     
@@ -86,7 +86,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         @partial(jax.vmap, in_axes=[0, None])
         def _listener_observation(aidx: int, state: State) -> jnp.ndarray:
             # The listeners need to see the newly generated images (which were generated from last-state's next_speaker_labels, i.e. speaker_labels) according to the channel map
-            speaker_index = state.channel_map[:, aidx][0]
+            ch = state.channel_map
+            speaker_index = ch[ch[:, 1].argsort()][:, 0][aidx]
+            
             image = lax.cond(speaker_index < self.num_speakers,
                              lambda _: state.speaker_images[speaker_index],
                              lambda _: state.env_images[speaker_index-self.num_speakers],
