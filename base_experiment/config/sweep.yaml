@@ -3,7 +3,7 @@ method: bayes
 name: bandit-sweep-fixed
 metric:
   goal: maximize
-  name: average reward for listener 0
+  name: reward/mean reward for listener 0
 parameters:
   LR:
     max: 1e-3
