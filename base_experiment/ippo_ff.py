@@ -313,7 +313,7 @@ def test_rollout_execution(config, rng):
     """
 
     rng, _rng = jax.random.split(rng)
-    runner_state = (listener_train_states, log_env_state, obs, jnp.zeros((config["NUM_ENVS"], config["ENV_KWARGS"]["num_speakers"] + config["ENV_KWARGS"]["num_listeners"]), dtype=bool), _rng)
+    runner_state = (listener_train_states, log_env_state, obs, _rng)
 
     # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
     runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS']) # This is if everything is working
