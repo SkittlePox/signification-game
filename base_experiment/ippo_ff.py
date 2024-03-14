@@ -529,8 +529,7 @@ def make_train(config):
             jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch))
 
             runner_state = (listener_train_state, log_env_state, last_obs, rng)
-            # jax.debug.print(str(update_step))
-            return runner_state, update_step + 1
+            return runner_state, update_step + 1 # TODO Lucas: Returning the transition batches above would be really helpful, but I don't know how it would affect the jax.lax.scan call 4 lines of code below
 
         rng, _rng = jax.random.split(rng)
         runner_state = (listener_train_states, log_env_state, obs, _rng)
@@ -539,9 +538,6 @@ def make_train(config):
         runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
             partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS']), config["UPDATE_EPOCHS"]
         )
-
-        # # Single update
-        # o = partial_update_fn(runner_state, 0)
 
         return {"runner_state": runner_state, "traj_batch": traj_batch}
 
