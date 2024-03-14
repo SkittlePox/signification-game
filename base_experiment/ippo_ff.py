@@ -155,6 +155,7 @@ class Transition(NamedTuple):
     listener_obs: jnp.ndarray
     listener_alive: jnp.ndarray
 
+@jax.profiler.annotate_function
 def initialize_listener(env, rng, config, learning_rate):
     if config["ENV_LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
@@ -181,6 +182,7 @@ def initialize_listener(env, rng, config, learning_rate):
     )
     return listener_network, train_state
 
+@jax.profiler.annotate_function
 def define_env(config):
     if config["ENV_DATASET"] == 'mnist':
         def ret_0(iteration):
@@ -197,6 +199,7 @@ def define_env(config):
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], channel_ratio_fn=ret_0, dataset=(images, labels))
         return env
 
+@jax.profiler.annotate_function
 def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
     _listener_obs_i = _listener_obs_i.ravel()
     policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
@@ -205,6 +208,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
     return action, log_prob, value
 
 # @jax.jit
+@jax.profiler.annotate_function
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, log_env_state, obs, rng = runner_state
@@ -271,7 +275,7 @@ def env_step(runner_state, env, config):
     
     return runner_state, transition
 
-
+@jax.profiler.annotate_function
 def test_rollout_execution(config, rng):
     env = define_env(config)
     env = SimpSigGameLogWrapper(env)
@@ -329,6 +333,7 @@ def test_rollout_execution(config, rng):
     
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
+@jax.profiler.annotate_function
 def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config):
     # j is for iterating through minibatches
 
@@ -386,6 +391,7 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
     return listener_train_state, total_loss
 
 
+@jax.profiler.annotate_function
 def make_train(config):
     env = define_env(config)
     env = SimpSigGameLogWrapper(env)
@@ -401,6 +407,7 @@ def make_train(config):
         # jax.debug.print(str(count))
         return config["LR"] * frac
 
+    @jax.profiler.annotate_function
     def train(rng):
         # MAKE AGENTS
         rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
@@ -585,4 +592,5 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
+    with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+        main()
