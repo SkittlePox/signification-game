@@ -1,6 +1,6 @@
 "LR": 5e-7
 "NUM_ENVS": 1
-"NUM_STEPS": 640
+"NUM_STEPS": 32
 "UPDATE_EPOCHS": 5000
 "MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0

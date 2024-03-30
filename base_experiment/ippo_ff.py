@@ -139,6 +139,43 @@ class ActorCriticListenerDense(nn.Module):
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
+    
+
+class ActorCriticSpeakerNoise(nn.Module):
+    latent_dim: int
+    num_classes: int
+    config: Dict
+
+    @nn.compact
+    def __call__(self, z, y):
+        y = nn.Embed(self.num_classes, self.latent_dim)(y)
+        y = jnp.squeeze(y, axis=(0))
+        z = jnp.concatenate([z, y], axis=-1)
+        z = nn.Dense(7 * 7 * 256)(z)
+        z = nn.relu(z)
+        z = z.reshape((-1, 7, 7, 256))
+        z = nn.ConvTranspose(128, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
+        z = nn.relu(z)
+        z = nn.ConvTranspose(64, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
+        z = nn.relu(z)
+        z = nn.ConvTranspose(1, kernel_size=(3, 3), padding='SAME')(z)
+        z = jnp.squeeze(z, axis=-1)  # Remove the channel dimension
+        z = jnp.reshape(z, (-1, 28 * 28))  # Flatten the image
+
+        # Actor Mean
+        actor_mean = nn.Dense(28 * 28)(z)
+
+        # Actor Standard Deviation
+        actor_std = nn.Dense(28 * 28)(z)
+        actor_std = nn.softplus(actor_std) + 1e-6  # Ensure positive standard deviation
+
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std)
+
+        # Critic
+        critic = nn.Dense(1)(z)
+
+        return pi, jnp.squeeze(critic, axis=-1)
 
 
 class Transition(NamedTuple):
@@ -183,10 +220,40 @@ def initialize_listener(env, rng, config, learning_rate):
     return listener_network, train_state
 
 @jax.profiler.annotate_function
+def initialize_speaker(env, rng, config, learning_rate):
+    speaker_network = ActorCriticSpeakerNoise(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+
+    rng, _rng = jax.random.split(rng)
+    init_y = jnp.zeros(
+            (1, config["NUM_ENVS"], 1),
+            dtype=jnp.int32
+        )
+    z = jax.random.normal(rng, (1, config["NUM_ENVS"], 32))
+    network_params = speaker_network.init(_rng, z, init_y)
+    if config["ANNEAL_LR"]:
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adam(learning_rate=learning_rate, eps=1e-5),
+        )
+    else:
+        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR"], eps=1e-5))
+    
+    train_state = TrainState.create(
+        apply_fn=speaker_network.apply,
+        params=network_params,
+        tx=tx,
+    )
+    return speaker_network, train_state
+
+
+@jax.profiler.annotate_function
 def define_env(config):
     if config["ENV_DATASET"] == 'mnist':
         def ret_0(iteration):
             return 0.0
+        
+        def ret_1(iteration):
+            return 1.0
         
         from torchvision.datasets import MNIST
         from utils import to_jax
@@ -207,11 +274,22 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
     log_prob = policy.log_prob(action)
     return action, log_prob, value
 
+@jax.profiler.annotate_function
+def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
+    z = jax.random.normal(__rng, (1, 1, 32))   # I should be splitting this rng again
+    _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
+    _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
+    _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
+    policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, z, _speaker_obs_i)
+    action = policy.sample(seed=__rng)
+    log_prob = policy.log_prob(action)
+    return action, log_prob, value
+
 # @jax.jit
 @jax.profiler.annotate_function
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
-    listener_train_states, log_env_state, obs, rng = runner_state
+    listener_train_states, speaker_train_states, log_env_state, obs, rng = runner_state
     speaker_obs, listener_obs = obs
 
     env_kwargs = config["ENV_KWARGS"]
@@ -233,18 +311,27 @@ def env_step(runner_state, env, config):
     listener_action = listener_action.reshape(config["NUM_ENVS"], -1)
     listener_log_prob = listener_log_prob.reshape(config["NUM_ENVS"], -1)
 
+    # COLLECT SPEAKER ACTIONS
+    speaker_outputs = [execute_individual_speaker(*args) for args in zip(env_rngs, speaker_train_states, speaker_obs)]
+    speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], env_kwargs["image_dim"], env_kwargs["image_dim"])
+    speaker_action = jnp.expand_dims(speaker_action, axis=(0))
+    # s_a = jnp.array([jnp.array([*o]) for o in speaker_outputs]) # I was only able to do this with the listener because its actions are the same shape as values and logprobs!
+    # speaker_action = jnp.asarray(s_a[:, 0], jnp.float32)
+    speaker_log_prob = jnp.array([o[1] for o in speaker_outputs])
+    speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
+
     # SIMULATE SPEAKER ACTIONS. TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
-    rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-    speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
-    speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
-    speaker_value = jnp.zeros((config["NUM_ENVS"], env_kwargs["num_speakers"]), dtype=jnp.float32)
-    speaker_log_prob = jnp.zeros_like(speaker_action)    # This will eventually be replaced by real speaker logprobs which should actually be a single float per agent!
+    # speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
+    # speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
+    # speaker_value = jnp.zeros((config["NUM_ENVS"], env_kwargs["num_speakers"]), dtype=jnp.float32)
+    # speaker_log_prob = jnp.zeros_like(speaker_action)    # This will eventually be replaced by real speaker logprobs which should actually be a single float per agent!
 
     # values = jnp.concatenate((speaker_value, listener_value))
     # v = values.reshape(config["NUM_ENVS"], -1)
     ###############################################
 
     ##### STEP ENV
+    rng_step = jax.random.split(_rng, config["NUM_ENVS"])
     new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_action, listener_action))
 
     speaker_alive = jnp.array([dones[f"speaker_{v}"] for v in range(env_kwargs["num_speakers"])]).reshape(config["NUM_ENVS"], -1)
@@ -271,7 +358,7 @@ def env_step(runner_state, env, config):
         listener_alive
     )
 
-    runner_state = (listener_train_states, env_state, new_obs, rng)
+    runner_state = (listener_train_states, speaker_train_states, env_state, new_obs, rng)
     
     return runner_state, transition
 
@@ -292,10 +379,14 @@ def test_rollout_execution(config, rng):
     # MAKE AGENTS
     rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
     listener_rngs = jax.random.split(rng_l, config["ENV_KWARGS"]["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
+    speaker_rngs = jax.random.split(rng_s, config["ENV_KWARGS"]["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
     
     listeners_stuff = [initialize_listener(env, x_rng, config, linear_schedule) for x_rng in listener_rngs]
     listener_networks, listener_train_states = zip(*listeners_stuff)
-    # TODO eventually: Add speaker networks and train states
+    
+    speakers_stuff = [initialize_speaker(env, x_rng, config, linear_schedule) for x_rng in speaker_rngs]
+    speaker_networks, speaker_train_states = zip(*speakers_stuff)
+    
 
     # INIT ENV
     rng, _rng = jax.random.split(rng)
@@ -317,7 +408,7 @@ def test_rollout_execution(config, rng):
     """
 
     rng, _rng = jax.random.split(rng)
-    runner_state = (listener_train_states, log_env_state, obs, _rng)
+    runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
 
     # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
     runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS']) # This is if everything is working
@@ -594,5 +685,6 @@ def main(config):
 
 
 if __name__ == "__main__":
-    with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-        main()
+    test()
+    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+    #     test()
