@@ -542,7 +542,7 @@ def make_train(config):
         runner_state = (listener_train_states, log_env_state, obs, _rng)
 
         partial_update_fn = partial(_update_step, env=env, config=config)
-        runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+        runner_state, _, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
             partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS']), config["UPDATE_EPOCHS"]
         )
 
