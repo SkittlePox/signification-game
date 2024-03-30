@@ -313,10 +313,7 @@ def env_step(runner_state, env, config):
 
     # COLLECT SPEAKER ACTIONS
     speaker_outputs = [execute_individual_speaker(*args) for args in zip(env_rngs, speaker_train_states, speaker_obs)]
-    speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], env_kwargs["image_dim"], env_kwargs["image_dim"])
-    speaker_action = jnp.expand_dims(speaker_action, axis=(0))
-    # s_a = jnp.array([jnp.array([*o]) for o in speaker_outputs]) # I was only able to do this with the listener because its actions are the same shape as values and logprobs!
-    # speaker_action = jnp.asarray(s_a[:, 0], jnp.float32)
+    speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(1, config["NUM_ENVS"], env_kwargs["image_dim"], env_kwargs["image_dim"])
     speaker_log_prob = jnp.array([o[1] for o in speaker_outputs])
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
 
@@ -325,9 +322,6 @@ def env_step(runner_state, env, config):
     # speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
     # speaker_value = jnp.zeros((config["NUM_ENVS"], env_kwargs["num_speakers"]), dtype=jnp.float32)
     # speaker_log_prob = jnp.zeros_like(speaker_action)    # This will eventually be replaced by real speaker logprobs which should actually be a single float per agent!
-
-    # values = jnp.concatenate((speaker_value, listener_value))
-    # v = values.reshape(config["NUM_ENVS"], -1)
     ###############################################
 
     ##### STEP ENV
