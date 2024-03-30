@@ -422,12 +422,12 @@ def test_rollout_execution(config, rng):
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 @jax.profiler.annotate_function
-def update_minibatch(rng, j, trans_batch_i, advantages_i, targets_i, train_state, config, listener=True):
+def update_minibatch(j, trans_batch_i, advantages_i, targets_i, train_state, config, listener=True):
     # j is for iterating through minibatches
 
-    def _loss_fn(params, _obs_args, _actions, values, log_probs, advantages, targets):
+    def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
-        _i_policy, _i_value = train_state.apply_fn(params, *_obs_args)
+        _i_policy, _i_value = train_state.apply_fn(params, _obs)
         _i_log_prob = _i_policy.log_prob(_actions)
 
         # CALCULATE VALUE LOSS
@@ -468,7 +468,7 @@ def update_minibatch(rng, j, trans_batch_i, advantages_i, targets_i, train_state
     if listener:
         total_loss, grads = grad_fn(
             train_state.params,    # params don't change across minibatches, they are for the same agent.
-            (trans_batch_i.listener_obs[j],),
+            trans_batch_i.listener_obs[j],
             trans_batch_i.listener_action[j], 
             trans_batch_i.listener_value[j], 
             trans_batch_i.listener_log_prob[j],
@@ -476,10 +476,9 @@ def update_minibatch(rng, j, trans_batch_i, advantages_i, targets_i, train_state
             targets_i[j]
         )
     else:
-        z = jax.random.normal(rng, (1, 1, 32))   # I should be splitting this rng again
         total_loss, grads = grad_fn(
             train_state.params,    # params don't change across minibatches, they are for the same agent.
-            (z, trans_batch_i.speaker_obs[j]),
+            trans_batch_i.speaker_obs[j],
             trans_batch_i.speaker_action[j], 
             trans_batch_i.speaker_value[j], 
             trans_batch_i.speaker_log_prob[j],
@@ -650,7 +649,7 @@ def make_train(config):
                 # new_listener_train_state_i, total_loss = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config)                
                 
                 # Iterate through batches
-                new_speaker_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(rng, i, speaker_trans_batch_i, speaker_advantages_i, speaker_targets_i, train_state, config), speaker_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
+                new_speaker_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, speaker_trans_batch_i, speaker_advantages_i, speaker_targets_i, train_state, config), speaker_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
                 return new_speaker_train_state_i, total_loss
 
@@ -734,7 +733,7 @@ def test(config):
     print(out['runner_state'])
 
 
-@hydra.main(version_base=None, config_path="config", config_name="default")
+@hydra.main(version_base=None, config_path="config", config_name="test")
 def main(config):
     config = OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
@@ -756,6 +755,6 @@ def main(config):
 
 
 if __name__ == "__main__":
-    test()
+    main()
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     #     test()
