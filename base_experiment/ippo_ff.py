@@ -263,7 +263,7 @@ def define_env(config):
         images = images.astype('float32') / 255.0
         
         # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
-        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], channel_ratio_fn=ret_0, dataset=(images, labels))
+        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], channel_ratio_fn=ret_1, dataset=(images, labels))
         return env
 
 @jax.profiler.annotate_function
@@ -277,6 +277,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
 @jax.profiler.annotate_function
 def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     z = jax.random.normal(__rng, (1, 1, 32))   # I should be splitting this rng again
+    # TODO: This looks terrible, I'm sure there's a better way
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
@@ -302,6 +303,7 @@ def env_step(runner_state, env, config):
     env_rngs = jax.random.split(_rng, len(listener_train_states))
 
     # COLLECT LISTENER ACTIONS
+    # TODO: This should be cleaned up, look at how the speaker outputs are sorted/aggregated
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
     l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
     listener_action = jnp.asarray(l_a[:, 0], jnp.int32)
@@ -314,9 +316,10 @@ def env_step(runner_state, env, config):
     # COLLECT SPEAKER ACTIONS
     speaker_outputs = [execute_individual_speaker(*args) for args in zip(env_rngs, speaker_train_states, speaker_obs)]
     speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(1, config["NUM_ENVS"], env_kwargs["image_dim"], env_kwargs["image_dim"])
-    speaker_log_prob = jnp.array([o[1] for o in speaker_outputs])
+    speaker_log_prob = jnp.array([o[1] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
 
+    # TODO: This can probably be deleted soon
     # SIMULATE SPEAKER ACTIONS. TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
     # speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
     # speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
@@ -419,17 +422,17 @@ def test_rollout_execution(config, rng):
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 @jax.profiler.annotate_function
-def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state, config):
+def update_minibatch(rng, j, trans_batch_i, advantages_i, targets_i, train_state, config, listener=True):
     # j is for iterating through minibatches
 
-    def _loss_fn(params, listener_obs, listener_actions, values, log_probs, advantages, targets):
-        # COLLECT LISTENER ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
-        listener_i_policy, listener_i_value = listener_train_state.apply_fn(params, listener_obs)
-        listener_i_log_prob = listener_i_policy.log_prob(listener_actions)
+    def _loss_fn(params, _obs_args, _actions, values, log_probs, advantages, targets):
+        # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
+        _i_policy, _i_value = train_state.apply_fn(params, *_obs_args)
+        _i_log_prob = _i_policy.log_prob(_actions)
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = values + (
-                listener_i_value - values
+                _i_value - values
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
 
         value_losses = jnp.square(values - targets)
@@ -437,7 +440,7 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
         value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean())
 
         # CALCULATE ACTOR LOSS
-        ratio = jnp.exp(listener_i_log_prob - log_probs)
+        ratio = jnp.exp(_i_log_prob - log_probs)
         gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         loss_actor1 = ratio * gae_for_i
         loss_actor2 = (
@@ -450,7 +453,7 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
         )
         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
         loss_actor = loss_actor.mean()
-        entropy = listener_i_policy.entropy().mean()
+        entropy = _i_policy.entropy().mean()
 
         total_loss = (
                 loss_actor
@@ -461,19 +464,33 @@ def update_minibatch(j, listener_trans_batch_i, listener_advantages_i, listener_
 
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
 
-    total_loss, grads = grad_fn(
-        listener_train_state.params,    # params don't change across minibatches, they are for the same listener.
-        listener_trans_batch_i.listener_obs[j],
-        listener_trans_batch_i.listener_action[j], 
-        listener_trans_batch_i.listener_value[j], 
-        listener_trans_batch_i.listener_log_prob[j],
-        listener_advantages_i[j], 
-        listener_targets_i[j]
-    )
-    
-    listener_train_state = listener_train_state.apply_gradients(grads=grads)
 
-    return listener_train_state, total_loss
+    if listener:
+        total_loss, grads = grad_fn(
+            train_state.params,    # params don't change across minibatches, they are for the same agent.
+            (trans_batch_i.listener_obs[j],),
+            trans_batch_i.listener_action[j], 
+            trans_batch_i.listener_value[j], 
+            trans_batch_i.listener_log_prob[j],
+            advantages_i[j], 
+            targets_i[j]
+        )
+    else:
+        z = jax.random.normal(rng, (1, 1, 32))   # I should be splitting this rng again
+        total_loss, grads = grad_fn(
+            train_state.params,    # params don't change across minibatches, they are for the same agent.
+            (z, trans_batch_i.speaker_obs[j]),
+            trans_batch_i.speaker_action[j], 
+            trans_batch_i.speaker_value[j], 
+            trans_batch_i.speaker_log_prob[j],
+            advantages_i[j], 
+            targets_i[j]
+        )
+    
+    train_state = train_state.apply_gradients(grads=grads)
+
+    return train_state, total_loss
+
 
 
 @jax.profiler.annotate_function
@@ -498,9 +515,15 @@ def make_train(config):
         rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
         listener_rngs = jax.random.split(rng_l, env_kwargs["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
         
+        rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
+        listener_rngs = jax.random.split(rng_l, config["ENV_KWARGS"]["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
+        speaker_rngs = jax.random.split(rng_s, config["ENV_KWARGS"]["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
+        
         listeners_stuff = [initialize_listener(env, x_rng, config, linear_schedule) for x_rng in listener_rngs]
         listener_networks, listener_train_states = zip(*listeners_stuff)
-        # TODO eventually: Add speaker networks and train states
+        
+        speakers_stuff = [initialize_speaker(env, x_rng, config, linear_schedule) for x_rng in speaker_rngs]
+        speaker_networks, speaker_train_states = zip(*speakers_stuff)
 
         # INIT ENV
         rng, _rng = jax.random.split(rng)
@@ -521,8 +544,8 @@ def make_train(config):
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
             trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
 
-            # CALCULATE ADVANTAGE
-            listener_train_state, log_env_state, last_obs, rng = runner_state
+            # CALCULATE ADVANTAGE #############
+            listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
             # listener_train_state is a tuple of TrainStates of length num_envs * env.num_listeners
 
             def _calculate_gae_listeners(trans_batch, last_val):
@@ -546,9 +569,33 @@ def make_train(config):
                 )
                 return advantages, advantages + trans_batch.listener_value
 
-            listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
+            def _calculate_gae_speakers(trans_batch, last_val):
+                def _get_advantages(gae_and_next_value, transition):
+                    gae, next_value = gae_and_next_value
+                    done, value, reward = (
+                        transition.speaker_alive,
+                        transition.speaker_value,
+                        transition.speaker_reward,
+                    )
+                    delta = reward + config["GAMMA"] * next_value * (1 - done) - value
+                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
+                    return (gae, value), gae
 
-            # UPDATE NETWORK (this is listener-specific)
+                _, advantages = jax.lax.scan(
+                    _get_advantages,
+                    (jnp.zeros_like(last_val), last_val),
+                    trans_batch,
+                    reverse=True,
+                    unroll=16,
+                )
+                return advantages, advantages + trans_batch.speaker_value
+
+            listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
+            speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1]) # TODO: Might want to do some offsetting of rewards/values by 1? If we don't do this, we'll need to set GAMMA and GAE_LAMBDA to something other than 0
+            
+            ##########################
+
+            # UPDATE NETWORKS (this is listener-specific)
             def _update_a_listener(i, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):                
                 listener_train_state_i = listener_train_states[i]
                 listener_advantages_i = listener_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
@@ -576,6 +623,36 @@ def make_train(config):
                 new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
                 return new_listener_train_state_i, total_loss
+            
+            # TODO: write _update_a_speaker()
+            def _update_a_speaker(i, speaker_train_states, speaker_trans_batch, speaker_advantages, speaker_targets):                
+                speaker_train_state_i = speaker_train_states[i]
+                speaker_advantages_i = speaker_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
+                speaker_targets_i = speaker_targets.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
+                
+                # TODO: All of this will need to change. The speakers need to be sliced, not the listeners.
+                speaker_trans_batch_i = Transition(
+                    speaker_action=speaker_trans_batch.speaker_action,
+                    speaker_reward=speaker_trans_batch.speaker_reward,
+                    speaker_value=speaker_trans_batch.speaker_value,
+                    speaker_log_prob=speaker_trans_batch.speaker_log_prob,
+                    speaker_obs=speaker_trans_batch.speaker_obs,
+                    speaker_alive=speaker_trans_batch.speaker_alive,
+                    listener_action=jnp.float32(speaker_trans_batch.listener_action.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))),
+                    listener_reward=speaker_trans_batch.listener_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    listener_value=speaker_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    listener_log_prob=speaker_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    listener_obs=speaker_trans_batch.listener_obs.reshape((config["NUM_STEPS"], speaker_trans_batch.listener_obs.shape[1]*speaker_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES"], -1, env_kwargs["image_dim"]**2)),
+                    listener_alive=speaker_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
+                )
+
+                # This line tests a single update
+                # new_listener_train_state_i, total_loss = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config)                
+                
+                # Iterate through batches
+                new_speaker_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(rng, i, speaker_trans_batch_i, speaker_advantages_i, speaker_targets_i, train_state, config), speaker_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
+
+                return new_speaker_train_state_i, total_loss
 
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
@@ -620,11 +697,11 @@ def make_train(config):
 
             jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch))
 
-            runner_state = (listener_train_state, log_env_state, last_obs, rng)
+            runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
             return runner_state, update_step + 1 # TODO Lucas: Returning the transition batches above would be really helpful, but I don't know how it would affect the jax.lax.scan call 4 lines of code below
 
         rng, _rng = jax.random.split(rng)
-        runner_state = (listener_train_states, log_env_state, obs, _rng)
+        runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
 
         partial_update_fn = partial(_update_step, env=env, config=config)
         runner_state, _, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
