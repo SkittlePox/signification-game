@@ -24,7 +24,7 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 
 class SimpSigGameLogWrapper(LogWrapper):
     @partial(jax.jit, static_argnums=(0,))
-    def reset(self, keys: chex.PRNGKey, epochs: int) -> Tuple[chex.Array, State]:
+    def reset(self, keys: chex.PRNGKey, epochs: Sequence[int]) -> Tuple[chex.Array, State]:
         obs, env_state = jax.vmap(self._env.reset)(keys, epochs)
         state = jax.vmap(lambda e_state: LogEnvState(
             e_state,
@@ -42,7 +42,7 @@ class SimpSigGameLogWrapper(LogWrapper):
         state: LogEnvState,
         action,
     ) -> Tuple[chex.Array, LogEnvState, float, bool, dict]:
-        obs, env_state, reward, done, info = jax.vmap(self._env.step)(
+        obs, env_state, reward, done, info = jax.vmap(self._env.step_env)(
             keys, state.env_state, action
         )
         ep_done = done["__all__"]
@@ -401,7 +401,7 @@ def test_rollout_execution(config, rng):
     # INIT ENV
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-    obs, log_env_state = env.reset(reset_rng, 0)  # log_env_state is a single variable, but each variable it has is actually batched
+    obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
 
     """
     init_transition = Transition( # This is no longer needed, but it may be helpful to know what types and shapes things are in the future.
@@ -423,14 +423,6 @@ def test_rollout_execution(config, rng):
     # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
     runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS']) # This is if everything is working
     # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
-
-    ############ Debugging so that we can look into env_step
-    # traj_batch = []
-    # for _ in range(config['NUM_STEPS']):
-    #     runner_state, traj = env_step(runner_state, env, config)
-    #     traj_batch.append(traj)
-    #######################
-    
     
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
@@ -537,13 +529,13 @@ def make_train(config):
         # INIT ENV
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-        obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
+        obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
         
         # TRAIN LOOP
         def _update_step(runner_state, update_step, env, config):
             # runner_state is actually a tuple of runner_states, one per agent
 
-            _, _ = env.reset(reset_rng, update_step)  # This should probably be a new rng each time
+            _, _ = env.reset(reset_rng, jnp.ones((len(reset_rng))) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
             
             # COLLECT TRAJECTORIES
             runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)

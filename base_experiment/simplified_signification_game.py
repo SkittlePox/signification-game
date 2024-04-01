@@ -8,6 +8,7 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
+import math
 
 from utils import to_jax
 
@@ -46,18 +47,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.num_listeners = num_listeners
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
-        if isinstance(channel_ratio_fn, str):
-            def ret_0(iteration):
-                return 0.0
-            
-            def ret_1(iteration):
-                return 1.0
-            if channel_ratio_fn == "ret_0":
-                self.channel_ratio_fn = ret_0
-            elif channel_ratio_fn == "ret_1":
-                self.channel_ratio_fn = ret_1
-        else:
-            self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
         self.stored_env_images = dataset[0]
         self.stored_env_labels = dataset[1]
         self.image_dim = image_dim
@@ -65,6 +54,30 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.reward_failure = reward_failure
         self.kwargs = kwargs
         # TODO: Move the above comments to an actual docstring
+
+        if isinstance(channel_ratio_fn, str):
+            def ret_0(iteration):
+                return 0.0
+            
+            def ret_1(iteration):
+                return 1.0
+            
+            def s_curve(x):
+                return 1.0 / (1.0 + jnp.exp(-1 * (jnp.array(x, float) - 200))) + 0.01
+            
+            def linear(x):
+                return x / 400.0
+
+            if channel_ratio_fn == "ret_0":
+                self.channel_ratio_fn = ret_0
+            elif channel_ratio_fn == "ret_1":
+                self.channel_ratio_fn = ret_1
+            elif channel_ratio_fn == "sigmoid1":
+                self.channel_ratio_fn = s_curve
+            elif channel_ratio_fn == "linear":
+                self.channel_ratio_fn = linear
+        else:
+            self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]
@@ -177,7 +190,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
         rewards["__all__"] = sum(rewards.values())
-        dones = {agent: False for agent in self.agents}
+
+        dones = {agent: False for agent in self.agents} # If the agents were never assigned to a channel, they are "done". #TODO: Lucas please do this
         dones["__all__"] = False
 
         ######## Then, update the state.
@@ -233,7 +247,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         
         return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, dones, {}
     
-    @partial(jax.jit, static_argnums=[0, 2])
+    @partial(jax.jit, static_argnums=[0, 3])
     def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
         """Reset the environment"""
         key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
