@@ -147,11 +147,11 @@ class ActorCriticSpeakerNoise(nn.Module):
     config: Dict
 
     @nn.compact
-    def __call__(self, z, y):
+    def __call__(self, y):
         y = nn.Embed(self.num_classes, self.latent_dim)(y)
         y = jnp.squeeze(y, axis=(0))
-        z = jnp.concatenate([z, y], axis=-1)
-        z = nn.Dense(7 * 7 * 256)(z)
+        # z = jnp.concatenate([z, y], axis=-1)
+        z = nn.Dense(7 * 7 * 256)(y)
         z = nn.relu(z)
         z = z.reshape((-1, 7, 7, 256))
         z = nn.ConvTranspose(128, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
@@ -229,7 +229,7 @@ def initialize_speaker(env, rng, config, learning_rate):
             dtype=jnp.int32
         )
     z = jax.random.normal(rng, (1, config["NUM_ENVS"], 32))
-    network_params = speaker_network.init(_rng, z, init_y)
+    network_params = speaker_network.init(_rng, init_y)
     if config["ANNEAL_LR"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
@@ -281,7 +281,7 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
-    policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, z, _speaker_obs_i)
+    policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i)
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     return action, log_prob, value
@@ -773,6 +773,6 @@ def main(config):
 
 
 if __name__ == "__main__":
-    main()
+    test()
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     #     test()
