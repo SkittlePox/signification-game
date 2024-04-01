@@ -340,6 +340,24 @@ def env_step(runner_state, env, config):
     speaker_obs = speaker_obs.reshape((config["NUM_ENVS"], -1))
     listener_obs = listener_obs.reshape((config["NUM_ENVS"], env_kwargs["num_channels"], env_kwargs["image_dim"], env_kwargs["image_dim"]))
 
+    def wandb_callback(metrics):
+        listener_obs, speaker_obs = metrics
+        # Ensure listener observations are in the correct shape for image conversion
+        if listener_obs.ndim > 4:
+            listener_obs = listener_obs.squeeze()  # Remove singleton dimensions if any
+        if listener_obs.ndim == 4:  # Expected shape: (NUM_ENVS, num_channels, image_dim, image_dim)
+            listener_images = listener_obs  # Use observations from all environments
+        else:
+            wandb.log({"listener_observations_shape was non-standard": listener_obs.shape})
+            return;  # Skip image logging if the shape is unexpected, but don't fail loudly
+            
+        # Log images from all environments
+        for env_idx, env_images in enumerate(listener_images):
+            wandb.log({f"listener_observations_env_{env_idx}": [wandb.Image(image) for image in np.split(env_images, env_images.shape[0], axis=0)]})
+
+    jax.experimental.io_callback(wandb_callback, None, (listener_obs, speaker_obs))
+
+
     transition = Transition(
         speaker_action,
         speaker_reward,
