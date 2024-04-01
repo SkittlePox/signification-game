@@ -1,4 +1,4 @@
-"LR": 5e-7
+"LR": 1e-4
 "NUM_ENVS": 1
 "NUM_STEPS": 32
 "UPDATE_EPOCHS": 5000
@@ -21,6 +21,7 @@
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
+  "channel_ratio_fn": "ret_0"
 "ANNEAL_LR": False
 
 # WandB Params

@@ -1,14 +1,14 @@
-"LR": 1e-4
+"LR": 8e-4
 "NUM_ENVS": 1
-"NUM_STEPS": 128
+"NUM_STEPS": 256
 "UPDATE_EPOCHS": 5000
-"MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE": 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
-"ENT_COEF": 0.015
-"VF_COEF": 0.8
-"MAX_GRAD_NORM": 0.95
+"ENT_COEF": 0.04
+"VF_COEF": 0.5
+"MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_LISTENER_ARCH": 'dense'
@@ -21,6 +21,7 @@
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
+  "channel_ratio_fn": "ret_1"
 "ANNEAL_LR": False
 
 # WandB Params

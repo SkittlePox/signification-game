@@ -248,13 +248,7 @@ def initialize_speaker(env, rng, config, learning_rate):
 
 @jax.profiler.annotate_function
 def define_env(config):
-    if config["ENV_DATASET"] == 'mnist':
-        def ret_0(iteration):
-            return 0.0
-        
-        def ret_1(iteration):
-            return 1.0
-        
+    if config["ENV_DATASET"] == 'mnist':        
         from torchvision.datasets import MNIST
         from utils import to_jax
 
@@ -263,7 +257,7 @@ def define_env(config):
         images = images.astype('float32') / 255.0
         
         # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
-        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], channel_ratio_fn=ret_1, dataset=(images, labels))
+        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
         return env
 
 @jax.profiler.annotate_function
@@ -320,6 +314,7 @@ def env_step(runner_state, env, config):
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
 
     # TODO: This can probably be deleted soon
+    # rng_step = jax.random.split(_rng, config["NUM_ENVS"])
     # SIMULATE SPEAKER ACTIONS. TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
     # speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
     # speaker_action = jnp.expand_dims(speaker_action, 0).repeat(config["NUM_ENVS"], axis=0)
@@ -355,7 +350,7 @@ def env_step(runner_state, env, config):
         for env_idx, env_images in enumerate(listener_images):
             wandb.log({f"listener_observations_env_{env_idx}": [wandb.Image(image) for image in np.split(env_images, env_images.shape[0], axis=0)]})
 
-    jax.experimental.io_callback(wandb_callback, None, (listener_obs, speaker_obs))
+    # jax.experimental.io_callback(wandb_callback, None, (listener_obs, speaker_obs))
 
 
     transition = Transition(
@@ -530,9 +525,6 @@ def make_train(config):
     def train(rng):
         # MAKE AGENTS
         rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
-        listener_rngs = jax.random.split(rng_l, env_kwargs["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
-        
-        rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
         listener_rngs = jax.random.split(rng_l, config["ENV_KWARGS"]["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
         speaker_rngs = jax.random.split(rng_s, config["ENV_KWARGS"]["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
         
@@ -559,7 +551,11 @@ def make_train(config):
             # Instead of executing the agents on the final observation to get their values, we are simply going to ignore the last observation from traj_batch.
             # We'll need to get the final value in transition_batch and cut off the last index
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
-            trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
+            # trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
+            trimmed_transition_batch = Transition(**{
+                k: (v[1:, ...] if k == 'speaker_reward' else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
+                for k, v in transition_batch._asdict().items()
+            })
 
             # CALCULATE ADVANTAGE #############
             listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
@@ -608,7 +604,7 @@ def make_train(config):
                 return advantages, advantages + trans_batch.speaker_value
 
             listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
-            speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1]) # TODO: Might want to do some offsetting of rewards/values by 1? If we don't do this, we'll need to set GAMMA and GAE_LAMBDA to something other than 0
+            speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1])
             
             ##########################
 
@@ -633,28 +629,23 @@ def make_train(config):
                     listener_alive=listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 )
 
-                # This line tests a single update
-                # new_listener_train_state_i, total_loss = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config)                
-                
                 # Iterate through batches
                 new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
                 return new_listener_train_state_i, total_loss
             
-            # TODO: write _update_a_speaker()
             def _update_a_speaker(i, speaker_train_states, speaker_trans_batch, speaker_advantages, speaker_targets):                
                 speaker_train_state_i = speaker_train_states[i]
                 speaker_advantages_i = speaker_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 speaker_targets_i = speaker_targets.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 
-                # TODO: All of this will need to change. The speakers need to be sliced, not the listeners.
                 speaker_trans_batch_i = Transition(
-                    speaker_action=speaker_trans_batch.speaker_action,
-                    speaker_reward=speaker_trans_batch.speaker_reward,
-                    speaker_value=speaker_trans_batch.speaker_value,
-                    speaker_log_prob=speaker_trans_batch.speaker_log_prob,
+                    speaker_action=speaker_trans_batch.speaker_action.reshape((config["NUM_STEPS"], env_kwargs["image_dim"] * env_kwargs["image_dim"], -1))[:, :, i].reshape((config["NUM_MINIBATCHES"], -1, env_kwargs["image_dim"]**2)),
+                    speaker_reward=speaker_trans_batch.speaker_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    speaker_value=speaker_trans_batch.speaker_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
+                    speaker_log_prob=speaker_trans_batch.speaker_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_obs=speaker_trans_batch.speaker_obs,
-                    speaker_alive=speaker_trans_batch.speaker_alive,
+                    speaker_alive=speaker_trans_batch.speaker_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_action=jnp.float32(speaker_trans_batch.listener_action.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))),
                     listener_reward=speaker_trans_batch.listener_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_value=speaker_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
@@ -663,22 +654,25 @@ def make_train(config):
                     listener_alive=speaker_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
                 )
 
-                # This line tests a single update
-                # new_listener_train_state_i, total_loss = update_minibatch(0, listener_trans_batch_i, listener_advantages_i, listener_targets_i, listener_train_state_i, config)                
-                
                 # Iterate through batches
-                new_speaker_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, speaker_trans_batch_i, speaker_advantages_i, speaker_targets_i, train_state, config), speaker_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
+                new_speaker_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, speaker_trans_batch_i, speaker_advantages_i, speaker_targets_i, train_state, config, listener=False), speaker_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
                 return new_speaker_train_state_i, total_loss
 
+            # Commenting out for debugging. Only need the speakers working rn.
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
 
+            speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
+            speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
+            speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])
+
             # wandb logging
             def wandb_callback(metrics):
-                ll, tb = metrics
-                r = tb.listener_reward
+                ll, sl, tb = metrics
+                lr = tb.listener_reward
+                sr = tb.speaker_reward
                 logp = tb.listener_log_prob
                 v = tb.listener_value
 
@@ -692,15 +686,26 @@ def make_train(config):
                 # loss_dict["average_loss"] = jnp.mean(ll)
                 # metric_dict.udpate({"loss/average loss for listeners"})
 
-                r = r.T
+                metric_dict.update({f"loss/total loss/speaker {i}": jnp.mean(sl[i][0]).item() for i in range(len(sl))})
+                metric_dict.update({f"loss/value loss/speaker {i}": jnp.mean(sl[i][1][0]).item() for i in range(len(sl))})
+                metric_dict.update({f"loss/actor loss/speaker {i}": jnp.mean(sl[i][1][1]).item() for i in range(len(sl))})
+                metric_dict.update({f"loss/entropy/speaker {i}": jnp.mean(sl[i][1][2]).item() for i in range(len(sl))})
+
+                lr = lr.T
                 # metric_dict.update({f"cumulative reward/listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
-                metric_dict.update({f"reward/mean reward/listener {i}": jnp.mean(r[i]).item() for i in range(len(r))})
-                metric_dict.update({"reward/mean reward/all listeners": jnp.mean(r).item()})
+                metric_dict.update({f"reward/mean reward/listener {i}": jnp.mean(lr[i]).item() for i in range(len(lr))})
+                metric_dict.update({"reward/mean reward/all listeners": jnp.mean(lr).item()})
 
                 random_expected_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]
                 if random_expected_reward != 0:
-                    metric_dict.update({f"reward/mean reward over random/listener {i}": jnp.mean(r[i]).item()/random_expected_reward for i in range(len(r))})
+                    metric_dict.update({f"reward/mean reward over random/listener {i}": jnp.mean(lr[i]).item()/random_expected_reward for i in range(len(lr))})
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
+
+                sr = sr.T
+                metric_dict.update({f"reward/mean reward/speaker {i}": jnp.mean(sr[i]).item() for i in range(len(sr))})
+                metric_dict.update({"reward/mean reward/all speakers": jnp.mean(sr).item()})
+                if random_expected_reward != 0:
+                    metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_reward for i in range(len(sr))})
                 
                 logp = logp.T
                 metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
@@ -712,7 +717,7 @@ def make_train(config):
                 
                 wandb.log(metric_dict)
 
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, trimmed_transition_batch))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch))
 
             runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
             return runner_state, update_step + 1 # TODO Lucas: Returning the transition batches above would be really helpful, but I don't know how it would affect the jax.lax.scan call 4 lines of code below
@@ -751,7 +756,7 @@ def test(config):
     print(out['runner_state'])
 
 
-@hydra.main(version_base=None, config_path="config", config_name="test")
+@hydra.main(version_base=None, config_path="config", config_name="default")
 def main(config):
     config = OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
@@ -773,6 +778,6 @@ def main(config):
 
 
 if __name__ == "__main__":
-    test()
+    main()
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     #     test()

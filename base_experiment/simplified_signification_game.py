@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Tuple, Dict, Callable
+from typing import Tuple, Dict, Callable, Union
 import numpy as np
 import jax, chex
 import jax.numpy as jnp
@@ -39,13 +39,24 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Callable, dataset: tuple, image_dim: int, reward_success: float = 1.0, reward_failure: float = -0.1, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], dataset: tuple, image_dim: int, reward_success: float = 1.0, reward_failure: float = -0.1, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
-        self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
+        if isinstance(channel_ratio_fn, str):
+            def ret_0(iteration):
+                return 0.0
+            
+            def ret_1(iteration):
+                return 1.0
+            if channel_ratio_fn == "ret_0":
+                self.channel_ratio_fn = ret_0
+            elif channel_ratio_fn == "ret_1":
+                self.channel_ratio_fn = ret_1
+        else:
+            self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
         self.stored_env_images = dataset[0]
         self.stored_env_labels = dataset[1]
         self.image_dim = image_dim
