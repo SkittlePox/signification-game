@@ -24,8 +24,8 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 
 class SimpSigGameLogWrapper(LogWrapper):
     @partial(jax.jit, static_argnums=(0,))
-    def reset(self, keys: chex.PRNGKey) -> Tuple[chex.Array, State]:
-        obs, env_state = jax.vmap(self._env.reset)(keys)
+    def reset(self, keys: chex.PRNGKey, epochs: int) -> Tuple[chex.Array, State]:
+        obs, env_state = jax.vmap(self._env.reset)(keys, epochs)
         state = jax.vmap(lambda e_state: LogEnvState(
             e_state,
             jnp.zeros((self._env.num_agents,)),
@@ -204,13 +204,13 @@ def initialize_listener(env, rng, config, learning_rate):
             (1, config["NUM_ENVS"], config["ENV_KWARGS"]["image_dim"]**2)
         )
     network_params = listener_network.init(_rng, init_x)    # I'm not sure how this works, I need to control the size of the inputs and the size of the outputs
-    if config["ANNEAL_LR"]:
+    if config["ANNEAL_LR_LISTENER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
             optax.adam(learning_rate=learning_rate, eps=1e-5),
         )
     else:
-        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR"], eps=1e-5))
+        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR_LISTENER"], eps=1e-5))
     
     train_state = TrainState.create(
         apply_fn=listener_network.apply,
@@ -230,13 +230,13 @@ def initialize_speaker(env, rng, config, learning_rate):
         )
     z = jax.random.normal(rng, (1, config["NUM_ENVS"], 32))
     network_params = speaker_network.init(_rng, init_y)
-    if config["ANNEAL_LR"]:
+    if config["ANNEAL_LR_SPEAKER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
             optax.adam(learning_rate=learning_rate, eps=1e-5),
         )
     else:
-        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR"], eps=1e-5))
+        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR_SPEAKER"], eps=1e-5))
     
     train_state = TrainState.create(
         apply_fn=speaker_network.apply,
@@ -384,7 +384,7 @@ def test_rollout_execution(config, rng):
     def linear_schedule(count):
         frac = 1.0 - (count // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
         # jax.debug.print(str(count))
-        return config["LR"] * frac
+        return config["LR_LISTENER"] * frac
 
     # MAKE AGENTS
     rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
@@ -401,7 +401,7 @@ def test_rollout_execution(config, rng):
     # INIT ENV
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-    obs, log_env_state = env.reset(reset_rng)  # log_env_state is a single variable, but each variable it has is actually batched
+    obs, log_env_state = env.reset(reset_rng, 0)  # log_env_state is a single variable, but each variable it has is actually batched
 
     """
     init_transition = Transition( # This is no longer needed, but it may be helpful to know what types and shapes things are in the future.
@@ -519,7 +519,7 @@ def make_train(config):
     def linear_schedule(count):
         frac = 1.0 - (count // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
         # jax.debug.print(str(count))
-        return config["LR"] * frac
+        return config["LR_LISTENER"] * frac
 
     @jax.profiler.annotate_function
     def train(rng):
@@ -542,6 +542,8 @@ def make_train(config):
         # TRAIN LOOP
         def _update_step(runner_state, update_step, env, config):
             # runner_state is actually a tuple of runner_states, one per agent
+
+            _, _ = env.reset(reset_rng, update_step)  # This should probably be a new rng each time
             
             # COLLECT TRAJECTORIES
             runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)
@@ -608,7 +610,6 @@ def make_train(config):
             
             ##########################
 
-            # UPDATE NETWORKS (this is listener-specific)
             def _update_a_listener(i, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):                
                 listener_train_state_i = listener_train_states[i]
                 listener_advantages_i = listener_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
@@ -720,7 +721,7 @@ def make_train(config):
             jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch))
 
             runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
-            return runner_state, update_step + 1 # TODO Lucas: Returning the transition batches above would be really helpful, but I don't know how it would affect the jax.lax.scan call 4 lines of code below
+            return runner_state, update_step + 1
 
         rng, _rng = jax.random.split(rng)
         runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
@@ -728,10 +729,8 @@ def make_train(config):
         partial_update_fn = partial(_update_step, env=env, config=config)
         runner_state, _, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
             partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS']), config["UPDATE_EPOCHS"]
-            # TODO: Lucas rewrite the above 
         )
 
-        # TODO: Lucas, return the trimmed_transition_batfch
         return {"runner_state": runner_state, "traj_batch": traj_batch}
 
     return train

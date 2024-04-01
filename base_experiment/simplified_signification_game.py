@@ -36,6 +36,7 @@ class State:
     previous_speaker_images: chex.Array  # [image_size] * num_speakers
 
     iteration: int
+    epoch: int
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
@@ -187,7 +188,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(state.iteration)).astype(int)
+        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(int)
         # requested_num_speaker_images should not be greater than self.num_speakers
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
@@ -226,13 +227,14 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             previous_speaker_images=state.speaker_images,
 
-            iteration=state.iteration + 1
+            iteration=state.iteration + 1,
+            epoch=state.epoch
         )
         
         return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, dones, {}
     
     @partial(jax.jit, static_argnums=[0, 2])
-    def reset(self, key: chex.PRNGKey, as_dict: bool = False) -> Tuple[Dict, State]:
+    def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
         """Reset the environment"""
         key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
         
@@ -241,7 +243,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(0)).astype(int)
+        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(epoch)).astype(int)
         # requested_num_speaker_images should not be greater than self.num_speakers
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
@@ -280,7 +282,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             previous_speaker_images=jnp.zeros((max(self.num_speakers, 1), self.image_dim, self.image_dim), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function
 
-            iteration=0
+            iteration=0,
+            epoch=epoch
         )
 
         return self.get_obs(state, as_dict), state
