@@ -720,7 +720,7 @@ def make_train(config):
                         ax.text(0, -12, f"L: {listener_actions[image_idx]}", color='black', fontsize=8)
                         ax.imshow(speaker_actions[image_idx], cmap='gray', aspect='equal')
                         ax.axis('off')  # Remove axis labels
-
+                plt.close()
                 metric_dict.update({"channel_images_and_labels": wandb.Image(fig)})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
