@@ -309,7 +309,7 @@ def env_step(runner_state, env, config):
 
     # COLLECT SPEAKER ACTIONS
     speaker_outputs = [execute_individual_speaker(*args) for args in zip(env_rngs, speaker_train_states, speaker_obs)]
-    speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(1, config["NUM_ENVS"], env_kwargs["image_dim"], env_kwargs["image_dim"])
+    speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], env_kwargs["image_dim"], env_kwargs["image_dim"], -1)
     speaker_log_prob = jnp.array([o[1] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
 
