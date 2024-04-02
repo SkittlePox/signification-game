@@ -191,8 +191,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
         rewards["__all__"] = sum(rewards.values())
 
-        dones = {agent: False for agent in self.agents} # If the agents were never assigned to a channel, they are "done". #TODO: Lucas please do this
-        dones["__all__"] = False
+        alives = {**{agent: True if i in state.channel_map[:, 0] else False for i, agent in enumerate(self.speaker_agents)}, **{agent: True if i in state.channel_map[:, 1] else False for i, agent in enumerate(self.listener_agents)}}
+        alives["__all__"] = False # It's important that this is False. Because the MARL library thinks this variable is actually "dones", and __all__ True would signify end of episode
 
         ######## Then, update the state.
         key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
@@ -245,7 +245,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             epoch=state.epoch
         )
         
-        return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, dones, {}
+        return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, alive, {}
     
     @partial(jax.jit, static_argnums=[0, 3])
     def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
@@ -412,7 +412,7 @@ def test_mnist_signification_game():
         return 0.5
     
     # Define parameters for a signification game
-    num_speakers = 5
+    num_speakers = 10
     num_listeners = 10
     num_channels = 10
     num_classes = 10
@@ -424,7 +424,7 @@ def test_mnist_signification_game():
     key, key_reset, key_act, key_step = jax.random.split(key, 4)
     
     env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28)
-    obs, state = env.reset(key_reset, as_dict=True)
+    obs, state = env.reset(key_reset, epoch=10, as_dict=True)
     
     print(list(obs.keys()))
     print(obs)

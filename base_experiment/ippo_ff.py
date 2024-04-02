@@ -324,10 +324,10 @@ def env_step(runner_state, env, config):
 
     ##### STEP ENV
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-    new_obs, env_state, rewards, dones, info = env.step(rng_step, log_env_state, (speaker_action, listener_action))
+    new_obs, env_state, rewards, alives, info = env.step(rng_step, log_env_state, (speaker_action, listener_action))
 
-    speaker_alive = jnp.array([dones[f"speaker_{v}"] for v in range(env_kwargs["num_speakers"])]).reshape(config["NUM_ENVS"], -1)
-    listener_alive = jnp.array([dones[f"listener_{v}"] for v in range(env_kwargs["num_listeners"])]).reshape(config["NUM_ENVS"], -1)
+    speaker_alive = jnp.array([alives[f"speaker_{v}"] for v in range(env_kwargs["num_speakers"])]).reshape(config["NUM_ENVS"], -1)
+    listener_alive = jnp.array([alives[f"listener_{v}"] for v in range(env_kwargs["num_listeners"])]).reshape(config["NUM_ENVS"], -1)
 
     speaker_reward = jnp.array([rewards[f"speaker_{v}"] for v in range(env_kwargs["num_speakers"])]).reshape(config["NUM_ENVS"], -1)
     listener_reward = jnp.array([rewards[f"listener_{v}"] for v in range(env_kwargs["num_listeners"])]).reshape(config["NUM_ENVS"], -1)
@@ -558,13 +558,13 @@ def make_train(config):
             def _calculate_gae_listeners(trans_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
                     gae, next_value = gae_and_next_value
-                    done, value, reward = (
+                    alive, value, reward = (
                         transition.listener_alive,
                         transition.listener_value,
                         transition.listener_reward,
                     )
-                    delta = reward + config["GAMMA"] * next_value * (1 - done) - value
-                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
+                    delta = reward + config["GAMMA"] * next_value * alive - value
+                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
                     return (gae, value), gae
 
                 _, advantages = jax.lax.scan(
@@ -579,13 +579,13 @@ def make_train(config):
             def _calculate_gae_speakers(trans_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
                     gae, next_value = gae_and_next_value
-                    done, value, reward = (
+                    alive, value, reward = (
                         transition.speaker_alive,
                         transition.speaker_value,
                         transition.speaker_reward,
                     )
-                    delta = reward + config["GAMMA"] * next_value * (1 - done) - value
-                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * (1 - done) * gae
+                    delta = reward + config["GAMMA"] * next_value * alive - value
+                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
                     return (gae, value), gae
 
                 _, advantages = jax.lax.scan(
