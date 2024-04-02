@@ -702,6 +702,27 @@ def make_train(config):
                 metric_dict.update({"env/avg_num_speaker_images": jnp.mean(les.env_state.requested_num_speaker_images)})
                 # TODO: Lucas do more logging of env state info here.
 
+                listener_actions = tb.listener_action
+                speaker_actions = tb.speaker_action
+                speaker_values = tb.speaker_value
+
+                # remove singleton values (squeeze from (MINIBATCH_SIZE,1,1) --> (MINIBATCH_SIZE))
+                speaker_values = speaker_values.squeeze()
+                speaker_actions = speaker_actions.squeeze()
+                listener_actions = listener_actions.squeeze()
+                minibatch_size = config["MINIBATCH_SIZE"]
+                fig, axs = plt.subplots(4, minibatch_size // 4, figsize=(5, 4), gridspec_kw={'hspace': 0.3})
+                for row in range(4):
+                    for col in range(minibatch_size // 4):
+                        image_idx = row * (minibatch_size // 4) + col
+                        ax = axs[row, col]
+                        ax.text(0, -4, f"S: {speaker_values[image_idx]:.2f}", color='black', fontsize=8)
+                        ax.text(0, -12, f"L: {listener_actions[image_idx]}", color='black', fontsize=8)
+                        ax.imshow(speaker_actions[image_idx], cmap='gray', aspect='equal')
+                        ax.axis('off')  # Remove axis labels
+
+                metric_dict.update({"channel_images_and_labels": wandb.Image(fig)})
+
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
                 metric_dict.update({f"loss/value loss/listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
