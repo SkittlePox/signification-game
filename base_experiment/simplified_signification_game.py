@@ -38,6 +38,7 @@ class State:
 
     iteration: int
     epoch: int
+    requested_num_speaker_images: int
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
@@ -162,7 +163,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             label = jnp.where(is_speaker, state.speaker_labels[speaker_index], state.env_labels[speaker_index-self.num_speakers])
 
             # Check if the listener's action matches the correct label and convert boolean to integer
-            listener_correct = (listener_actions[listener_index] == label).astype(int)
+            listener_correct = (listener_actions[listener_index] == label).astype(jnp.int32)
 
             # Return reward based on whether the listener was correct
             reward = jnp.where(listener_correct, self.reward_success, self.reward_failure)
@@ -191,8 +192,13 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
         rewards["__all__"] = sum(rewards.values())
 
-        alives = {**{agent: True if i in state.channel_map[:, 0] else False for i, agent in enumerate(self.speaker_agents)}, **{agent: True if i in state.channel_map[:, 1] else False for i, agent in enumerate(self.listener_agents)}}
-        alives["__all__"] = False # It's important that this is False. Because the MARL library thinks this variable is actually "dones", and __all__ True would signify end of episode
+
+        speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.channel_map[:, 0]).astype(jnp.int32)
+        listener_alives = jnp.isin(jnp.arange(self.num_listeners), state.channel_map[:, 1]).astype(jnp.int32)
+
+        alives = {**{agent: speaker_alives[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_alives[i] for i, agent in enumerate(self.listener_agents)}}
+        # alives = {**{agent: 1 if i in state.channel_map[:, 0] else 0 for i, agent in enumerate(self.speaker_agents)}, **{agent: 1 if i in state.channel_map[:, 1] else 0 for i, agent in enumerate(self.listener_agents)}}
+        alives["__all__"] = 0 # It's important that this is False. Because the MARL library thinks this variable is actually "dones", and __all__ True would signify end of episode
 
         ######## Then, update the state.
         key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
@@ -202,7 +208,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(int)
+        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(jnp.int32)
         # requested_num_speaker_images should not be greater than self.num_speakers
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
@@ -242,10 +248,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             previous_speaker_images=state.speaker_images,
 
             iteration=state.iteration + 1,
-            epoch=state.epoch
+            epoch=state.epoch,
+            requested_num_speaker_images=requested_num_speaker_images   # For next state
         )
         
-        return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, alive, {}
+        return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, alives, {}
     
     @partial(jax.jit, static_argnums=[0, 3])
     def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
@@ -257,7 +264,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(epoch)).astype(int)
+        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(epoch)).astype(jnp.int32)
         # requested_num_speaker_images should not be greater than self.num_speakers
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
@@ -297,7 +304,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             previous_speaker_images=jnp.zeros((max(self.num_speakers, 1), self.image_dim, self.image_dim), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function
 
             iteration=0,
-            epoch=epoch
+            epoch=epoch,
+            requested_num_speaker_images=requested_num_speaker_images   # For next state
         )
 
         return self.get_obs(state, as_dict), state

@@ -141,7 +141,7 @@ class ActorCriticListenerDense(nn.Module):
         return pi, jnp.squeeze(critic, axis=-1)
     
 
-class ActorCriticSpeakerNoise(nn.Module):
+class ActorCriticSpeaker(nn.Module):
     latent_dim: int
     num_classes: int
     config: Dict
@@ -221,7 +221,7 @@ def initialize_listener(env, rng, config, learning_rate):
 
 @jax.profiler.annotate_function
 def initialize_speaker(env, rng, config, learning_rate):
-    speaker_network = ActorCriticSpeakerNoise(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+    speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
@@ -427,7 +427,7 @@ def test_rollout_execution(config, rng):
     return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 @jax.profiler.annotate_function
-def update_minibatch(j, trans_batch_i, advantages_i, targets_i, train_state, config, listener=True):
+def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_state, config):
     # j is for iterating through minibatches
 
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets):
@@ -463,33 +463,78 @@ def update_minibatch(j, trans_batch_i, advantages_i, targets_i, train_state, con
         total_loss = (
                 loss_actor
                 + config["VF_COEF"] * value_loss
-                - config["ENT_COEF"] * entropy
+                - config["ENT_COEF_LISTENER"] * entropy
         )
         return total_loss, (value_loss, loss_actor, entropy)
-
+ 
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
 
+    total_loss, grads = grad_fn(
+        train_state.params,    # params don't change across minibatches, they are for the same agent.
+        trans_batch_i.listener_obs[j],
+        trans_batch_i.listener_action[j], 
+        trans_batch_i.listener_value[j], 
+        trans_batch_i.listener_log_prob[j],
+        advantages_i[j], 
+        targets_i[j]
+    )
+    
+    train_state = train_state.apply_gradients(grads=grads)
 
-    if listener:
-        total_loss, grads = grad_fn(
-            train_state.params,    # params don't change across minibatches, they are for the same agent.
-            trans_batch_i.listener_obs[j],
-            trans_batch_i.listener_action[j], 
-            trans_batch_i.listener_value[j], 
-            trans_batch_i.listener_log_prob[j],
-            advantages_i[j], 
-            targets_i[j]
+    return train_state, total_loss
+
+@jax.profiler.annotate_function
+def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_state, config):
+    # j is for iterating through minibatches
+
+    def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets):
+        # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
+        _i_policy, _i_value = train_state.apply_fn(params, _obs)
+        _i_log_prob = _i_policy.log_prob(_actions)
+
+        # CALCULATE VALUE LOSS
+        value_pred_clipped = values + (
+                _i_value - values
+        ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
+
+        value_losses = jnp.square(values - targets)
+        value_losses_clipped = jnp.square(value_pred_clipped - targets)
+        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean())
+
+        # CALCULATE ACTOR LOSS
+        ratio = jnp.exp(_i_log_prob - log_probs)
+        gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        loss_actor1 = ratio * gae_for_i
+        loss_actor2 = (
+                jnp.clip(
+                    ratio,
+                    1.0 - config["CLIP_EPS"],
+                    1.0 + config["CLIP_EPS"],
+                )
+                * gae_for_i
         )
-    else:
-        total_loss, grads = grad_fn(
-            train_state.params,    # params don't change across minibatches, they are for the same agent.
-            trans_batch_i.speaker_obs[j],
-            trans_batch_i.speaker_action[j], 
-            trans_batch_i.speaker_value[j], 
-            trans_batch_i.speaker_log_prob[j],
-            advantages_i[j], 
-            targets_i[j]
+        loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
+        loss_actor = loss_actor.mean()
+        entropy = _i_policy.entropy().mean()
+
+        total_loss = (
+                loss_actor
+                + config["VF_COEF"] * value_loss
+                - config["ENT_COEF_SPEAKER"] * entropy
         )
+        return total_loss, (value_loss, loss_actor, entropy)
+ 
+    grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
+
+    total_loss, grads = grad_fn(
+        train_state.params,    # params don't change across minibatches, they are for the same agent.
+        trans_batch_i.speaker_obs[j],
+        trans_batch_i.speaker_action[j], 
+        trans_batch_i.speaker_value[j], 
+        trans_batch_i.speaker_log_prob[j],
+        advantages_i[j], 
+        targets_i[j]
+    )
     
     train_state = train_state.apply_gradients(grads=grads)
 
@@ -535,7 +580,8 @@ def make_train(config):
         def _update_step(runner_state, update_step, env, config):
             # runner_state is actually a tuple of runner_states, one per agent
 
-            _, _ = env.reset(reset_rng, jnp.ones((len(reset_rng))) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
+            last_obs, log_env_state = env.reset(reset_rng, jnp.ones((len(reset_rng))) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
+            runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, runner_state[4])
             
             # COLLECT TRAJECTORIES
             runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)
@@ -547,7 +593,7 @@ def make_train(config):
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
             # trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
             trimmed_transition_batch = Transition(**{
-                k: (v[1:, ...] if k == 'speaker_reward' else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
+                k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
 
@@ -623,7 +669,7 @@ def make_train(config):
                 )
 
                 # Iterate through batches
-                new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
+                new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch_listener(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
                 return new_listener_train_state_i, total_loss
             
@@ -639,16 +685,16 @@ def make_train(config):
                     speaker_log_prob=speaker_trans_batch.speaker_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_obs=speaker_trans_batch.speaker_obs,
                     speaker_alive=speaker_trans_batch.speaker_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    listener_action=jnp.float32(speaker_trans_batch.listener_action.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))),
-                    listener_reward=speaker_trans_batch.listener_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    listener_value=speaker_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    listener_log_prob=speaker_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    listener_obs=speaker_trans_batch.listener_obs.reshape((config["NUM_STEPS"], speaker_trans_batch.listener_obs.shape[1]*speaker_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES"], -1, env_kwargs["image_dim"]**2)),
-                    listener_alive=speaker_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1))
+                    listener_action=speaker_trans_batch.listener_action,
+                    listener_reward=speaker_trans_batch.listener_reward,
+                    listener_value=speaker_trans_batch.listener_value,
+                    listener_log_prob=speaker_trans_batch.listener_log_prob,
+                    listener_obs=speaker_trans_batch.listener_obs,
+                    listener_alive=speaker_trans_batch.listener_alive
                 )
 
                 # Iterate through batches
-                new_speaker_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch(i, speaker_trans_batch_i, speaker_advantages_i, speaker_targets_i, train_state, config, listener=False), speaker_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
+                new_speaker_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch_speaker(i, speaker_trans_batch_i, speaker_advantages_i, speaker_targets_i, train_state, config), speaker_train_state_i, jnp.arange(config["NUM_MINIBATCHES"]))
 
                 return new_speaker_train_state_i, total_loss
 
@@ -663,13 +709,16 @@ def make_train(config):
 
             # wandb logging
             def wandb_callback(metrics):
-                ll, sl, tb = metrics
+                ll, sl, tb, les = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 logp = tb.listener_log_prob
                 v = tb.listener_value
 
                 metric_dict = {}
+
+                metric_dict.update({"env/avg_num_speaker_images": jnp.mean(les.env_state.requested_num_speaker_images)})
+                # TODO: Lucas do more logging of env state info here.
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
@@ -689,19 +738,19 @@ def make_train(config):
                 metric_dict.update({f"reward/mean reward/listener {i}": jnp.mean(lr[i]).item() for i in range(len(lr))})
                 metric_dict.update({"reward/mean reward/all listeners": jnp.mean(lr).item()})
 
-                random_expected_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]
-                if random_expected_reward != 0:
-                    metric_dict.update({f"reward/mean reward over random/listener {i}": jnp.mean(lr[i]).item()/random_expected_reward for i in range(len(lr))})
-                    # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
-
                 sr = sr.T
                 metric_dict.update({f"reward/mean reward/speaker {i}": jnp.mean(sr[i]).item() for i in range(len(sr))})
                 metric_dict.update({"reward/mean reward/all speakers": jnp.mean(sr).item()})
+                
+                random_expected_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]
                 if random_expected_reward != 0:
+                    metric_dict.update({f"reward/mean reward over random/listener {i}": jnp.mean(lr[i]).item()/random_expected_reward for i in range(len(lr))})
                     metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_reward for i in range(len(sr))})
+                    # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
                 logp = logp.T
                 metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
+                
                 v = v.T
                 metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(v[i]).item() for i in range(len(v))})
 
@@ -710,7 +759,7 @@ def make_train(config):
                 
                 wandb.log(metric_dict)
 
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state))
 
             runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
             return runner_state, update_step + 1
