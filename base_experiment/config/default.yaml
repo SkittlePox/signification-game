@@ -29,6 +29,6 @@
 "ANNEAL_LR_LISTENER": False
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"

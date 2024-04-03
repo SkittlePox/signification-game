@@ -280,7 +280,7 @@ def initialize_speaker(env, rng, config, learning_rate):
             (1, config["NUM_ENVS"], 1),
             dtype=jnp.int32
         )
-    z = jax.random.normal(rng, (1, config["NUM_ENVS"], 32))
+    # z = jax.random.normal(rng, (1, config["NUM_ENVS"], 32))
     network_params = speaker_network.init(_rng, init_y)
     if config["ANNEAL_LR_SPEAKER"]:
         tx = optax.chain(
@@ -328,8 +328,9 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i)
     action = policy.sample(seed=__rng)
-    log_prob = policy.log_prob(action)
-    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value  # TODO: Clipping may be a bad idea, might want to reparameterize to a beta distribution instead of a multivariate
+    log_prob = jnp.sum(policy.log_prob(action), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
+    # return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value  # TODO: Clipping may be a bad idea, might want to reparameterize to a beta distribution instead of a multivariate
+    return action, log_prob, value
 
 # @jax.jit
 @jax.profiler.annotate_function
