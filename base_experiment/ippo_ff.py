@@ -215,7 +215,7 @@ class ActorCriticSpeakerBetaDist(nn.Module):
         actor_beta = nn.softplus(actor_beta) + 1e-6  # Ensure positive beta
 
         # Create a beta distribution
-        pi = distrax.Beta(concentration1=actor_alpha, concentration0=actor_beta)
+        pi = distrax.Beta(alpha=actor_alpha, beta=actor_beta)
 
         # Critic
         critic = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
@@ -270,7 +270,10 @@ def initialize_listener(env, rng, config, learning_rate):
 
 @jax.profiler.annotate_function
 def initialize_speaker(env, rng, config, learning_rate):
-    speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+    if config["ENV_SPEAKER_ARCH"] == 'gauss':
+        speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+    elif config["ENV_SPEAKER_ARCH"] == 'beta':
+        speaker_network = ActorCriticSpeakerBetaDist(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
@@ -318,7 +321,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
 
 @jax.profiler.annotate_function
 def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
-    z = jax.random.normal(__rng, (1, 1, 32))   # I should be splitting this rng again
+    # z = jax.random.normal(__rng, (1, 1, 32))   # I should be splitting this rng again
     # TODO: This looks terrible, I'm sure there's a better way
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
