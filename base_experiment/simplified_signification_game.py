@@ -68,6 +68,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             
             def linear(x):
                 return x / 400.0
+            
+            def fifth(x):
+                return 1.0 / 5.0
 
             if channel_ratio_fn == "ret_0":
                 self.channel_ratio_fn = ret_0
@@ -77,6 +80,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.channel_ratio_fn = s_curve
             elif channel_ratio_fn == "linear":
                 self.channel_ratio_fn = linear
+            elif channel_ratio_fn == "fifth":
+                self.channel_ratio_fn = fifth
         else:
             self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
 

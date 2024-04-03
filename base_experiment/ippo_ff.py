@@ -166,6 +166,7 @@ class ActorCriticSpeaker(nn.Module):
 
         # Actor Mean
         actor_mean = nn.Dense(28 * 28)(z)
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         # Actor Standard Deviation
         actor_std = nn.Dense(28 * 28)(z)
@@ -666,7 +667,7 @@ def make_train(config):
                     speaker_reward=speaker_trans_batch.speaker_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_value=speaker_trans_batch.speaker_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_log_prob=speaker_trans_batch.speaker_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    speaker_obs=speaker_trans_batch.speaker_obs.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),   # The problem is on this line. I need to get the ith speaker's action
+                    speaker_obs=speaker_trans_batch.speaker_obs.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_alive=speaker_trans_batch.speaker_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_action=speaker_trans_batch.listener_action,
                     listener_reward=speaker_trans_batch.listener_reward,
