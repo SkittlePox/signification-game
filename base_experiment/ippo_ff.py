@@ -240,11 +240,11 @@ class ActorCriticSpeakerBetaDistFast(nn.Module):
 
         # Actor Alpha
         actor_alpha = nn.Dense(784)(z)
-        actor_alpha = nn.softplus(actor_alpha) + 1e-6  # Ensure positive alpha
+        actor_alpha = nn.softplus(actor_alpha) + 1.0  # Ensure alpha > 1
 
         # Actor Beta
         actor_beta = nn.Dense(784)(z)
-        actor_beta = nn.softplus(actor_beta) + 1e-6  # Ensure positive beta
+        actor_beta = nn.softplus(actor_beta) + 1.0  # Ensure beta > 1
 
         # Create a beta distribution
         pi = distrax.Beta(alpha=actor_alpha, beta=actor_beta)
@@ -665,7 +665,7 @@ def make_train(config):
             })
 
             def check_tranbatch(trans_batch):
-                print(trans_batch)
+                print(trans_batch.speaker_log_prob)
 
             jax.debug.callback(check_tranbatch, trimmed_transition_batch)
 
