@@ -225,6 +225,36 @@ class ActorCriticSpeakerBetaDist(nn.Module):
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
+    
+
+class ActorCriticSpeakerBetaDistFast(nn.Module):
+    latent_dim: int
+    num_classes: int
+    config: Dict
+
+    @nn.compact
+    def __call__(self, y):
+        y = nn.Embed(self.num_classes, self.latent_dim)(y)
+        z = nn.Dense(128)(y)
+        z = nn.relu(z)
+
+        # Actor Alpha
+        actor_alpha = nn.Dense(784)(z)
+        actor_alpha = nn.softplus(actor_alpha) + 1e-6  # Ensure positive alpha
+
+        # Actor Beta
+        actor_beta = nn.Dense(784)(z)
+        actor_beta = nn.softplus(actor_beta) + 1e-6  # Ensure positive beta
+
+        # Create a beta distribution
+        pi = distrax.Beta(alpha=actor_alpha, beta=actor_beta)
+
+        # Critic
+        critic = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
 
 
 class Transition(NamedTuple):
@@ -274,6 +304,8 @@ def initialize_speaker(env, rng, config, learning_rate):
         speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'beta':
         speaker_network = ActorCriticSpeakerBetaDist(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+    elif config["ENV_SPEAKER_ARCH"] == 'betafast':
+        speaker_network = ActorCriticSpeakerBetaDistFast(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
