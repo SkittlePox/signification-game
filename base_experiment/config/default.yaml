@@ -1,14 +1,14 @@
 "LR_SPEAKER": 8e-3
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
-"NUM_STEPS": 32 # 256
+"NUM_STEPS": 2 # 256
 "UPDATE_EPOCHS": 5000
-"MINIBATCH_SIZE": 32 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE": 2 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
 "ENT_COEF_LISTENER": 0.04
-"ENT_COEF_SPEAKER": 1e-10
+"ENT_COEF_SPEAKER": 0.0001
 "VF_COEF": 0.5
 "MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
@@ -24,11 +24,11 @@
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "ret_0"
+  "channel_ratio_fn": "half"
 "ANNEAL_LR_SPEAKER": False
 "ANNEAL_LR_LISTENER": False
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
