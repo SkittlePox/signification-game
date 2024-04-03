@@ -176,7 +176,53 @@ class ActorCriticSpeaker(nn.Module):
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std)
 
         # Critic
-        critic = nn.Dense(1)(z)
+        critic = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+    
+
+class ActorCriticSpeakerBetaDist(nn.Module):
+    latent_dim: int
+    num_classes: int
+    config: Dict
+
+    @nn.compact
+    def __call__(self, y):
+        y = nn.Embed(self.num_classes, self.latent_dim)(y)
+        # y = jnp.squeeze(y, axis=(0))
+        # z = jnp.concatenate([z, y], axis=-1)
+        z = nn.Dense(7 * 7 * 256)(y)
+        z = nn.relu(z)
+        z = z.reshape((-1, 7, 7, 256))
+        z = nn.ConvTranspose(128, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
+        z = nn.relu(z)
+        z = nn.ConvTranspose(64, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
+        z = nn.relu(z)
+        z = nn.ConvTranspose(1, kernel_size=(3, 3), padding='SAME')(z)
+        z = jnp.squeeze(z, axis=-1)  # Remove the channel dimension
+        z = jnp.reshape(z, (-1, 28 * 28))  # Flatten the image
+
+        # Actor Alpha
+        actor_alpha = nn.Dense(28 * 28)(z)
+        actor_alpha = nn.softplus(actor_alpha) + 1e-6  # Ensure positive alpha
+
+        # Actor Beta
+        actor_beta = nn.Dense(28 * 28)(z)
+        actor_beta = nn.softplus(actor_beta) + 1e-6  # Ensure positive beta
+
+        # Create a beta distribution
+        pi = distrax.Beta(concentration1=actor_alpha, concentration0=actor_beta)
+
+        # Critic
+        critic = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
 
