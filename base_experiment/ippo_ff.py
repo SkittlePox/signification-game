@@ -17,6 +17,9 @@ import jaxmarl
 import wandb
 import functools
 import hydra
+import torch
+from torchvision.utils import make_grid
+from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 
@@ -248,7 +251,6 @@ def initialize_speaker(env, rng, config, learning_rate):
 @jax.profiler.annotate_function
 def define_env(config):
     if config["ENV_DATASET"] == 'mnist':        
-        from torchvision.datasets import MNIST
         from utils import to_jax
 
         mnist_dataset = MNIST('/tmp/mnist/', download=True)
@@ -698,6 +700,7 @@ def make_train(config):
                 sv = tb.speaker_value
 
                 listener_actions = tb.listener_action
+                listener_obs = tb.listener_obs
                 speaker_actions = tb.speaker_action
 
                 metric_dict = {}
@@ -718,10 +721,12 @@ def make_train(config):
                 # wandb.log(wandb.Image(speaker_actions[image_idx], mode="RGBA"))
                 # wandb.log(image_log)
 
-
-                # metric_dict.update({f"actions/speaker "})
-
-
+                speaker_images = speaker_actions[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
+                speaker_images = wandb.Image(make_grid(torch.tensor(speaker_images), nrow=env_kwargs["num_speakers"]), caption="speaker_actions")
+                listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
+                listener_images = wandb.Image(make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"]), caption="listener_observations")
+                metric_dict.update({"env/last_speaker_actions": speaker_images})
+                metric_dict.update({"env/last_listener_obs": listener_images})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
@@ -752,9 +757,8 @@ def make_train(config):
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
                 logp = logp.T
-                metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
-                
                 lv = lv.T
+                metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
                 metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
 
                 # la = la.T

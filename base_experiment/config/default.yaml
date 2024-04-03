@@ -1,9 +1,9 @@
-"LR_SPEAKER": 8e-5
-"LR_LISTENER": 4e-6
+"LR_SPEAKER": 8e-3
+"LR_LISTENER": 4e-3
 "NUM_ENVS": 1
-"NUM_STEPS": 32 # 256
+"NUM_STEPS": 246 # 256
 "UPDATE_EPOCHS": 5000
-"MINIBATCH_SIZE": 32 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE": 64 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -16,9 +16,9 @@
 "ENV_LISTENER_ARCH": 'dense'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 3
-  "num_listeners": 3
-  "num_channels": 3
+  "num_speakers": 1
+  "num_listeners": 1
+  "num_channels": 1
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
@@ -28,6 +28,6 @@
 "ANNEAL_LR_LISTENER": False
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
