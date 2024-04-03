@@ -280,7 +280,7 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i)
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
-    return action, log_prob, value
+    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value  # TODO: Clipping may be a bad idea, might want to reparameterize to a beta distribution instead of a multivariate
 
 # @jax.jit
 @jax.profiler.annotate_function

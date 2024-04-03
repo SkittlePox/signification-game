@@ -1,9 +1,9 @@
 "LR_SPEAKER": 8e-3
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
-"NUM_STEPS": 246 # 256
+"NUM_STEPS": 32 # 256
 "UPDATE_EPOCHS": 5000
-"MINIBATCH_SIZE": 64 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE": 32 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
