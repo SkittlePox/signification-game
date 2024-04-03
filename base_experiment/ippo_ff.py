@@ -148,7 +148,7 @@ class ActorCriticSpeaker(nn.Module):
     @nn.compact
     def __call__(self, y):
         y = nn.Embed(self.num_classes, self.latent_dim)(y)
-        y = jnp.squeeze(y, axis=(0))
+        # y = jnp.squeeze(y, axis=(0))
         # z = jnp.concatenate([z, y], axis=-1)
         z = nn.Dense(7 * 7 * 256)(y)
         z = nn.relu(z)
@@ -664,7 +664,7 @@ def make_train(config):
                     speaker_reward=speaker_trans_batch.speaker_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_value=speaker_trans_batch.speaker_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     speaker_log_prob=speaker_trans_batch.speaker_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
-                    speaker_obs=speaker_trans_batch.speaker_obs,
+                    speaker_obs=speaker_trans_batch.speaker_obs.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),   # The problem is on this line. I need to get the ith speaker's action
                     speaker_alive=speaker_trans_batch.speaker_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES"], -1)),
                     listener_action=speaker_trans_batch.listener_action,
                     listener_reward=speaker_trans_batch.listener_reward,
@@ -694,29 +694,35 @@ def make_train(config):
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 logp = tb.listener_log_prob
-                v = tb.listener_value
+                lv = tb.listener_value
+                sv = tb.speaker_value
+
+                listener_actions = tb.listener_action
+                speaker_actions = tb.speaker_action
 
                 metric_dict = {}
 
                 metric_dict.update({"env/avg_num_speaker_images": jnp.mean(les.env_state.requested_num_speaker_images)})
                 # TODO: Lucas do more logging of env state info here.
 
-                listener_actions = tb.listener_action
-                speaker_actions = tb.speaker_action
-                speaker_values = tb.speaker_value
-
-                # remove singleton values (squeeze from (MINIBATCH_SIZE,1,1) --> (MINIBATCH_SIZE))
-                speaker_values = speaker_values.squeeze()
-                speaker_actions = speaker_actions.squeeze()
-                listener_actions = listener_actions.squeeze()
+                # # remove singleton values (squeeze from (MINIBATCH_SIZE,1,1) --> (MINIBATCH_SIZE))
+                # speaker_values = speaker_values.squeeze()
+                # speaker_actions = speaker_actions.squeeze()
+                # listener_actions = listener_actions.squeeze()
 
 
-                image_idx = listener_actions.shape[0] - 1
-                image_log = {}
-                image_log.update({f"speaker_value ": speaker_values[image_idx]})
-                image_log.update({f"listener_action": listener_actions[image_idx]})
-                wandb.log(wandb.Image(speaker_actions[image_idx], mode="RGBA"))
-                wandb.log(image_log)
+                # image_idx = listener_actions.shape[0] - 1
+                # image_log = {}
+                # image_log.update({f"speaker_value ": speaker_values[image_idx]})
+                # image_log.update({f"listener_action": listener_actions[image_idx]})
+                # wandb.log(wandb.Image(speaker_actions[image_idx], mode="RGBA"))
+                # wandb.log(image_log)
+
+
+                # metric_dict.update({f"actions/speaker "})
+
+
+
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
                 metric_dict.update({f"loss/value loss/listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
@@ -748,8 +754,8 @@ def make_train(config):
                 logp = logp.T
                 metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
                 
-                v = v.T
-                metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(v[i]).item() for i in range(len(v))})
+                lv = lv.T
+                metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
 
                 # la = la.T
                 # metric_dict.update({""})

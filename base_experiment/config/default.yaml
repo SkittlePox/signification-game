@@ -16,9 +16,9 @@
 "ENV_LISTENER_ARCH": 'dense'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 1
-  "num_listeners": 1
-  "num_channels": 1
+  "num_speakers": 3
+  "num_listeners": 3
+  "num_channels": 3
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
