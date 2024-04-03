@@ -556,7 +556,7 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
         _i_policy, _i_value = train_state.apply_fn(params, _obs)
-        _i_log_prob = _i_policy.log_prob(_actions)
+        _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = values + (
