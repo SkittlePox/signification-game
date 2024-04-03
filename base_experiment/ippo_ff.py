@@ -646,8 +646,9 @@ def make_train(config):
         def _update_step(runner_state, update_step, env, config):
             # runner_state is actually a tuple of runner_states, one per agent
 
-            last_obs, log_env_state = env.reset(reset_rng, jnp.ones((len(reset_rng))) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
-            runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, runner_state[4])
+            # new_reset_rng = jax.random.split(runner_state[4], config["NUM_ENVS"])
+            # last_obs, log_env_state = env.reset(new_reset_rng, jnp.ones((config["NUM_ENVS"])) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
+            # runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, runner_state[4])
             
             # COLLECT TRAJECTORIES
             runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)
@@ -662,6 +663,11 @@ def make_train(config):
                 k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
+
+            def check_tranbatch(trans_batch):
+                print(trans_batch)
+
+            jax.debug.callback(check_tranbatch, trimmed_transition_batch)
 
             # CALCULATE ADVANTAGE #############
             listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
@@ -764,7 +770,6 @@ def make_train(config):
 
                 return new_speaker_train_state_i, total_loss
 
-            # Commenting out for debugging. Only need the speakers working rn.
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
@@ -789,27 +794,16 @@ def make_train(config):
                 metric_dict = {}
 
                 metric_dict.update({"env/avg_num_speaker_images": jnp.mean(les.env_state.requested_num_speaker_images)})
-                # TODO: Lucas do more logging of env state info here.
-
-                # # remove singleton values (squeeze from (MINIBATCH_SIZE,1,1) --> (MINIBATCH_SIZE))
-                # speaker_values = speaker_values.squeeze()
-                # speaker_actions = speaker_actions.squeeze()
-                # listener_actions = listener_actions.squeeze()
-
-
-                # image_idx = listener_actions.shape[0] - 1
-                # image_log = {}
-                # image_log.update({f"speaker_value ": speaker_values[image_idx]})
-                # image_log.update({f"listener_action": listener_actions[image_idx]})
-                # wandb.log(wandb.Image(speaker_actions[image_idx], mode="RGBA"))
-                # wandb.log(image_log)
 
                 speaker_images = speaker_actions[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
-                speaker_images = wandb.Image(make_grid(torch.tensor(speaker_images), nrow=env_kwargs["num_speakers"]), caption="speaker_actions")
                 listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
-                listener_images = wandb.Image(make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"]), caption="listener_observations")
-                metric_dict.update({"env/last_speaker_actions": speaker_images})
-                metric_dict.update({"env/last_listener_obs": listener_images})
+                
+                speaker_images = make_grid(torch.tensor(speaker_images), nrow=env_kwargs["num_speakers"])
+                listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
+                final_speaker_images = wandb.Image(speaker_images, caption="speaker_actions")
+                final_listener_images = wandb.Image(listener_images, caption="listener_observations")
+                metric_dict.update({"env/last_speaker_actions": final_speaker_images})
+                metric_dict.update({"env/last_listener_obs": final_listener_images})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
@@ -843,9 +837,6 @@ def make_train(config):
                 lv = lv.T
                 metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
                 metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
-
-                # la = la.T
-                # metric_dict.update({""})
                 
                 wandb.log(metric_dict)
 
@@ -858,8 +849,8 @@ def make_train(config):
         runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
 
         partial_update_fn = partial(_update_step, env=env, config=config)
-        runner_state, _, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
-            partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS']), config["UPDATE_EPOCHS"]
+        runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+            partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS'])
         )
 
         return {"runner_state": runner_state, "traj_batch": traj_batch}
