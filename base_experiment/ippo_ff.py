@@ -16,7 +16,6 @@ from jaxmarl.wrappers.baselines import LogWrapper, LogEnvState
 import jaxmarl
 import wandb
 import functools
-import matplotlib.pyplot as plt
 import hydra
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
@@ -710,19 +709,14 @@ def make_train(config):
                 speaker_values = speaker_values.squeeze()
                 speaker_actions = speaker_actions.squeeze()
                 listener_actions = listener_actions.squeeze()
-                minibatch_size = config["MINIBATCH_SIZE"]
-                fig, axs = plt.subplots(4, minibatch_size // 4, figsize=(5, 4), gridspec_kw={'hspace': 0.3})
-                for row in range(4):
-                    for col in range(minibatch_size // 4):
-                        image_idx = row * (minibatch_size // 4) + col
-                        ax = axs[row, col]
-                        ax.text(0, -4, f"S: {speaker_values[image_idx]:.2f}", color='black', fontsize=8)
-                        ax.text(0, -12, f"L: {listener_actions[image_idx]}", color='black', fontsize=8)
-                        ax.imshow(speaker_actions[image_idx], cmap='gray', aspect='equal')
-                        ax.axis('off')  # Remove axis labels
-                plt.close()
-                metric_dict.update({"channel_images_and_labels": wandb.Image(fig)})
 
+
+                image_idx = listener_actions.shape[0] - 1
+                image_log = {}
+                image_log.update({f"speaker_value ": speaker_values[image_idx]})
+                image_log.update({f"listener_action": listener_actions[image_idx]})
+                wandb.log(wandb.Image(speaker_actions[image_idx], mode="RGBA"))
+                wandb.log(image_log)
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
                 metric_dict.update({f"loss/value loss/listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
