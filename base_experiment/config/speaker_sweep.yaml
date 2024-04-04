@@ -1,0 +1,30 @@
+program: ippo_ff.py
+method: bayes
+name: speaker-sweep
+metric:
+  goal: maximize
+  name: reward/mean reward/speaker 0
+parameters:
+  LR_SPEAKER:
+    max: 1e-5
+    min: 1e-8
+    distribution: log_uniform_values
+  ENT_COEF_SPEAKER:
+    max: 0.05
+    min: 1e-4
+    distribution: log_uniform_values
+  MINIBATCH_SIZE_SPEAKER:
+    values: [16, 32, 128]
+  WANDB_MODE:
+    value: online
+  UPDATE_EPOCHS:
+    value: 1000
+  NUM_STEPS:
+    value: 256
+
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
