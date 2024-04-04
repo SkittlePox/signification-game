@@ -1,14 +1,15 @@
-"LR_SPEAKER": 8e-8
+"LR_SPEAKER": 4e-5
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
 "NUM_STEPS": 256 # 256
-"UPDATE_EPOCHS": 1000
-"MINIBATCH_SIZE": 32 # 64  # This must be a whole divisor of NUM_STEPS
+"UPDATE_EPOCHS": 5000
+"MINIBATCH_SIZE_LISTENER": 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 64 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
 "ENT_COEF_LISTENER": 0.04
-"ENT_COEF_SPEAKER": 1e-8
+"ENT_COEF_SPEAKER": 1e-4
 "VF_COEF": 0.5
 "MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
@@ -22,7 +23,7 @@
   "num_channels": 2
   "num_classes": 10
   "image_dim": 28
-  "reward_success": 1.0
+  "reward_success": 50.0
   "reward_failure": -0.1
   "channel_ratio_fn": "half"
 "ANNEAL_LR_SPEAKER": False
