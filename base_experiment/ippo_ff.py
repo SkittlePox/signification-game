@@ -648,9 +648,9 @@ def make_train(config):
         def _update_step(runner_state, update_step, env, config):
             # runner_state is actually a tuple of runner_states, one per agent
 
-            # new_reset_rng = jax.random.split(runner_state[4], config["NUM_ENVS"])
-            # last_obs, log_env_state = env.reset(new_reset_rng, jnp.ones((config["NUM_ENVS"])) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
-            # runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, runner_state[4])
+            new_reset_rng = jax.random.split(runner_state[4], config["NUM_ENVS"])
+            last_obs, log_env_state = env.reset(new_reset_rng, jnp.ones((config["NUM_ENVS"])) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
+            runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, runner_state[4])
             
             # COLLECT TRAJECTORIES
             runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)
