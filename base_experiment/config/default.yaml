@@ -1,9 +1,9 @@
 "LR_SPEAKER": 8e-10
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
-"NUM_STEPS": 16 # 256
+"NUM_STEPS": 256 # 256
 "UPDATE_EPOCHS": 500
-"MINIBATCH_SIZE": 4 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE": 64 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -14,7 +14,7 @@
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_LISTENER_ARCH": 'dense'
-"ENV_SPEAKER_ARCH": 'betafast'
+"ENV_SPEAKER_ARCH": 'gauss'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
   "num_speakers": 1

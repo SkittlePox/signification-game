@@ -169,11 +169,11 @@ class ActorCriticSpeaker(nn.Module):
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         # Actor Standard Deviation
-        actor_std = nn.Dense(28 * 28)(z)
+        actor_std = nn.Dense(28 * 28, kernel_init=orthogonal(np.sqrt(2)))(z)
         actor_std = nn.softplus(actor_std) + 1e-6  # Ensure positive standard deviation
 
         # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std)
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std * 0.33)
 
         # Critic
         critic = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
@@ -360,8 +360,9 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i)
     action = policy.sample(seed=__rng)
-    log_prob = jnp.sum(policy.log_prob(action), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
-    # return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value  # TODO: Clipping may be a bad idea, might want to reparameterize to a beta distribution instead of a multivariate
+    log_prob = policy.log_prob(action)
+    # log_prob = jnp.sum(policy.log_prob(action), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
+    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value  # TODO: Clipping may be a bad idea, might want to reparameterize to a beta distribution instead of a multivariate
     return action, log_prob, value
 
 # @jax.jit
@@ -556,7 +557,8 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
         _i_policy, _i_value = train_state.apply_fn(params, _obs)
-        _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
+        # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
+        _i_log_prob = _i_policy.log_prob(_actions)
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = values + (
@@ -667,7 +669,7 @@ def make_train(config):
             def check_tranbatch(trans_batch):
                 print(trans_batch.speaker_log_prob)
 
-            jax.debug.callback(check_tranbatch, trimmed_transition_batch)
+            # jax.debug.callback(check_tranbatch, trimmed_transition_batch)
 
             # CALCULATE ADVANTAGE #############
             listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
