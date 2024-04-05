@@ -7,7 +7,7 @@ metric:
 parameters:
   LR_LISTENER:
     max: 1e-3
-    min: 1e-8
+    min: 1e-6
     distribution: log_uniform_values
   WANDB_MODE:
     value: online

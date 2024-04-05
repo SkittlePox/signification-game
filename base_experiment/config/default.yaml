@@ -27,7 +27,7 @@
   "reward_failure": -0.1
   "channel_ratio_fn": "fifth_at_500"
 "ANNEAL_LR_SPEAKER": False
-"ANNEAL_LR_SPEAKER_MULTIPLIER": 0.5
+"ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
 "ANNEAL_LR_LISTENER": True
 "ANNEAL_LR_LISTENER_MULTIPLIER": 1.0
 
