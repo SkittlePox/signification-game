@@ -1,28 +1,24 @@
 program: ippo_ff.py
 method: bayes
-name: speaker-sweep-sig
+name: listener-sweep
 metric:
   goal: maximize
-  name: reward/mean reward/speaker 0
+  name: reward/mean reward/all listeners
 parameters:
-  LR_SPEAKER:
-    max: 1e-5
+  LR_LISTENER:
+    max: 1e-3
     min: 1e-8
     distribution: log_uniform_values
   WANDB_MODE:
     value: online
   UPDATE_EPOCHS:
-    value: 2000
+    value: 500
   NUM_STEPS:
     value: 512
-  ENT_COEF_SPEAKER:
-    max: 0.1
-    min: 1e-4
-    distribution: log_uniform_values
   ANNEAL_LR_LISTENER:
     value: True
   ANNEAL_LR_LISTENER_MULTIPLIER:
-    value: 1.0
+    value: 0.25
   ANNEAL_LR_SPEAKER:
     value: False
 

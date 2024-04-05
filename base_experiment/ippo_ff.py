@@ -356,7 +356,7 @@ def initialize_listener(env, rng, config):
     network_params = listener_network.init(_rng, init_x)    # I'm not sure how this works, I need to control the size of the inputs and the size of the outputs
     
     def linear_schedule(count):
-        frac = 1.0 - (count / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
+        frac = 1.0 - ((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
         # jax.debug.print(str(count))
         return config["LR_LISTENER"] * frac
     if config["ANNEAL_LR_LISTENER"]:
@@ -399,7 +399,7 @@ def initialize_speaker(env, rng, config):
 
     # For the learning rate
     def linear_schedule(count):
-        frac = 1.0 - (count / (config["NUM_MINIBATCHES_SPEAKER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
+        frac = 1.0 - ((count * config["ANNEAL_LR_SPEAKER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_SPEAKER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
         # jax.debug.print(str(count))
         return config["LR_SPEAKER"] * frac
 

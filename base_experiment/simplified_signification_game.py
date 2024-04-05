@@ -75,8 +75,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             def half(x):
                 return 0.5
             
-            def fifth_at_1k(x):
-                return 0.0 if x < 1000 else 1.0 / 5.0
+            def fifth_at_500(x):
+                return jax.lax.cond(x < 500, lambda _: 0.0, lambda _: 1.0 / 5.0, None)
 
             if channel_ratio_fn == "ret_0":
                 self.channel_ratio_fn = ret_0
@@ -90,8 +90,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.channel_ratio_fn = fifth
             elif channel_ratio_fn == "half":
                 self.channel_ratio_fn = half
-            elif channel_ratio_fn == "fith_at_1k":
-                self.channel_ratio_fn = fifth_at_1k
+            elif channel_ratio_fn == "fifth_at_500":
+                self.channel_ratio_fn = fifth_at_500
         else:
             self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
 
