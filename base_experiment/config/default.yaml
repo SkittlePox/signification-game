@@ -19,13 +19,13 @@
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
   "num_speakers": 1
-  "num_listeners": 2
-  "num_channels": 2
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 28
   "reward_success": 50.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "half"
+  "channel_ratio_fn": "fifth"
 "ANNEAL_LR_SPEAKER": False
 "ANNEAL_LR_LISTENER": False
 

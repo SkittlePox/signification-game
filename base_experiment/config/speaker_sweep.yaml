@@ -1,6 +1,6 @@
 program: ippo_ff.py
 method: bayes
-name: speaker-sweep-small-datapoints
+name: speaker-sweep-better-arch
 metric:
   goal: maximize
   name: reward/mean reward/speaker 0
@@ -14,7 +14,7 @@ parameters:
     min: 1e-4
     distribution: log_uniform_values
   MINIBATCH_SIZE_SPEAKER:
-    values: [16, 32, 128]
+    value: 64
   WANDB_MODE:
     value: online
   UPDATE_EPOCHS:
