@@ -588,7 +588,7 @@ def test_rollout_execution(config, rng):
 def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_state, config):
     # j is for iterating through minibatches
 
-    def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets):
+    def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
         _i_policy, _i_value = train_state.apply_fn(params, _obs)
         _i_log_prob = _i_policy.log_prob(_actions)
@@ -598,25 +598,25 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
                 _i_value - values
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
 
-        value_losses = jnp.square(values - targets)
-        value_losses_clipped = jnp.square(value_pred_clipped - targets)
-        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean())
+        value_losses = jnp.square(values - targets) * alive
+        value_losses_clipped = jnp.square(value_pred_clipped - targets) * alive
+        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).sum() / (alive.sum() + 1e-8))
 
         # CALCULATE ACTOR LOSS
         ratio = jnp.exp(_i_log_prob - log_probs)
         gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        loss_actor1 = ratio * gae_for_i
+        loss_actor1 = ratio * gae_for_i * alive
         loss_actor2 = (
                 jnp.clip(
                     ratio,
                     1.0 - config["CLIP_EPS"],
                     1.0 + config["CLIP_EPS"],
                 )
-                * gae_for_i
+                * gae_for_i * alive
         )
         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
-        loss_actor = loss_actor.mean()
-        entropy = _i_policy.entropy().mean()
+        loss_actor = loss_actor.sum() / (alive.sum() + 1e-8)
+        entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
         total_loss = (
                 loss_actor
@@ -634,7 +634,8 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
         trans_batch_i.listener_value[j], 
         trans_batch_i.listener_log_prob[j],
         advantages_i[j], 
-        targets_i[j]
+        targets_i[j],
+        trans_batch_i.listener_alive[j]
     )
     
     train_state = train_state.apply_gradients(grads=grads)
@@ -645,7 +646,7 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
 def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_state, config):
     # j is for iterating through minibatches
 
-    def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets):
+    def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
         _i_policy, _i_value = train_state.apply_fn(params, _obs)
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
@@ -656,25 +657,25 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
                 _i_value - values
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
 
-        value_losses = jnp.square(values - targets)
-        value_losses_clipped = jnp.square(value_pred_clipped - targets)
-        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).mean())
+        value_losses = jnp.square(values - targets) * alive
+        value_losses_clipped = jnp.square(value_pred_clipped - targets) * alive
+        value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).sum() / (alive.sum() + 1e-8))
 
         # CALCULATE ACTOR LOSS
         ratio = jnp.exp(_i_log_prob - log_probs)
         gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        loss_actor1 = ratio * gae_for_i
+        loss_actor1 = ratio * gae_for_i * alive
         loss_actor2 = (
                 jnp.clip(
                     ratio,
                     1.0 - config["CLIP_EPS"],
                     1.0 + config["CLIP_EPS"],
                 )
-                * gae_for_i
+                * gae_for_i * alive
         )
         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
-        loss_actor = loss_actor.mean()
-        entropy = _i_policy.entropy().mean()
+        loss_actor = loss_actor.sum() / (alive.sum() + 1e-8)
+        entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
         total_loss = (
                 loss_actor
@@ -692,7 +693,8 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
         trans_batch_i.speaker_value[j], 
         trans_batch_i.speaker_log_prob[j],
         advantages_i[j], 
-        targets_i[j]
+        targets_i[j],
+        trans_batch_i.speaker_alive[j]
     )
     
     train_state = train_state.apply_gradients(grads=grads)
@@ -751,11 +753,6 @@ def make_train(config):
                 k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
-
-            def check_tranbatch(trans_batch):
-                print(trans_batch.speaker_log_prob)
-
-            # jax.debug.callback(check_tranbatch, trimmed_transition_batch)
 
             # CALCULATE ADVANTAGE #############
             listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
@@ -825,7 +822,7 @@ def make_train(config):
                     listener_value=listener_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
                     listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
                     listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], listener_trans_batch.listener_obs.shape[1]*listener_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES_LISTENER"], -1, env_kwargs["image_dim"]**2)),
-                    listener_alive=listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
+                    listener_alive=jnp.float32(listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)))
                 )
 
                 # Iterate through batches
@@ -844,7 +841,7 @@ def make_train(config):
                     speaker_value=speaker_trans_batch.speaker_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
                     speaker_log_prob=speaker_trans_batch.speaker_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
                     speaker_obs=speaker_trans_batch.speaker_obs.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
-                    speaker_alive=speaker_trans_batch.speaker_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
+                    speaker_alive=jnp.float32(speaker_trans_batch.speaker_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))),
                     listener_action=speaker_trans_batch.listener_action,
                     listener_reward=speaker_trans_batch.listener_reward,
                     listener_value=speaker_trans_batch.listener_value,

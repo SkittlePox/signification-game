@@ -1,10 +1,10 @@
 "LR_SPEAKER": 4e-5
 "LR_LISTENER": 4e-3
-"NUM_ENVS": 2
+"NUM_ENVS": 1
 "NUM_STEPS": 4 # 256
 "UPDATE_EPOCHS": 500
-"MINIBATCH_SIZE_LISTENER": 2 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 2 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 4 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 4 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -25,11 +25,11 @@
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "ret_1"
+  "channel_ratio_fn": "half"
 "ANNEAL_LR_SPEAKER": True
 "ANNEAL_LR_LISTENER": False
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
