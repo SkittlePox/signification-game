@@ -343,7 +343,7 @@ class Transition(NamedTuple):
     listener_alive: jnp.ndarray
 
 @jax.profiler.annotate_function
-def initialize_listener(env, rng, config, learning_rate):
+def initialize_listener(env, rng, config):
     if config["ENV_LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["ENV_LISTENER_ARCH"] == 'dense':
@@ -354,23 +354,30 @@ def initialize_listener(env, rng, config, learning_rate):
             (1, config["NUM_ENVS"], config["ENV_KWARGS"]["image_dim"]**2)
         )
     network_params = listener_network.init(_rng, init_x)    # I'm not sure how this works, I need to control the size of the inputs and the size of the outputs
+    
+    def linear_schedule(count):
+        frac = 1.0 - (count / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
+        # jax.debug.print(str(count))
+        return config["LR_LISTENER"] * frac
     if config["ANNEAL_LR_LISTENER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-            optax.adam(learning_rate=learning_rate, eps=1e-5),
+            optax.adam(learning_rate=linear_schedule, eps=1e-5),
         )
+        lr_func = linear_schedule
     else:
         tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR_LISTENER"], eps=1e-5))
+        lr_func = lambda *args: config["LR_LISTENER"]
     
     train_state = TrainState.create(
         apply_fn=listener_network.apply,
         params=network_params,
         tx=tx,
     )
-    return listener_network, train_state
+    return listener_network, train_state, lr_func
 
 @jax.profiler.annotate_function
-def initialize_speaker(env, rng, config, learning_rate):
+def initialize_speaker(env, rng, config):
     if config["ENV_SPEAKER_ARCH"] == 'gauss':
         speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'beta':
@@ -389,20 +396,29 @@ def initialize_speaker(env, rng, config, learning_rate):
         )
     # z = jax.random.normal(rng, (1, config["NUM_ENVS"], 32))
     network_params = speaker_network.init(_rng, init_y)
+
+    # For the learning rate
+    def linear_schedule(count):
+        frac = 1.0 - (count / (config["NUM_MINIBATCHES_SPEAKER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
+        # jax.debug.print(str(count))
+        return config["LR_SPEAKER"] * frac
+
     if config["ANNEAL_LR_SPEAKER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-            optax.adam(learning_rate=learning_rate, eps=1e-5),
+            optax.adam(learning_rate=linear_schedule, eps=1e-5),
         )
+        lr_func = linear_schedule
     else:
         tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR_SPEAKER"], eps=1e-5))
+        lr_func = lambda *args: config["LR_SPEAKER"]
     
     train_state = TrainState.create(
         apply_fn=speaker_network.apply,
         params=network_params,
         tx=tx,
     )
-    return speaker_network, train_state
+    return speaker_network, train_state, lr_func
 
 
 @jax.profiler.annotate_function
@@ -696,12 +712,6 @@ def make_train(config):
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
     
-    # For the learning rate
-    def linear_schedule(count):
-        frac = 1.0 - (count // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
-        # jax.debug.print(str(count))
-        return config["LR_LISTENER"] * frac
-
     @jax.profiler.annotate_function
     def train(rng):
         # MAKE AGENTS
@@ -709,11 +719,11 @@ def make_train(config):
         listener_rngs = jax.random.split(rng_l, config["ENV_KWARGS"]["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
         speaker_rngs = jax.random.split(rng_s, config["ENV_KWARGS"]["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
         
-        listeners_stuff = [initialize_listener(env, x_rng, config, linear_schedule) for x_rng in listener_rngs]
-        listener_networks, listener_train_states = zip(*listeners_stuff)
+        listeners_stuff = [initialize_listener(env, x_rng, config) for x_rng in listener_rngs]
+        listener_networks, listener_train_states, listener_lr_funcs = zip(*listeners_stuff) # listener_lr_funcs is for logging only, it's not actually used directly by the optimizer
         
-        speakers_stuff = [initialize_speaker(env, x_rng, config, linear_schedule) for x_rng in speaker_rngs]
-        speaker_networks, speaker_train_states = zip(*speakers_stuff)
+        speakers_stuff = [initialize_speaker(env, x_rng, config) for x_rng in speaker_rngs]
+        speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
 
         # INIT ENV
         rng, _rng = jax.random.split(rng)
@@ -859,7 +869,7 @@ def make_train(config):
 
             # wandb logging
             def wandb_callback(metrics):
-                ll, sl, tb, les = metrics
+                ll, sl, tb, les, speaker_lr, listener_lr = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 logp = tb.listener_log_prob
@@ -924,10 +934,16 @@ def make_train(config):
                 lv = lv.T
                 metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
                 metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
+
+                metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
+                metric_dict.update({"learning rate/average listener": jnp.mean(listener_lr).item()})
                 
                 wandb.log(metric_dict)
 
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state))
+            speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
+            listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
+
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr))
 
             runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
             return runner_state, update_step + 1
