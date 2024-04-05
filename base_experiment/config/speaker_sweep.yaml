@@ -1,6 +1,6 @@
 program: ippo_ff.py
 method: bayes
-name: speaker-sweep
+name: speaker-sweep-small-datapoints
 metric:
   goal: maximize
   name: reward/mean reward/speaker 0

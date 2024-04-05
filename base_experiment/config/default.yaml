@@ -16,7 +16,7 @@
 "ENV_DATASET": 'mnist'
 "ENV_LISTENER_ARCH": 'dense'
 "ENV_SPEAKER_ARCH": 'gauss'
-"ENV_NUM_DATAPOINTS": 1000
+"ENV_NUM_DATAPOINTS": 10
 "ENV_KWARGS":
   "num_speakers": 1
   "num_listeners": 2
