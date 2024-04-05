@@ -914,6 +914,12 @@ def make_train(config):
                     metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_reward for i in range(len(sr))})
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
+                optimal_expected_reward = env_kwargs["reward_success"]
+                if optimal_expected_reward != 0:
+                    metric_dict.update({f"reward/mean reward over optimal/listener {i}": jnp.mean(lr[i]).item()/optimal_expected_reward for i in range(len(lr))})
+                    metric_dict.update({f"reward/mean reward over optimal/speaker {i}": jnp.mean(sr[i]).item()/optimal_expected_reward for i in range(len(sr))})
+                    # Average reward over optimal - based on success_reward
+                
                 logp = logp.T
                 lv = lv.T
                 metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
