@@ -122,13 +122,13 @@ class ActorCriticListenerDense(nn.Module):
     def __call__(self, x):
         obs = x
         # Embedding Layer
-        embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(obs)
+        embedding = nn.Dense(512)(obs)
         embedding = nn.sigmoid(embedding)
 
         # Actor Layer
-        actor_mean = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
+        actor_mean = nn.Dense(512)(embedding)
         actor_mean = nn.sigmoid(actor_mean)
-        actor_mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0))(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
 
         # Action Logits
         # unavail_actions = 1 - avail_actions
@@ -136,9 +136,9 @@ class ActorCriticListenerDense(nn.Module):
         pi = distrax.Categorical(logits=actor_mean)
 
         # Critic Layer
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
+        critic = nn.Dense(512)(embedding)
         critic = nn.sigmoid(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
+        critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
     
@@ -181,6 +181,77 @@ class ActorCriticSpeaker(nn.Module):
         critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
         critic = nn.sigmoid(critic)
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+    
+
+class ActorCriticSpeakerGaussSmall(nn.Module):
+    latent_dim: int
+    num_classes: int
+    config: Dict
+
+    @nn.compact
+    def __call__(self, y):
+        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
+        z = nn.Dense(32, kernel_init=nn.initializers.he_normal())(y)
+        z = nn.relu(z)
+        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
+        z = nn.relu(z)
+        z = nn.Dense(784, kernel_init=nn.initializers.he_normal())(z)
+        z = nn.relu(z)
+
+        # Actor Mean
+        actor_mean = nn.Dense(28 * 28, kernel_init=nn.initializers.he_normal())(z)
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
+
+        # Actor Standard Deviation
+        actor_std = nn.Dense(28 * 28)(z)
+        actor_std = nn.softplus(actor_std) * 0.25 + 1e-6  # Ensure positive standard deviation
+
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std)
+
+        # Critic
+        critic = nn.Dense(512)(z)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticSpeakerGaussSmallNovariance(nn.Module):
+    latent_dim: int
+    num_classes: int
+    config: Dict
+
+    @nn.compact
+    def __call__(self, obs):
+        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
+        z = nn.Dense(32, kernel_init=nn.initializers.he_normal())(y)
+        z = nn.relu(z)
+        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
+        z = nn.relu(z)
+        z = nn.Dense(784, kernel_init=nn.initializers.he_normal())(z)
+        z = nn.relu(z)
+
+        # Actor Mean
+        actor_mean = nn.Dense(28 * 28, kernel_init=nn.initializers.he_normal())(z)
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
+
+        # # Actor Standard Deviation
+        # actor_std = nn.Dense(28 * 28, kernel_init=nn.initializers.he_normal())(z)
+        # actor_std =  nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
+
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.05)
+
+        # Critic
+        critic = nn.Dense(512)(z)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(512)(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(512)(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
     
@@ -306,6 +377,10 @@ def initialize_speaker(env, rng, config, learning_rate):
         speaker_network = ActorCriticSpeakerBetaDist(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'betafast':
         speaker_network = ActorCriticSpeakerBetaDistFast(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+    elif config["ENV_SPEAKER_ARCH"] == 'gausssmall':
+        speaker_network = ActorCriticSpeakerGaussSmall(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+    elif config["ENV_SPEAKER_ARCH"] == 'gausssmallnovar':
+        speaker_network = ActorCriticSpeakerGaussSmallNovariance(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
@@ -776,7 +851,8 @@ def make_train(config):
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
-
+            
+            speaker_loss = None
             speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
             speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
             speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])

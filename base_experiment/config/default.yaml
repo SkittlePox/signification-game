@@ -1,4 +1,4 @@
-"LR_SPEAKER": 4e-5
+"LR_SPEAKER": 4e-6
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
 "NUM_STEPS": 256 # 256
@@ -9,14 +9,14 @@
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
 "ENT_COEF_LISTENER": 0.04
-"ENT_COEF_SPEAKER": 1e-4
+"ENT_COEF_SPEAKER": 0.004
 "VF_COEF": 0.5
 "MAX_GRAD_NORM": 0.5
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_LISTENER_ARCH": 'dense'
-"ENV_SPEAKER_ARCH": 'gauss'
-"ENV_NUM_DATAPOINTS": 10
+"ENV_SPEAKER_ARCH": 'gausssmallnovar'
+"ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
   "num_speakers": 1
   "num_listeners": 2
