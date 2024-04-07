@@ -22,7 +22,7 @@ from agents import *
 
 
 class TrainState(train_state.TrainState):
-  key: jax.Array
+    key: jax.Array
 
 
 class Transition(NamedTuple):
@@ -49,7 +49,6 @@ def define_env(config):
         images, labels = to_jax(mnist_dataset, num_datapoints=config["ENV_NUM_DATAPOINTS"])  # This should also be in ENV_KWARGS
         images = images.astype('float32') / 255.0
         
-        # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
         return env
 
@@ -67,11 +66,10 @@ def initialize_listener(env, rng, config):
     init_x = jnp.zeros(
             (1, config["NUM_ENVS"], config["ENV_KWARGS"]["image_dim"]**2)
         )
-    network_params = listener_network.init({'params': _rng, 'dropout': _rng}, init_x)    # I'm not sure how this works, I need to control the size of the inputs and the size of the outputs
+    network_params = listener_network.init({'params': _rng, 'dropout': _rng}, init_x)
     
     def linear_schedule(count):
-        frac = 1.0 - ((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
-        # jax.debug.print(str(count))
+        frac = 1.0 - ((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"]))
         return config["LR_LISTENER"] * frac
     if config["ANNEAL_LR_LISTENER"]:
         tx = optax.chain(
