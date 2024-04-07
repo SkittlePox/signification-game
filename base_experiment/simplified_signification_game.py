@@ -42,7 +42,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], dataset: tuple, image_dim: int, reward_success: float = 1.0, reward_failure: float = -0.1, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], dataset: tuple, image_dim: int, reward_success: float = 1.0, reward_failure: float = -0.1, speaker_action_transform = None, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -53,6 +53,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.image_dim = image_dim
         self.reward_success = reward_success
         self.reward_failure = reward_failure
+        if speaker_action_transform is None:
+            @jax.vmap
+            def identity(actions: jnp.array):
+                return actions
+            self.speaker_action_transform = identity
         self.kwargs = kwargs
         # TODO: Move the above comments to an actual docstring
 
@@ -258,7 +263,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             env_labels=state.next_env_labels,
             speaker_labels=state.next_speaker_labels,
 
-            speaker_images=speaker_actions,
+            speaker_images=self.speaker_action_transform(speaker_actions),
 
             previous_channel_map=state.channel_map,
             previous_env_images=state.env_images,
