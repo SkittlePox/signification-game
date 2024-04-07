@@ -10,7 +10,7 @@ import numpy as np
 import optax
 from flax.linen.initializers import constant, orthogonal
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
-from flax.training.train_state import TrainState
+from flax.training import train_state
 import distrax
 from jaxmarl.wrappers.baselines import LogWrapper, LogEnvState
 import jaxmarl
@@ -22,6 +22,10 @@ from torchvision.utils import make_grid
 from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
+
+
+class TrainState(train_state.TrainState):
+  key: jax.Array
 
 
 class SimpSigGameLogWrapper(LogWrapper):
@@ -111,6 +115,47 @@ class ActorCriticListenerConv(nn.Module):
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
+    
+
+class ActorCriticListenerConvSmall(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME', kernel_init=nn.initializers.he_normal())(x)
+        x = nn.relu(x)
+        x = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME', kernel_init=nn.initializers.he_normal())(x)
+        x = nn.relu(x)
+        x = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.he_normal())(actor_mean)
+        pi = distrax.Categorical(logits=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(128, kernel_init=nn.initializers.he_normal())(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1, kernel_init=nn.initializers.he_normal())(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
 
 
 class ActorCriticListenerDense(nn.Module):
@@ -146,6 +191,7 @@ class ActorCriticListenerDense(nn.Module):
 class ActorCriticSpeaker(nn.Module):
     latent_dim: int
     num_classes: int
+    image_dim: Sequence[int]
     config: Dict
 
     @nn.compact
@@ -162,14 +208,14 @@ class ActorCriticSpeaker(nn.Module):
         z = nn.relu(z)
         z = nn.ConvTranspose(1, kernel_size=(3, 3), padding='SAME')(z)
         z = jnp.squeeze(z, axis=-1)  # Remove the channel dimension
-        z = jnp.reshape(z, (-1, 28 * 28))  # Flatten the image
+        z = jnp.reshape(z, (-1, self.image_dim ** 2))  # Flatten the image
 
         # Actor Mean
-        actor_mean = nn.Dense(28 * 28)(z)
+        actor_mean = nn.Dense(self.image_dim ** 2)(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         # Actor Standard Deviation
-        actor_std = nn.Dense(28 * 28, kernel_init=orthogonal(np.sqrt(2)))(z)
+        actor_std = nn.Dense(self.image_dim ** 2, kernel_init=orthogonal(np.sqrt(2)))(z)
         actor_std = nn.softplus(actor_std) * 0.25 + 1e-6  # Ensure positive standard deviation
 
         # Create a multivariate normal distribution with diagonal covariance matrix
@@ -188,24 +234,25 @@ class ActorCriticSpeaker(nn.Module):
 class ActorCriticSpeakerGaussSmall(nn.Module):
     latent_dim: int
     num_classes: int
+    image_dim: Sequence[int]
     config: Dict
 
     @nn.compact
-    def __call__(self, y):
+    def __call__(self, obs):
         y = nn.Embed(self.num_classes, self.latent_dim)(obs)
         z = nn.Dense(32, kernel_init=nn.initializers.he_normal())(y)
         z = nn.relu(z)
         z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
         z = nn.relu(z)
-        z = nn.Dense(784, kernel_init=nn.initializers.he_normal())(z)
+        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(28 * 28, kernel_init=nn.initializers.he_normal())(z)
+        actor_mean = nn.Dense(self.image_dim ** 2, kernel_init=nn.initializers.he_normal())(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         # Actor Standard Deviation
-        actor_std = nn.Dense(28 * 28)(z)
+        actor_std = nn.Dense(self.image_dim ** 2)(z)
         actor_std = nn.softplus(actor_std) * 0.25 + 1e-6  # Ensure positive standard deviation
 
         # Create a multivariate normal distribution with diagonal covariance matrix
@@ -221,6 +268,7 @@ class ActorCriticSpeakerGaussSmall(nn.Module):
 class ActorCriticSpeakerGaussSmallNovariance(nn.Module):
     latent_dim: int
     num_classes: int
+    image_dim: Sequence[int]
     config: Dict
 
     @nn.compact
@@ -228,18 +276,16 @@ class ActorCriticSpeakerGaussSmallNovariance(nn.Module):
         y = nn.Embed(self.num_classes, self.latent_dim)(obs)
         z = nn.Dense(32, kernel_init=nn.initializers.he_normal())(y)
         z = nn.relu(z)
+        z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
         z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
         z = nn.relu(z)
-        z = nn.Dense(784, kernel_init=nn.initializers.he_normal())(z)
+        z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
+        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(28 * 28, kernel_init=nn.initializers.he_normal())(z)
+        actor_mean = nn.Dense(self.image_dim ** 2, kernel_init=nn.initializers.he_normal())(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
-
-        # # Actor Standard Deviation
-        # actor_std = nn.Dense(28 * 28, kernel_init=nn.initializers.he_normal())(z)
-        # actor_std =  nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         # Create a multivariate normal distribution with diagonal covariance matrix
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.05)
@@ -247,83 +293,13 @@ class ActorCriticSpeakerGaussSmallNovariance(nn.Module):
         # Critic
         critic = nn.Dense(512)(z)
         critic = nn.sigmoid(critic)
+        critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(512)(critic)
         critic = nn.sigmoid(critic)
+        critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(512)(critic)
         critic = nn.sigmoid(critic)
         critic = nn.Dense(1)(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-    
-
-class ActorCriticSpeakerBetaDist(nn.Module):
-    latent_dim: int
-    num_classes: int
-    config: Dict
-
-    @nn.compact
-    def __call__(self, y):
-        y = nn.Embed(self.num_classes, self.latent_dim)(y)
-        # y = jnp.squeeze(y, axis=(0))
-        # z = jnp.concatenate([z, y], axis=-1)
-        z = nn.Dense(7 * 7 * 256)(y)
-        z = nn.relu(z)
-        z = z.reshape((-1, 7, 7, 256))
-        z = nn.ConvTranspose(128, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
-        z = nn.relu(z)
-        z = nn.ConvTranspose(64, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
-        z = nn.relu(z)
-        z = nn.ConvTranspose(1, kernel_size=(3, 3), padding='SAME')(z)
-        z = jnp.squeeze(z, axis=-1)  # Remove the channel dimension
-        z = jnp.reshape(z, (-1, 28 * 28))  # Flatten the image
-
-        # Actor Alpha
-        actor_alpha = nn.Dense(28 * 28)(z)
-        actor_alpha = nn.softplus(actor_alpha) + 1e-6  # Ensure positive alpha
-
-        # Actor Beta
-        actor_beta = nn.Dense(28 * 28)(z)
-        actor_beta = nn.softplus(actor_beta) + 1e-6  # Ensure positive beta
-
-        # Create a beta distribution
-        pi = distrax.Beta(alpha=actor_alpha, beta=actor_beta)
-
-        # Critic
-        critic = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-    
-
-class ActorCriticSpeakerBetaDistFast(nn.Module):
-    latent_dim: int
-    num_classes: int
-    config: Dict
-
-    @nn.compact
-    def __call__(self, y):
-        y = nn.Embed(self.num_classes, self.latent_dim)(y)
-        z = nn.Dense(128)(y)
-        z = nn.relu(z)
-
-        # Actor Alpha
-        actor_alpha = nn.Dense(784)(z)
-        actor_alpha = nn.softplus(actor_alpha) + 1.0  # Ensure alpha > 1
-
-        # Actor Beta
-        actor_beta = nn.Dense(784)(z)
-        actor_beta = nn.softplus(actor_beta) + 1.0  # Ensure beta > 1
-
-        # Create a beta distribution
-        pi = distrax.Beta(alpha=actor_alpha, beta=actor_beta)
-
-        # Critic
-        critic = nn.Dense(128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
 
@@ -346,6 +322,8 @@ class Transition(NamedTuple):
 def initialize_listener(env, rng, config):
     if config["ENV_LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["ENV_LISTENER_ARCH"] == 'convsmall':
+        listener_network = ActorCriticListenerConvSmall(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["ENV_LISTENER_ARCH"] == 'dense':
         listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
 
@@ -353,7 +331,7 @@ def initialize_listener(env, rng, config):
     init_x = jnp.zeros(
             (1, config["NUM_ENVS"], config["ENV_KWARGS"]["image_dim"]**2)
         )
-    network_params = listener_network.init(_rng, init_x)    # I'm not sure how this works, I need to control the size of the inputs and the size of the outputs
+    network_params = listener_network.init({'params': _rng, 'dropout': _rng}, init_x)    # I'm not sure how this works, I need to control the size of the inputs and the size of the outputs
     
     def linear_schedule(count):
         frac = 1.0 - ((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"]))   # I don't know exactly how this works.
@@ -372,6 +350,7 @@ def initialize_listener(env, rng, config):
     train_state = TrainState.create(
         apply_fn=listener_network.apply,
         params=network_params,
+        key=rng,
         tx=tx,
     )
     return listener_network, train_state, lr_func
@@ -379,23 +358,18 @@ def initialize_listener(env, rng, config):
 @jax.profiler.annotate_function
 def initialize_speaker(env, rng, config):
     if config["ENV_SPEAKER_ARCH"] == 'gauss':
-        speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
-    elif config["ENV_SPEAKER_ARCH"] == 'beta':
-        speaker_network = ActorCriticSpeakerBetaDist(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
-    elif config["ENV_SPEAKER_ARCH"] == 'betafast':
-        speaker_network = ActorCriticSpeakerBetaDistFast(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+        speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'gausssmall':
-        speaker_network = ActorCriticSpeakerGaussSmall(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSmall(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'gausssmallnovar':
-        speaker_network = ActorCriticSpeakerGaussSmallNovariance(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSmallNovariance(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
             (1, config["NUM_ENVS"], 1),
             dtype=jnp.int32
         )
-    # z = jax.random.normal(rng, (1, config["NUM_ENVS"], 32))
-    network_params = speaker_network.init(_rng, init_y)
+    network_params = speaker_network.init({'params': _rng, 'dropout': _rng}, init_y)
 
     # For the learning rate
     def linear_schedule(count):
@@ -416,6 +390,7 @@ def initialize_speaker(env, rng, config):
     train_state = TrainState.create(
         apply_fn=speaker_network.apply,
         params=network_params,
+        key=rng,
         tx=tx,
     )
     return speaker_network, train_state, lr_func
@@ -436,8 +411,9 @@ def define_env(config):
 
 @jax.profiler.annotate_function
 def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
+    __rng, dropout_key = jax.random.split(__rng)
     _listener_obs_i = _listener_obs_i.ravel()
-    policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i)
+    policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     return action, log_prob, value
@@ -449,12 +425,12 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
-    policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i)
+    __rng, dropout_key = jax.random.split(__rng)
+    policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     # log_prob = jnp.sum(policy.log_prob(action), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
-    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value  # TODO: Clipping may be a bad idea, might want to reparameterize to a beta distribution instead of a multivariate
-    return action, log_prob, value
+    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 # @jax.jit
 @jax.profiler.annotate_function
@@ -590,7 +566,8 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
 
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
-        _i_policy, _i_value = train_state.apply_fn(params, _obs)
+        dropout_key = jax.random.fold_in(key=train_state.key, data=j)
+        _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key})
         _i_log_prob = _i_policy.log_prob(_actions)
 
         # CALCULATE VALUE LOSS
@@ -648,7 +625,8 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
 
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
-        _i_policy, _i_value = train_state.apply_fn(params, _obs)
+        dropout_key = jax.random.fold_in(key=train_state.key, data=j)
+        _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key})
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
         _i_log_prob = _i_policy.log_prob(_actions)
 
