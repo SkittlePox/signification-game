@@ -5,303 +5,24 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-import chex
 import numpy as np
 import optax
 from flax.linen.initializers import constant, orthogonal
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
 from flax.training import train_state
-import distrax
-from jaxmarl.wrappers.baselines import LogWrapper, LogEnvState
 import jaxmarl
 import wandb
-import functools
 import hydra
 import torch
 from torchvision.utils import make_grid
 from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
+from agents import *
 
 
 class TrainState(train_state.TrainState):
   key: jax.Array
-
-
-class SimpSigGameLogWrapper(LogWrapper):
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(self, keys: chex.PRNGKey, epochs: Sequence[int]) -> Tuple[chex.Array, State]:
-        obs, env_state = jax.vmap(self._env.reset)(keys, epochs)
-        state = jax.vmap(lambda e_state: LogEnvState(
-            e_state,
-            jnp.zeros((self._env.num_agents,)),
-            jnp.zeros((self._env.num_agents,)),
-            jnp.zeros((self._env.num_agents,)),
-            jnp.zeros((self._env.num_agents,)),
-        ))(env_state)
-        return obs, state
-
-    @partial(jax.jit, static_argnums=(0,))
-    def step(
-        self,
-        keys: chex.PRNGKey,
-        state: LogEnvState,
-        action,
-    ) -> Tuple[chex.Array, LogEnvState, float, bool, dict]:
-        obs, env_state, reward, done, info = jax.vmap(self._env.step_env)(
-            keys, state.env_state, action
-        )
-        ep_done = done["__all__"]
-        new_episode_return = state.episode_returns + self._batchify_floats(reward).T
-        new_episode_length = state.episode_lengths + 1
-        old_ep_done = ep_done
-
-        ep_done = jnp.repeat(ep_done[:, None], new_episode_return.shape[1], axis=1)   # This is a major hotfix. Right now ep_done is one per env, as opposed to one per agent per env. This line extrapolates the one per env to one per agent per env.
-        state = LogEnvState(
-            env_state=env_state,
-            episode_returns=new_episode_return * (1 - ep_done),
-            episode_lengths=new_episode_length * (1 - ep_done),
-            returned_episode_returns=state.returned_episode_returns * (1 - ep_done)
-            + new_episode_return * ep_done,
-            returned_episode_lengths=state.returned_episode_lengths * (1 - ep_done)
-            + new_episode_length * ep_done,
-        )
-        if self.replace_info:
-            info = {}
-        info["returned_episode_returns"] = state.returned_episode_returns
-        info["returned_episode_lengths"] = state.returned_episode_lengths
-        # info["returned_episode"] = jnp.full((self._env.num_agents,), old_ep_done) # This doesn't work for some reason
-        return obs, state, reward, done, info
-
-
-# There should be two kinds of ActorCritics, one for listeners and one for speakers. For now, this will be for listeners.
-class ActorCriticListenerConv(nn.Module):
-    action_dim: Sequence[int]
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, x):
-        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
-
-        # Convolutional layers
-        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
-        x = nn.sigmoid(x)
-        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
-        x = nn.sigmoid(x)
-        x = x.reshape((x.shape[0], -1))  # Flatten
-        
-        # Embedding Layer
-        embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
-        embedding = nn.sigmoid(embedding)
-        embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(embedding)
-        embedding = nn.sigmoid(embedding)
-
-        # Actor Layer
-        actor_mean = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        actor_mean = nn.sigmoid(actor_mean)
-        actor_mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0))(actor_mean)
-
-        # Action Logits
-        # unavail_actions = 1 - avail_actions
-        # action_logits = actor_mean - (unavail_actions * 1e10)
-        pi = distrax.Categorical(logits=actor_mean)
-
-        # Critic Layer
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-    
-
-class ActorCriticListenerConvSmall(nn.Module):
-    action_dim: Sequence[int]
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, x):
-        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
-
-        # Convolutional layers
-        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME', kernel_init=nn.initializers.he_normal())(x)
-        x = nn.relu(x)
-        x = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(x)
-        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME', kernel_init=nn.initializers.he_normal())(x)
-        x = nn.relu(x)
-        x = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(x)
-        x = x.reshape((x.shape[0], -1))  # Flatten
-        
-        # Embedding Layer
-        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(x)
-        embedding = nn.relu(embedding)
-        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
-        embedding = nn.relu(embedding)
-
-        # Actor Layer
-        actor_mean = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
-        actor_mean = nn.relu(actor_mean)
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.he_normal())(actor_mean)
-        pi = distrax.Categorical(logits=actor_mean)
-
-        # Critic Layer
-        critic = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
-        critic = nn.relu(critic)
-        critic = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(critic)
-        critic = nn.Dense(128, kernel_init=nn.initializers.he_normal())(critic)
-        critic = nn.relu(critic)
-        critic = nn.Dense(1, kernel_init=nn.initializers.he_normal())(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-
-
-class ActorCriticListenerDense(nn.Module):
-    action_dim: Sequence[int]
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, x):
-        obs = x
-        # Embedding Layer
-        embedding = nn.Dense(512)(obs)
-        embedding = nn.sigmoid(embedding)
-
-        # Actor Layer
-        actor_mean = nn.Dense(512)(embedding)
-        actor_mean = nn.sigmoid(actor_mean)
-        actor_mean = nn.Dense(self.action_dim)(actor_mean)
-
-        # Action Logits
-        # unavail_actions = 1 - avail_actions
-        # action_logits = actor_mean - (unavail_actions * 1e10)
-        pi = distrax.Categorical(logits=actor_mean)
-
-        # Critic Layer
-        critic = nn.Dense(512)(embedding)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1)(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-    
-
-class ActorCriticSpeaker(nn.Module):
-    latent_dim: int
-    num_classes: int
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, y):
-        y = nn.Embed(self.num_classes, self.latent_dim)(y)
-        # y = jnp.squeeze(y, axis=(0))
-        # z = jnp.concatenate([z, y], axis=-1)
-        z = nn.Dense(7 * 7 * 256)(y)
-        z = nn.relu(z)
-        z = z.reshape((-1, 7, 7, 256))
-        z = nn.ConvTranspose(128, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
-        z = nn.relu(z)
-        z = nn.ConvTranspose(64, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
-        z = nn.relu(z)
-        z = nn.ConvTranspose(1, kernel_size=(3, 3), padding='SAME')(z)
-        z = jnp.squeeze(z, axis=-1)  # Remove the channel dimension
-        z = jnp.reshape(z, (-1, self.image_dim ** 2))  # Flatten the image
-
-        # Actor Mean
-        actor_mean = nn.Dense(self.image_dim ** 2)(z)
-        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
-
-        # Actor Standard Deviation
-        actor_std = nn.Dense(self.image_dim ** 2, kernel_init=orthogonal(np.sqrt(2)))(z)
-        actor_std = nn.softplus(actor_std) * 0.25 + 1e-6  # Ensure positive standard deviation
-
-        # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std)
-
-        # Critic
-        critic = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-    
-
-class ActorCriticSpeakerGaussSmall(nn.Module):
-    latent_dim: int
-    num_classes: int
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, obs):
-        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
-        z = nn.Dense(32, kernel_init=nn.initializers.he_normal())(y)
-        z = nn.relu(z)
-        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
-        z = nn.relu(z)
-        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
-        z = nn.relu(z)
-
-        # Actor Mean
-        actor_mean = nn.Dense(self.image_dim ** 2, kernel_init=nn.initializers.he_normal())(z)
-        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
-
-        # Actor Standard Deviation
-        actor_std = nn.Dense(self.image_dim ** 2)(z)
-        actor_std = nn.softplus(actor_std) * 0.25 + 1e-6  # Ensure positive standard deviation
-
-        # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std)
-
-        # Critic
-        critic = nn.Dense(512)(z)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1)(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-
-class ActorCriticSpeakerGaussSmallNovariance(nn.Module):
-    latent_dim: int
-    num_classes: int
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, obs):
-        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
-        z = nn.Dense(32, kernel_init=nn.initializers.he_normal())(y)
-        z = nn.relu(z)
-        z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
-        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
-        z = nn.relu(z)
-        z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
-        z = nn.Dense(256, kernel_init=nn.initializers.he_normal())(z)
-        z = nn.relu(z)
-
-        # Actor Mean
-        actor_mean = nn.Dense(self.image_dim ** 2, kernel_init=nn.initializers.he_normal())(z)
-        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
-
-        # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.05)
-
-        # Critic
-        critic = nn.Dense(512)(z)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
-        critic = nn.Dense(512)(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
-        critic = nn.Dense(512)(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1)(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
 
 
 class Transition(NamedTuple):
@@ -317,6 +38,21 @@ class Transition(NamedTuple):
     listener_log_prob: jnp.ndarray
     listener_obs: jnp.ndarray
     listener_alive: jnp.ndarray
+
+
+@jax.profiler.annotate_function
+def define_env(config):
+    if config["ENV_DATASET"] == 'mnist':        
+        from utils import to_jax
+
+        mnist_dataset = MNIST('/tmp/mnist/', download=True)
+        images, labels = to_jax(mnist_dataset, num_datapoints=config["ENV_NUM_DATAPOINTS"])  # This should also be in ENV_KWARGS
+        images = images.astype('float32') / 255.0
+        
+        # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
+        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
+        return env
+
 
 @jax.profiler.annotate_function
 def initialize_listener(env, rng, config):
@@ -395,20 +131,6 @@ def initialize_speaker(env, rng, config):
     )
     return speaker_network, train_state, lr_func
 
-
-@jax.profiler.annotate_function
-def define_env(config):
-    if config["ENV_DATASET"] == 'mnist':        
-        from utils import to_jax
-
-        mnist_dataset = MNIST('/tmp/mnist/', download=True)
-        images, labels = to_jax(mnist_dataset, num_datapoints=config["ENV_NUM_DATAPOINTS"])  # This should also be in ENV_KWARGS
-        images = images.astype('float32') / 255.0
-        
-        # env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, **config["ENV_KWARGS"])
-        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
-        return env
-
 @jax.profiler.annotate_function
 def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
     __rng, dropout_key = jax.random.split(__rng)
@@ -420,19 +142,15 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
 
 @jax.profiler.annotate_function
 def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
-    # z = jax.random.normal(__rng, (1, 1, 32))   # I should be splitting this rng again
-    # TODO: This looks terrible, I'm sure there's a better way
-    _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
-    _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
-    _speaker_obs_i = jnp.expand_dims(_speaker_obs_i, axis=(0))
     __rng, dropout_key = jax.random.split(__rng)
+    _speaker_obs_i = _speaker_obs_i.reshape((1, 1, 1))
     policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     # log_prob = jnp.sum(policy.log_prob(action), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
-# @jax.jit
+
 @jax.profiler.annotate_function
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
@@ -449,15 +167,10 @@ def env_step(runner_state, env, config):
     env_rngs = jax.random.split(_rng, len(listener_train_states))
 
     # COLLECT LISTENER ACTIONS
-    # TODO: This should be cleaned up, look at how the speaker outputs are sorted/aggregated
     listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
-    l_a = jnp.array([jnp.array([*o]) for o in listener_outputs])
-    listener_action = jnp.asarray(l_a[:, 0], jnp.int32)
-    listener_log_prob = l_a[:, 1]
-    listener_value = l_a[:, 2].reshape(config["NUM_ENVS"], -1)
-
-    listener_action = listener_action.reshape(config["NUM_ENVS"], -1)
-    listener_log_prob = listener_log_prob.reshape(config["NUM_ENVS"], -1)
+    listener_action = jnp.array([o[0] for o in listener_outputs], dtype=jnp.int32).reshape(config["NUM_ENVS"], -1)
+    listener_log_prob = jnp.array([o[1] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
+    listener_value = jnp.array([o[2] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
 
     # COLLECT SPEAKER ACTIONS
     speaker_outputs = [execute_individual_speaker(*args) for args in zip(env_rngs, speaker_train_states, speaker_obs)]
@@ -465,7 +178,7 @@ def env_step(runner_state, env, config):
     speaker_log_prob = jnp.array([o[1] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
 
-    # TODO: This can probably be deleted soon
+    # TODO: I could make this a debug option
     # rng_step = jax.random.split(_rng, config["NUM_ENVS"])
     # SIMULATE SPEAKER ACTIONS. TEMPORARY, FOR DEBUGGING, UNTIL SPEAKERS WORK:
     # speaker_action = jnp.array([env.action_space(agent).sample(rng_step[0]) for i, agent in enumerate(env.agents) if agent.startswith("speaker")])
@@ -506,59 +219,6 @@ def env_step(runner_state, env, config):
     
     return runner_state, transition
 
-@jax.profiler.annotate_function
-def test_rollout_execution(config, rng):
-    env = define_env(config)
-    env = SimpSigGameLogWrapper(env)
-
-    config["NUM_ACTORS"] = (config["ENV_KWARGS"]["num_speakers"] + config["ENV_KWARGS"]["num_listeners"]) * config["NUM_ENVS"]
-    config["NUM_MINIBATCHES"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
-    
-    # For the learning rate
-    def linear_schedule(count):
-        frac = 1.0 - (count // config["UPDATE_EPOCHS"])   # I don't know exactly how this works.
-        # jax.debug.print(str(count))
-        return config["LR_LISTENER"] * frac
-
-    # MAKE AGENTS
-    rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
-    listener_rngs = jax.random.split(rng_l, config["ENV_KWARGS"]["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
-    speaker_rngs = jax.random.split(rng_s, config["ENV_KWARGS"]["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
-    
-    listeners_stuff = [initialize_listener(env, x_rng, config, linear_schedule) for x_rng in listener_rngs]
-    listener_networks, listener_train_states = zip(*listeners_stuff)
-    
-    speakers_stuff = [initialize_speaker(env, x_rng, config, linear_schedule) for x_rng in speaker_rngs]
-    speaker_networks, speaker_train_states = zip(*speakers_stuff)
-    
-
-    # INIT ENV
-    rng, _rng = jax.random.split(rng)
-    reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-    obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
-
-    """
-    init_transition = Transition( # This is no longer needed, but it may be helpful to know what types and shapes things are in the future.
-        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=bool),
-        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.int32),
-        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # rewards
-        jnp.zeros((config["NUM_ENVS"], env.num_agents), dtype=jnp.float32),     # values
-        jnp.zeros((config["NUM_ENVS"], max(env.num_speakers, 1), env.image_dim, env.image_dim), dtype=jnp.float32),
-        jnp.zeros((config["NUM_ENVS"], max(env.num_listeners, 1)), dtype=jnp.float32),
-        obs[0],
-        obs[1]
-    )
-    """
-
-    rng, _rng = jax.random.split(rng)
-    runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
-
-    # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
-    runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS']) # This is if everything is working
-    # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
-    
-    return {"runner_state": runner_state, "traj_batch": traj_batch}
 
 @jax.profiler.annotate_function
 def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_state, config):
@@ -936,25 +596,6 @@ def make_train(config):
     return train
 
 
-@hydra.main(version_base=None, config_path="config", config_name="test")
-def test(config):
-    config = OmegaConf.to_container(
-        config, resolve=True, throw_on_missing=True
-    )
-    wandb.init(
-        entity=config["ENTITY"],
-        project=config["PROJECT"],
-        tags=["test"],
-        config=config,
-        mode=config["WANDB_MODE"],
-        save_code=True
-    )
-    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    rng = jax.random.PRNGKey(50)
-    out = test_rollout_execution(config, rng)
-    print(out['runner_state'])
-
-
 @hydra.main(version_base=None, config_path="config", config_name="default")
 def main(config):
     config = OmegaConf.to_container(
@@ -974,6 +615,60 @@ def main(config):
     train = make_train(config)
     out = train(rng)
     print("Done")
+
+
+@jax.profiler.annotate_function
+def test_rollout_execution(config, rng):    # I don't think this funciton works anymore. I've changed a lot.
+    env = define_env(config)
+    env = SimpSigGameLogWrapper(env)
+
+    config["NUM_ACTORS"] = (config["ENV_KWARGS"]["num_speakers"] + config["ENV_KWARGS"]["num_listeners"]) * config["NUM_ENVS"]
+    config["NUM_MINIBATCHES"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
+
+    # MAKE AGENTS
+    rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
+    listener_rngs = jax.random.split(rng_l, config["ENV_KWARGS"]["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
+    speaker_rngs = jax.random.split(rng_s, config["ENV_KWARGS"]["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
+    
+    listeners_stuff = [initialize_listener(env, x_rng, config) for x_rng in listener_rngs]
+    listener_networks, listener_train_states = zip(*listeners_stuff)
+    
+    speakers_stuff = [initialize_speaker(env, x_rng, config) for x_rng in speaker_rngs]
+    speaker_networks, speaker_train_states = zip(*speakers_stuff)
+    
+
+    # INIT ENV
+    rng, _rng = jax.random.split(rng)
+    reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
+    obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
+
+    rng, _rng = jax.random.split(rng)
+    runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
+
+    # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
+    runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS']) # This is if everything is working
+    # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
+    
+    return {"runner_state": runner_state, "traj_batch": traj_batch}
+
+
+@hydra.main(version_base=None, config_path="config", config_name="test")
+def test(config):
+    config = OmegaConf.to_container(
+        config, resolve=True, throw_on_missing=True
+    )
+    wandb.init(
+        entity=config["ENTITY"],
+        project=config["PROJECT"],
+        tags=["test"],
+        config=config,
+        mode=config["WANDB_MODE"],
+        save_code=True
+    )
+    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
+    rng = jax.random.PRNGKey(50)
+    out = test_rollout_execution(config, rng)
+    print(out['runner_state'])
 
 
 if __name__ == "__main__":
