@@ -1,10 +1,10 @@
 "LR_SPEAKER": 4e-4
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
-"NUM_STEPS": 256 # 256
+"NUM_STEPS": 4 # 256
 "UPDATE_EPOCHS": 2000
-"MINIBATCH_SIZE_LISTENER": 32 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 32 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 4 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 4 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -41,3 +41,4 @@
 "WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
+"SPEAKER_EXAMPLE_LOGGING_ITER": 50

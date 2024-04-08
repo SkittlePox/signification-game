@@ -544,7 +544,7 @@ def make_train(config):
                 
                 speaker_images = make_grid(torch.tensor(speaker_images), nrow=env_kwargs["num_speakers"])
                 listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
-                final_speaker_images = wandb.Image(speaker_images, caption="speaker_actions")
+                final_speaker_images = wandb.Image(speaker_images, caption=f"labels: {str(les.env_state.speaker_labels.ravel())}")
                 final_listener_images = wandb.Image(listener_images, caption="listener_observations")
                 
                 metric_dict.update({"env/speaker_images": final_speaker_images})
@@ -593,7 +593,7 @@ def make_train(config):
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
                 metric_dict.update({"learning rate/average listener": jnp.mean(listener_lr).item()})
                 
-                if (u_step + 1) % 100 == 0:
+                if (u_step + 1) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0:
                     speaker_example_images = make_grid(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"])
                     final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
                     metric_dict.update({"env/speaker_examples": final_speaker_example_images})
