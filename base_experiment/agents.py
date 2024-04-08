@@ -308,11 +308,11 @@ class ActorCriticSpeakerGaussSplat(nn.Module):
         actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.he_normal())(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        scale_factor = jnp.tile(jnp.array([1, 1, 0.001, 0.001, 1], dtype=jnp.float32), actor_mean.shape[-1]//5)
+        scale_factor = jnp.tile(jnp.array([1, 1, 0.02, 0.02, 1], dtype=jnp.float32), actor_mean.shape[-1]//5)
         actor_mean *= scale_factor
 
         # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.05)
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.001)
 
         # Critic
         critic = nn.Dense(512)(z)

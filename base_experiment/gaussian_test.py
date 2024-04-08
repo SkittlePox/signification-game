@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import jax
 import matplotlib.pyplot as plt
 
 def paint_normalized_gaussians_on_array(array_shape, gaussians_params):
@@ -16,7 +17,7 @@ def paint_normalized_gaussians_on_array(array_shape, gaussians_params):
     y, x = jnp.indices(array_shape)  # Create a grid of x and y coordinates
     array = jnp.zeros(array_shape)
 
-    for params in gaussians_params:
+    def compute_gaussian(params):
         x_mu_norm, y_mu_norm, sigma_x2_norm, sigma_y2_norm, amplitude = params
         
         # Convert normalized mean to actual coordinates
@@ -27,9 +28,12 @@ def paint_normalized_gaussians_on_array(array_shape, gaussians_params):
         sigma_x2 = sigma_x2_norm * array_shape[1]**2
         sigma_y2 = sigma_y2_norm * array_shape[0]**2
 
-        # Compute the 2D Gaussian formula and add it to the array
+        # Compute the 2D Gaussian formula
         gaussian = amplitude * jnp.exp(-(((x - x_mu)**2 / (2 * sigma_x2)) + ((y - y_mu)**2 / (2 * sigma_y2))))
-        array += gaussian
+        return gaussian
+
+    array += jax.vmap(compute_gaussian)(gaussians_params)
+    array = jnp.sum(array, axis=0)
 
     return jnp.clip(array, a_min=0.0, a_max=1.0)
 
