@@ -105,13 +105,56 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             def identity(actions: jnp.array):
                 return actions
             
+            @jax.vmap
             def image(actions: jnp.array):
                 return actions.reshape(-1, image_dim, image_dim)
+            
+            @jax.vmap
+            def gauss_splat(actions: jnp.array):
+                def paint_normalized_gaussians_on_array(array_shape, gaussians_params):
+                    """
+                    Paint multiple 2D Gaussians with normalized parameters on a 2D array, using a NumPy array for parameters.
+                    
+                    Parameters:
+                    - array_shape: tuple of int, shape of the 2D array (height, width).
+                    - gaussians_params: NumPy array with each row representing the parameters for a Gaussian 
+                    (normalized mean x, normalized mean y, normalized variance x, normalized variance y, amplitude).
+                    
+                    Returns:
+                    - 2D numpy array with the Gaussians painted on it.
+                    """
+                    y, x = jnp.indices(array_shape)  # Create a grid of x and y coordinates
+                    array = jnp.zeros(array_shape)
+
+                    for params in gaussians_params:
+                        x_mu_norm, y_mu_norm, sigma_x2_norm, sigma_y2_norm, amplitude = params
+                        
+                        # Convert normalized mean to actual coordinates
+                        x_mu = x_mu_norm * array_shape[1]
+                        y_mu = y_mu_norm * array_shape[0]
+
+                        # Convert normalized covariance to actual variances
+                        sigma_x2 = sigma_x2_norm * array_shape[1]**2
+                        sigma_y2 = sigma_y2_norm * array_shape[0]**2
+
+                        # Compute the 2D Gaussian formula and add it to the array
+                        gaussian = amplitude * jnp.exp(-(((x - x_mu)**2 / (2 * sigma_x2)) + ((y - y_mu)**2 / (2 * sigma_y2))))
+                        array += gaussian
+
+                    return jnp.clip(array, a_min=0.0, a_max=1.0)
+
+                gaussians_params = actions.reshape(-1, 5)
+                array_shape = (image_dim, image_dim)
+
+                gaussian_array = paint_normalized_gaussians_on_array(array_shape, gaussians_params)
+                return gaussian_array
 
             if speaker_action_transform == "identity":
                 self.speaker_action_transform = identity
             elif speaker_action_transform == "image":
                 self.speaker_action_transform = image
+            elif speaker_action_transform == "gausssplat":
+                self.speaker_action_transform = gauss_splat
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]

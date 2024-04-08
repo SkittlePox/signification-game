@@ -11,6 +11,8 @@ def to_jax(dataset, num_datapoints=100):
     return jnp.array(images), jnp.array(labels)
 
 
+
+
 if __name__ == "__main__":
     # Step 1: Download MNIST Dataset
     mnist = datasets.MNIST(root='/tmp/mnist/', download=True)
