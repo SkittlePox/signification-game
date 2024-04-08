@@ -613,7 +613,7 @@ def main(config):
         save_code=True
     )
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    rng = jax.random.PRNGKey(50)
+    rng = jax.random.PRNGKey(51)
     # train_jit = jax.jit(make_train(config), device=jax.devices()[0]) # The environment may or may not be jittable.
     train = make_train(config)
     out = train(rng)

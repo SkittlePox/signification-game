@@ -34,7 +34,7 @@
   "reward_failure": -0.1
   "channel_ratio_fn": "fifth_at_1k"
   "speaker_action_transform": "gausssplat"
-  "speaker_action_dim": 40
+  "speaker_action_dim": 50
 
 
 # WandB Params
