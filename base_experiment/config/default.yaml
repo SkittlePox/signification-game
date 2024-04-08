@@ -32,7 +32,7 @@
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "tenth_at_500"
+  "channel_ratio_fn": "ret_1"
   "speaker_action_transform": "gausssplat"
   "speaker_action_dim": 40
 

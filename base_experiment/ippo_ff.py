@@ -502,7 +502,6 @@ def make_train(config):
             speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
             speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])
 
-            # wandb logging
             def wandb_callback(metrics):
                 ll, sl, tb, les, speaker_lr, listener_lr = metrics
                 lr = tb.listener_reward
@@ -522,17 +521,18 @@ def make_train(config):
 
                 # NOTE: speaker_actions may not necessarily be images anymore!
                 # speaker_images = speaker_actions[-1, 0, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
-                speaker_images = les.env_state.speaker_images
+                speaker_images = les.env_state.speaker_images.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
                 listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
                 
                 speaker_images = make_grid(torch.tensor(speaker_images), nrow=env_kwargs["num_speakers"])
                 listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
                 final_speaker_images = wandb.Image(speaker_images, caption="speaker_actions")
                 final_listener_images = wandb.Image(listener_images, caption="listener_observations")
-                metric_dict.update({"env/last_speaker_actions": final_speaker_images})
+                
+                metric_dict.update({"env/speaker_images": final_speaker_images})
                 metric_dict.update({"env/last_listener_obs": final_listener_images})
 
-                metric_dict.update({f"env/last_speaker_obs {i}": speaker_obs[-1, :, i].item() for i in range(speaker_obs.shape[-1])})
+                metric_dict.update({f"env/speaker_labels {i}": les.env_state.speaker_labels[:, i].item() for i in range(les.env_state.speaker_labels.shape[-1])})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})

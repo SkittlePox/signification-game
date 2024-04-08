@@ -81,9 +81,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             def tenth_at_500(x):
                 return jax.lax.cond(x < 500, lambda _: 0.0, lambda _: 0.1, None)
 
-            if channel_ratio_fn == "all_env":
+            if channel_ratio_fn in ("all_env", "ret_0", "ret0"):
                 self.channel_ratio_fn = ret_0
-            elif channel_ratio_fn == "all_speakers":
+            elif channel_ratio_fn in ("all_speakers", "ret_1", "ret1"):
                 self.channel_ratio_fn = ret_1
             elif channel_ratio_fn == "sigmoid1":
                 self.channel_ratio_fn = s_curve
