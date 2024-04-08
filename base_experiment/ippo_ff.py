@@ -94,11 +94,11 @@ def initialize_speaker(env, rng, config):
     if config["ENV_SPEAKER_ARCH"] == 'gauss':
         speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'gausssmall':
-        speaker_network = ActorCriticSpeakerGaussSmall(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSmall(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'gausssmallnovar':
-        speaker_network = ActorCriticSpeakerGaussSmallNovariance(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSmallNovariance(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'gausssplat':
-        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=16, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
@@ -541,10 +541,10 @@ def make_train(config):
                 listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
                 
                 listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
-                final_listener_images = wandb.Image(listener_images, caption=f"labels: {str(listener_actions[-1, 0, :].ravel())}")
+                final_listener_images = wandb.Image(listener_images, caption=f"classified as: {str(listener_actions[-1, 0, :].ravel())}")
 
                 speaker_images = make_grid(torch.tensor(speaker_imgs), nrow=env_kwargs["num_speakers"])
-                final_speaker_images = wandb.Image(speaker_images, caption=f"obs: {str(speaker_obs[-2, 0, :].ravel())}")
+                final_speaker_images = wandb.Image(speaker_images, caption=f"tried generating: {str(speaker_obs[-2, 0, :].ravel())}")
                 
                 metric_dict.update({"env/speaker_images": final_speaker_images})
                 metric_dict.update({"env/last_listener_obs": final_listener_images})
@@ -596,10 +596,6 @@ def make_train(config):
                     speaker_example_images = make_grid(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"])
                     final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
                     metric_dict.update({"env/speaker_examples": final_speaker_example_images})
-                    
-                    
-                    # speaker_ex = [make_grid(torch.tensor(speaker_examples[i].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))) for i in env_kwargs["num_speakers"]]
-                    # metric_dict.update({f"env/speaker_examples/speaker {i}": wandbspeaker_ex[i]})
                 
                 wandb.log(metric_dict)
             jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, update_step))
