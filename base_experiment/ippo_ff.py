@@ -143,12 +143,23 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
 @jax.profiler.annotate_function
 def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     __rng, dropout_key = jax.random.split(__rng)
-    _speaker_obs_i = _speaker_obs_i.reshape((1, 1, 1))
+    _speaker_obs_i = _speaker_obs_i.reshape((1, -1, 1))
     policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     # log_prob = jnp.sum(policy.log_prob(action), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
+
+
+def get_speaker_examples(runner_state, env, config):
+    _, speaker_train_states, log_env_state, obs, rng = runner_state
+    env_rngs = jax.random.split(rng, len(speaker_train_states))
+    speaker_obs = jnp.arange(config["ENV_KWARGS"]["num_classes"])
+    speaker_outputs = [execute_individual_speaker(env_rngs[i], speaker_train_states[i], speaker_obs) for i in range(config["ENV_KWARGS"]["num_speakers"])]
+    speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, config["ENV_KWARGS"]["speaker_action_dim"])
+    speaker_action = speaker_action.reshape((config["ENV_KWARGS"]["num_speakers"] * config["ENV_KWARGS"]["num_classes"], -1))
+    speaker_images = env._env.speaker_action_transform(speaker_action).reshape((config["ENV_KWARGS"]["num_speakers"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
+    return speaker_images
 
 
 @jax.profiler.annotate_function
@@ -502,8 +513,10 @@ def make_train(config):
             speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
             speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])
 
+            runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
+
             def wandb_callback(metrics):
-                ll, sl, tb, les, speaker_lr, listener_lr = metrics
+                ll, sl, tb, les, speaker_lr, listener_lr, speaker_examples = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 logp = tb.listener_log_prob
@@ -532,7 +545,7 @@ def make_train(config):
                 metric_dict.update({"env/speaker_images": final_speaker_images})
                 metric_dict.update({"env/last_listener_obs": final_listener_images})
 
-                metric_dict.update({f"env/speaker_labels {i}": les.env_state.speaker_labels[:, i].item() for i in range(les.env_state.speaker_labels.shape[-1])})
+                metric_dict.update({f"env/speaker_labels/speaker {i}": les.env_state.speaker_labels[:, i].item() for i in range(les.env_state.speaker_labels.shape[-1])})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
@@ -576,14 +589,26 @@ def make_train(config):
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
                 metric_dict.update({"learning rate/average listener": jnp.mean(listener_lr).item()})
                 
+                if speaker_examples is not None:
+                    speaker_example_images = make_grid(torch.tensor(speaker_examples.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"])
+                    final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
+                    metric_dict.update({"env/speaker_examples": final_speaker_example_images})
+                    # speaker_ex = [make_grid(torch.tensor(speaker_examples[i].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))) for i in env_kwargs["num_speakers"]]
+                    # metric_dict.update({f"env/speaker_examples/speaker {i}": wandbspeaker_ex[i]})
+                
                 wandb.log(metric_dict)
 
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
 
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr))
 
-            runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
+            if (log_env_state.env_state.epoch.item() + 1 - 1) % 100 == 0:
+                speaker_examples = get_speaker_examples(runner_state, env, config)
+            else:
+                speaker_examples = None
+
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples))
+            
             return runner_state, update_step + 1
 
         rng, _rng = jax.random.split(rng)

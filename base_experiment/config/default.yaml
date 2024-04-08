@@ -1,7 +1,7 @@
 "LR_SPEAKER": 4e-4
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
-"NUM_STEPS": 32 # 256
+"NUM_STEPS": 256 # 256
 "UPDATE_EPOCHS": 2000
 "MINIBATCH_SIZE_LISTENER": 32 # This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 32 # 64  # This must be a whole divisor of NUM_STEPS
