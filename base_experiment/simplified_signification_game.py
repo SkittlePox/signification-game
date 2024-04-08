@@ -42,7 +42,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], dataset: tuple, image_dim: int, reward_success: float = 1.0, reward_failure: float = -0.1, speaker_action_transform = None, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, reward_success: float = 1.0, reward_failure: float = -0.1, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -53,11 +53,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.image_dim = image_dim
         self.reward_success = reward_success
         self.reward_failure = reward_failure
-        if speaker_action_transform is None:
-            @jax.vmap
-            def identity(actions: jnp.array):
-                return actions
-            self.speaker_action_transform = identity
         self.kwargs = kwargs
         # TODO: Move the above comments to an actual docstring
 
@@ -105,12 +100,25 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         else:
             self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
 
+        if isinstance(speaker_action_transform, str):
+            @jax.vmap
+            def identity(actions: jnp.array):
+                return actions
+            
+            def image(actions: jnp.array):
+                return actions.reshape(-1, image_dim, image_dim)
+
+            if speaker_action_transform == "identity":
+                self.speaker_action_transform = identity
+            elif speaker_action_transform == "image":
+                self.speaker_action_transform = image
+
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]
         self.agents = self.speaker_agents + self.listener_agents
 
         self.observation_spaces = {**{agent: Discrete(num_classes) for agent in self.speaker_agents}, **{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.listener_agents}}
-        self.action_spaces = {**{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.speaker_agents}, **{agent: Discrete(num_classes) for agent in self.listener_agents}}
+        self.action_spaces = {**{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.speaker_agents}, **{agent: Discrete(num_classes) for agent in self.listener_agents}}  # TODO migrate: This may need to change, unsure. Sampling randomly from this may fail.
 
     @partial(jax.jit, static_argnums=(0,))
     def load_images(self, key: chex.PRNGKey, num_imgs: int = -1):

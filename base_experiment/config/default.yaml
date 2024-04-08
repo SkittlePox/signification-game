@@ -1,10 +1,10 @@
 "LR_SPEAKER": 4e-5
 "LR_LISTENER": 4e-3
-"NUM_ENVS": 2
-"NUM_STEPS": 256 # 256
+"NUM_ENVS": 1
+"NUM_STEPS": 32 # 256
 "UPDATE_EPOCHS": 100
-"MINIBATCH_SIZE_LISTENER": 64 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 64 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 32 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 32 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -25,14 +25,16 @@
 "ENV_SPEAKER_ARCH": 'gausssmallnovar'
 "ENV_NUM_DATAPOINTS": 2000
 "ENV_KWARGS":
-  "num_speakers": 2
-  "num_listeners": 2
-  "num_channels": 2
+  "num_speakers": 1
+  "num_listeners": 1
+  "num_channels": 1
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
   "channel_ratio_fn": "all_speakers"
+  "speaker_action_transform": "image"
+  "speaker_action_dim": 784
 
 
 # WandB Params
