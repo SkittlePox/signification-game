@@ -544,7 +544,6 @@ def make_train(config):
                 
                 metric_dict.update({"env/speaker_images": final_speaker_images})
                 metric_dict.update({"env/last_listener_obs": final_listener_images})
-
                 metric_dict.update({f"env/speaker_labels/speaker {i}": les.env_state.speaker_labels[:, i].item() for i in range(les.env_state.speaker_labels.shape[-1])})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
@@ -638,7 +637,7 @@ def main(config):
         save_code=True
     )
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    rng = jax.random.PRNGKey(50)
+    rng = jax.random.PRNGKey(51)
     # train_jit = jax.jit(make_train(config), device=jax.devices()[0]) # The environment may or may not be jittable.
     train = make_train(config)
     out = train(rng)

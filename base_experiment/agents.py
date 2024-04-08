@@ -118,9 +118,11 @@ class ActorCriticListenerConvSmall(nn.Module):
         x = x.reshape((x.shape[0], -1))  # Flatten
         
         # Embedding Layer
-        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(x)
+        embedding = nn.Dense(256, kernel_init=nn.initializers.he_normal())(x)
         embedding = nn.relu(embedding)
-        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        embedding = nn.Dense(256, kernel_init=nn.initializers.he_normal())(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(256, kernel_init=nn.initializers.he_normal())(embedding)
         embedding = nn.relu(embedding)
 
         # Actor Layer
@@ -308,7 +310,11 @@ class ActorCriticSpeakerGaussSplat(nn.Module):
         actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.he_normal())(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        scale_factor = jnp.tile(jnp.array([1, 1, 0.02, 0.02, 1], dtype=jnp.float32), actor_mean.shape[-1]//5)
+        # x_mu_norm, y_mu_norm, sigma_x2_norm, sigma_y2_norm, amplitude. e.g.
+        #[0.5, 0.5, 0.01, 0.01, 1.0],
+        #[0.7, 0.7, 0.005, 0.005, 0.5],
+        #[0.3, 0.4, 0.015, 0.01, 0.75]
+        scale_factor = jnp.tile(jnp.array([1, 1, 0.02, 0.02, 1.5], dtype=jnp.float32), actor_mean.shape[-1]//5)
         actor_mean *= scale_factor
 
         # Create a multivariate normal distribution with diagonal covariance matrix
