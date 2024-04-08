@@ -532,7 +532,7 @@ def make_train(config):
                 metric_dict.update({"env/last_speaker_actions": final_speaker_images})
                 metric_dict.update({"env/last_listener_obs": final_listener_images})
 
-                metric_dict.update({f"env/last_speaker_obs {i}": speaker_obs[-1, :, i].item() for i in range(speaker_obs.shape[-1])})
+                metric_dict.update({f"env/last_speaker_obs speaker {i}": speaker_obs[-3, :, i].item() for i in range(speaker_obs.shape[-1])})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
