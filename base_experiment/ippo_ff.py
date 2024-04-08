@@ -519,7 +519,7 @@ def make_train(config):
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
             speaker_examples = jax.lax.cond((update_step + 1) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
-            speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1))).reshape((len(speaker_train_state), 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
+            speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1))).reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # TODO: This code is not robust to more than 1 env
 
             def wandb_callback(metrics):
                 ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, u_step = metrics
@@ -538,18 +538,13 @@ def make_train(config):
 
                 metric_dict.update({"env/avg_num_speaker_images": jnp.mean(les.env_state.requested_num_speaker_images)})
 
-                # NOTE: speaker_actions may not necessarily be images anymore!
-                # speaker_images = speaker_actions[-1, 0, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
-                # speaker_images = les.env_state.speaker_images.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
                 listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
                 
-                # speaker_images = make_grid(torch.tensor(speaker_images), nrow=env_kwargs["num_speakers"])
                 listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
-                # final_speaker_images = wandb.Image(speaker_images, caption=f"labels: {str(les.env_state.speaker_labels.ravel())}")
-                final_listener_images = wandb.Image(listener_images, caption="listener_observations")
+                final_listener_images = wandb.Image(listener_images, caption=f"labels: {str(listener_actions[-1, 0, :].ravel())}")
 
-                speaker_images2 = make_grid(torch.tensor(speaker_imgs), nrow=env_kwargs["num_speakers"])
-                final_speaker_images = wandb.Image(speaker_images2, caption=f"labels: {str(speaker_obs[-3, 0, :].ravel())}")    # TODO: hopefully I'm logging the right index
+                speaker_images = make_grid(torch.tensor(speaker_imgs), nrow=env_kwargs["num_speakers"])
+                final_speaker_images = wandb.Image(speaker_images, caption=f"obs: {str(speaker_obs[-2, 0, :].ravel())}")
                 
                 metric_dict.update({"env/speaker_images": final_speaker_images})
                 metric_dict.update({"env/last_listener_obs": final_listener_images})
