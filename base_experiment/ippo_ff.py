@@ -521,7 +521,7 @@ def make_train(config):
             speaker_examples = jax.lax.cond((update_step + 1) % 100 == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
 
             def wandb_callback(metrics):
-                ll, sl, tb, les, speaker_lr, listener_lr, speaker_examples, u_step = metrics
+                ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, u_step = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 logp = tb.listener_log_prob
@@ -593,10 +593,12 @@ def make_train(config):
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
                 metric_dict.update({"learning rate/average listener": jnp.mean(listener_lr).item()})
                 
-                if (update_step + 1) % 100 == 0:
-                    speaker_example_images = make_grid(torch.tensor(speaker_examples.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"])
+                if (u_step + 1) % 100 == 0:
+                    speaker_example_images = make_grid(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"])
                     final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
                     metric_dict.update({"env/speaker_examples": final_speaker_example_images})
+                    
+                    
                     # speaker_ex = [make_grid(torch.tensor(speaker_examples[i].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))) for i in env_kwargs["num_speakers"]]
                     # metric_dict.update({f"env/speaker_examples/speaker {i}": wandbspeaker_ex[i]})
                 
