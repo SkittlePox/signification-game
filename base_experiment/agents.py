@@ -307,7 +307,7 @@ class ActorCriticSpeakerGaussSplat(nn.Module):
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.he_uniform())(z)
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(1.0))(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         # x_mu_norm, y_mu_norm, sigma_x2_norm, sigma_y2_norm, amplitude. e.g.
