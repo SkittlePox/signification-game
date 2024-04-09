@@ -1,4 +1,4 @@
-"LR_SPEAKER": 5e-4
+"LR_SPEAKER": 1e-4
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
 "NUM_STEPS": 256 # 256
@@ -22,7 +22,7 @@
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_LISTENER_ARCH": 'convsmall'
-"ENV_SPEAKER_ARCH": 'gausssplatcovar'
+"ENV_SPEAKER_ARCH": 'gausssplatchol'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 5
@@ -33,7 +33,7 @@
   "reward_success": 1.0
   "reward_failure": -0.1
   "channel_ratio_fn": "all_speakers"
-  "speaker_action_transform": "gausssplatcovar"
+  "speaker_action_transform": "gausssplatchol"
   "speaker_action_dim": 30
 
 

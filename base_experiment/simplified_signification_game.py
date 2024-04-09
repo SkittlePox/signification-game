@@ -212,7 +212,62 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 gaussian_array = paint_normalized_gaussians_on_array(array_shape, gaussians_params)
                 return gaussian_array
 
+            @jax.vmap
+            def gauss_splat_chol(actions: jnp.array):
+                def paint_normalized_gaussians_on_array(array_shape, gaussians_params):
+                    """
+                    Paint multiple 2D Gaussians on a 2D array, parameters defined via Cholesky decomposition.
+                    
+                    Parameters:
+                    - array_shape: tuple of int, shape of the 2D array (height, width).
+                    - gaussians_params: JAX array with each row representing the parameters for a Gaussian 
+                    (normalized mean x, normalized mean y, amplitude, L_{11}, L_{21}, L_{22}).
+                    
+                    Returns:
+                    - 2D JAX array with the Gaussians painted on it.
+                    """
+                    y, x = jnp.indices(array_shape)  # Create a grid of x and y coordinates
+                    array = jnp.zeros(array_shape)
 
+                    @jax.vmap
+                    def compute_gaussian(params):
+                        x_mu_norm, y_mu_norm, amplitude, L_11, L_21, L_22 = params
+
+                        L_11 *= 0.1
+                        L_22 *= 0.1
+                        L_21 = ((2 * L_21) - 1) * 0.01
+                        
+                        # Convert normalized mean to actual coordinates
+                        x_mu = x_mu_norm * array_shape[1]
+                        y_mu = y_mu_norm * array_shape[0]
+
+                        # Construct the covariance matrix from Cholesky decomposition
+                        L = jnp.array([[L_11, 0], [L_21, L_22]])
+                        cov_matrix = L @ L.T
+
+                        # Convert normalized covariance matrix to actual values
+                        cov_matrix = cov_matrix * jnp.array([[array_shape[1]**2, array_shape[1]*array_shape[0]], 
+                                                            [array_shape[1]*array_shape[0], array_shape[0]**2]])
+                        inv_cov_matrix = jnp.linalg.inv(cov_matrix)
+
+                        # Compute the Gaussian function
+                        X = jnp.vstack((x.ravel() - x_mu, y.ravel() - y_mu))
+                        gaussian = amplitude * jnp.exp(-0.5 * jnp.sum(X.T @ inv_cov_matrix * X.T, axis=1)).reshape(array_shape)
+                        
+                        return gaussian
+
+                    gaussians = compute_gaussian(gaussians_params)
+                    array += jnp.sum(gaussians, axis=0)  # Sum contributions from all Gaussians
+
+                    return jnp.clip(array, a_min=0.0, a_max=1.0)
+
+                # Assuming 'actions' includes the Cholesky decomposition parameters
+                gaussians_params = actions.reshape(-1, 6)  # Reshape based on the new parameter structure
+                image_dim = 28  # Fixed image dimension
+                array_shape = (image_dim, image_dim)
+
+                gaussian_array = paint_normalized_gaussians_on_array(array_shape, gaussians_params)
+                return gaussian_array
 
             if speaker_action_transform == "identity":
                 self.speaker_action_transform = identity
@@ -222,6 +277,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.speaker_action_transform = gauss_splat
             elif speaker_action_transform == "gausssplatcovar":
                 self.speaker_action_transform = gauss_splat_covar
+            elif speaker_action_transform == "gausssplatchol":
+                self.speaker_action_transform = gauss_splat_chol
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]

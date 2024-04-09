@@ -369,3 +369,40 @@ class ActorCriticSpeakerGaussSplatCov(nn.Module):
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
+
+
+class ActorCriticSpeakerGaussSplatChol(nn.Module):
+    latent_dim: int
+    num_classes: int
+    action_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, obs):
+        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
+        z = nn.Dense(32, kernel_init=nn.initializers.he_uniform())(y)
+        z = nn.relu(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.relu(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.relu(z)
+
+        # Actor Mean
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(1.0/3.0))(z)
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
+        
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.01)
+
+        # Critic
+        critic = nn.Dense(128)(actor_mean)
+        critic = nn.sigmoid(critic)
+        # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.sigmoid(critic)
+        # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(32)(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
