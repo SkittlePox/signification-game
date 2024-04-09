@@ -332,3 +332,66 @@ class ActorCriticSpeakerGaussSplat(nn.Module):
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
+
+
+class ActorCriticSpeakerGaussSplatCov(nn.Module):
+    latent_dim: int
+    num_classes: int
+    action_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, obs):
+        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
+        z = nn.Dense(32, kernel_init=nn.initializers.he_uniform())(y)
+        z = nn.relu(z)
+        z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
+        z = nn.Dense(256, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.relu(z)
+        z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
+        z = nn.Dense(256, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.relu(z)
+
+        # Actor Mean
+        x_y_intensity = nn.Dense(self.action_dim // 2, kernel_init=nn.initializers.normal(0.2))(z)
+        x_y_intensity = nn.sigmoid(x_y_intensity)
+        x_y_intensity = x_y_intensity.reshape((1, 1, -1, 3))
+        
+        xvar_yvar = nn.Dense(self.action_dim // 3)(z)
+        xvar_yvar = nn.sigmoid(xvar_yvar)
+        xvar_yvar = xvar_yvar.reshape((1, 1, -1, 2)) * 0.02
+
+        covariance = nn.Dense(self.action_dim // 6)(z)
+        covariance = nn.tanh(covariance)
+        covariance = covariance.reshape((1, 1, -1, 1)) * 0.02
+
+        # TODO: Fix the stacking here!
+
+        actor_mean = jnp.hstack((x_y_intensity, xvar_yvar, covariance))
+        
+        # actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.2))(z)
+        # actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
+
+        # Each row: normalized mean x, normalized mean y, normalized variance x, normalized variance y,
+        # normalized covariance xy, amplitude
+        #[0.5, 0.5, 0.01, 0.01, 0, 1.0],  # Assuming no covariance (0) for simplicity
+        #[0.7, 0.7, 0.005, 0.005, 0.002, 0.5],
+        #[0.3, 0.4, 0.015, 0.01, -0.01, 0.75]
+        # scale_factor = jnp.tile(jnp.array([1.0, 1.0, 0.02, 0.02, 1.0], dtype=jnp.float32), actor_mean.shape[-1]//5)
+        # actor_mean *= scale_factor
+
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.001)
+
+        # Critic
+        critic = nn.Dense(512)(z)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(512)(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(512)(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
