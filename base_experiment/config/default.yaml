@@ -1,10 +1,10 @@
-"LR_SPEAKER": 1e-4
+"LR_SPEAKER": 5e-4
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
-"NUM_STEPS": 512 # 256
+"NUM_STEPS": 4 # 256
 "UPDATE_EPOCHS": 5000
-"MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 64 # 64  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 4 # 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 4 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -25,20 +25,20 @@
 "ENV_SPEAKER_ARCH": 'gausssplatchol'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 2
-  "num_listeners": 10
-  "num_channels": 10
+  "num_speakers": 1
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "fifth_at_1k"
+  "channel_ratio_fn": "fifth"
   "speaker_action_transform": "gausssplatchol"
   "speaker_action_dim": 24
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 50

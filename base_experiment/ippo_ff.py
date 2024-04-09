@@ -244,6 +244,7 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
         dropout_key = jax.random.fold_in(key=train_state.key, data=j)
         _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key})
         _i_log_prob = _i_policy.log_prob(_actions)
+        _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * 1e-8)
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = values + (
@@ -304,6 +305,7 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
         _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key})
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
         _i_log_prob = _i_policy.log_prob(_actions)
+        _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * 1e-8)
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = values + (
