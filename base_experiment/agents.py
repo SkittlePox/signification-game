@@ -153,6 +153,10 @@ class ActorCriticListenerDense(nn.Module):
         # Embedding Layer
         embedding = nn.Dense(512)(obs)
         embedding = nn.sigmoid(embedding)
+        embedding = nn.Dense(512)(embedding)
+        embedding = nn.sigmoid(embedding)
+        embedding = nn.Dense(512)(embedding)
+        embedding = nn.sigmoid(embedding)
 
         # Actor Layer
         actor_mean = nn.Dense(512)(embedding)
@@ -392,7 +396,7 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
         
         # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.01)
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.02)
 
         # Critic
         critic = nn.Dense(128)(actor_mean)
