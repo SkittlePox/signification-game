@@ -145,7 +145,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
 @jax.profiler.annotate_function
 def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     __rng, dropout_key = jax.random.split(__rng)
-    _speaker_obs_i = _speaker_obs_i.reshape((1, -1, 1))
+    _speaker_obs_i = _speaker_obs_i.reshape((-1, 1))
     policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
