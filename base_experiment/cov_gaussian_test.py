@@ -15,7 +15,7 @@ def paint_gaussians_with_covariance_on_array(array_shape, gaussians_params):
     Returns:
     - 2D numpy array with the Gaussians painted on it.
     """
-    y, x = np.indices(array_shape)  # Create a grid of x and y coordinates
+    y, x = jnp.indices(array_shape)  # Create a grid of x and y coordinates
     array = jnp.zeros(array_shape)
 
     for params in gaussians_params:
@@ -31,11 +31,11 @@ def paint_gaussians_with_covariance_on_array(array_shape, gaussians_params):
         sigma_xy = sigma_xy_norm * array_shape[1] * array_shape[0]
 
         # Construct the covariance matrix
-        cov_matrix = np.array([[sigma_x2, sigma_xy], [sigma_xy, sigma_y2]])
+        cov_matrix = jnp.array([[sigma_x2, sigma_xy], [sigma_xy, sigma_y2]])
         inv_cov_matrix = jnp.linalg.inv(cov_matrix)
 
         # Create the meshgrid arrays for x and y
-        X = np.vstack((x.ravel() - x_mu, y.ravel() - y_mu))
+        X = jnp.vstack((x.ravel() - x_mu, y.ravel() - y_mu))
         
         # Compute the Gaussian function
         gaussian = amplitude * jnp.exp(-0.5 * jnp.sum(X.T @ inv_cov_matrix * X.T, axis=1)).reshape(array_shape)
