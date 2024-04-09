@@ -351,7 +351,7 @@ class ActorCriticSpeakerGaussSplatCov(nn.Module):
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.2))(z)
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(1.0/3.0))(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
         
         # Create a multivariate normal distribution with diagonal covariance matrix

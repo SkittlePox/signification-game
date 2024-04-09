@@ -86,7 +86,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             if channel_ratio_fn in ("all_env", "ret_0", "ret0"):
                 self.channel_ratio_fn = ret_0
-            elif channel_ratio_fn in ("all_speakers", "ret_1", "ret1"):
+            elif channel_ratio_fn in ("all_speakers", "all_speaker", "ret_1", "ret1"):
                 self.channel_ratio_fn = ret_1
             elif channel_ratio_fn == "sigmoid1":
                 self.channel_ratio_fn = s_curve
@@ -187,7 +187,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                         # Convert normalized covariance to actual values
                         sigma_x2 = sigma_x2_norm * array_shape[1]**2 * 0.01
                         sigma_y2 = sigma_y2_norm * array_shape[0]**2 * 0.01
-                        sigma_xy = (2 * sigma_xy_norm - 1) * array_shape[1] * array_shape[0] * 0.005
+                        sigma_xy = (2 * sigma_xy_norm - 1) * array_shape[1] * array_shape[0] * 0.002
 
                         # Construct the covariance matrix and its inverse
                         cov_matrix = jnp.array([[sigma_x2, sigma_xy], [sigma_xy, sigma_y2]])
