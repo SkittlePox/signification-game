@@ -1,21 +1,21 @@
-"LR_SPEAKER": 1e-4
+"LR_SPEAKER": 2e-4
 "LR_LISTENER": 4e-3
 "NUM_ENVS": 1
 "NUM_STEPS": 512 # 256
-"UPDATE_EPOCHS": 4000
+"UPDATE_EPOCHS": 5000
 "MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 64 # 64  # This must be a whole divisor of NUM_STEPS
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
 "ENT_COEF_LISTENER": 0.04
-"ENT_COEF_SPEAKER": 0.004
+"ENT_COEF_SPEAKER": 0.01
 "VF_COEF": 0.5
 "MAX_GRAD_NORM": 0.5
 "ANNEAL_LR_SPEAKER": False
 "ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
 "ANNEAL_LR_LISTENER": True
-"ANNEAL_LR_LISTENER_MULTIPLIER": 4.0
+"ANNEAL_LR_LISTENER_MULTIPLIER": 5.0
 "SPEAKER_DROPOUT": 0.0
 "LISTENER_DROPOUT": 0.3
 
@@ -25,16 +25,16 @@
 "ENV_SPEAKER_ARCH": 'gausssplatchol'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 1
-  "num_listeners": 5
-  "num_channels": 5
+  "num_speakers": 2
+  "num_listeners": 10
+  "num_channels": 10
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
   "channel_ratio_fn": "fifth_at_1k"
   "speaker_action_transform": "gausssplatchol"
-  "speaker_action_dim": 30
+  "speaker_action_dim": 24
 
 
 # WandB Params
