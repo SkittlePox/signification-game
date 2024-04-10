@@ -144,7 +144,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                         sigma_y2 = sigma_y2_norm * array_shape[0]**2
 
                         # Compute the 2D Gaussian formula
-                        gaussian = amplitude * jnp.exp(-(((x - x_mu)**2 / (2 * sigma_x2)) + ((y - y_mu)**2 / (2 * sigma_y2))))
+                        gaussian = amplitude * jnp.exp(-(((x - x_mu)**2 / (2 * sigma_x2 + 1e-8)) + ((y - y_mu)**2 / (2 * sigma_y2 + 1e-8))))
                         return gaussian
 
                     array += compute_gaussian(gaussians_params)
@@ -185,9 +185,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                         y_mu = y_mu_norm * array_shape[0]
 
                         # Convert normalized covariance to actual values
-                        sigma_x2 = sigma_x2_norm * array_shape[1]**2 * 0.01
-                        sigma_y2 = sigma_y2_norm * array_shape[0]**2 * 0.01
-                        sigma_xy = (2 * sigma_xy_norm - 1) * array_shape[1] * array_shape[0] * 0.002
+                        sigma_x2 = sigma_x2_norm * array_shape[1]**2 * 0.01 + 1e-8
+                        sigma_y2 = sigma_y2_norm * array_shape[0]**2 * 0.01 + 1e-8
+                        sigma_xy = (2 * sigma_xy_norm - 1) * array_shape[1] * array_shape[0] * 0.002 + 1e-8
 
                         # Construct the covariance matrix and its inverse
                         cov_matrix = jnp.array([[sigma_x2, sigma_xy], [sigma_xy, sigma_y2]])
