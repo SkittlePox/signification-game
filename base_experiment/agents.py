@@ -109,35 +109,36 @@ class ActorCriticListenerConvSmall(nn.Module):
         x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
 
         # Convolutional layers
-        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME', kernel_init=nn.initializers.he_normal())(x)
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
         x = nn.relu(x)
-        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME', kernel_init=nn.initializers.he_normal())(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
         x = nn.relu(x)
         x = x.reshape((x.shape[0], -1))  # Flatten
         
         # Embedding Layer
-        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(x)
+        embedding = nn.Dense(128)(x)
         embedding = nn.relu(embedding)
         embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
-        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        embedding = nn.Dense(128)(embedding)
         embedding = nn.relu(embedding)
         embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
-        embedding = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        embedding = nn.Dense(128)(embedding)
         embedding = nn.relu(embedding)
 
         # Actor Layer
-        actor_mean = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        actor_mean = nn.Dense(128)(embedding)
         actor_mean = nn.relu(actor_mean)
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.he_normal())(actor_mean)
-        pi = distrax.Categorical(logits=actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
 
         # Critic Layer
-        critic = nn.Dense(128, kernel_init=nn.initializers.he_normal())(embedding)
+        critic = nn.Dense(128)(embedding)
         critic = nn.relu(critic)
-        critic = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(critic)
-        critic = nn.Dense(128, kernel_init=nn.initializers.he_normal())(critic)
+        # critic = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(128)(critic)
         critic = nn.relu(critic)
-        critic = nn.Dense(1, kernel_init=nn.initializers.he_normal())(critic)
+        critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
 
@@ -153,13 +154,13 @@ class ActorCriticListenerDense(nn.Module):
         # Embedding Layer
         embedding = nn.Dense(512)(obs)
         embedding = nn.sigmoid(embedding)
-        embedding = nn.Dense(512)(embedding)
-        embedding = nn.sigmoid(embedding)
+        # embedding = nn.Dense(512)(embedding)
+        # embedding = nn.sigmoid(embedding)
         embedding = nn.Dense(512)(embedding)
         embedding = nn.sigmoid(embedding)
 
         # Actor Layer
-        actor_mean = nn.Dense(512)(embedding)
+        actor_mean = nn.Dense(32)(embedding)
         actor_mean = nn.sigmoid(actor_mean)
         actor_mean = nn.Dense(self.action_dim)(actor_mean)
 
@@ -395,11 +396,11 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
-        scale_diag = nn.sigmoid(scale_diag) * 0.01
+        # scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
+        # scale_diag = nn.sigmoid(scale_diag) * 0.01
         
         # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.01)
 
         # Critic
         critic = nn.Dense(128)(actor_mean)
