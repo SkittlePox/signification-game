@@ -512,13 +512,18 @@ def make_train(config):
                 return new_speaker_train_state_i, total_loss
 
             listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
-            listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
+            new_listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
             
             speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
-            speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
-            runner_state = (listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
+            new_speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
 
-            # Below is just for logging
+            # Check if the speakers were dead for the whole of the transition batch
+            if jnp.sum(trimmed_transition_batch.speaker_alive).item() == 0: 
+                runner_state = (new_listener_train_state, speaker_train_state, log_env_state, last_obs, rng)
+            else:
+                runner_state = (new_listener_train_state, new_speaker_train_state, log_env_state, last_obs, rng)
+
+            ########## Below is just for logging
 
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
             speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])
