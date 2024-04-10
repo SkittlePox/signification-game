@@ -525,7 +525,7 @@ def make_train(config):
             ########## Below is just for logging
 
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
-            speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])
+            speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])   # I think this is the only use of the outputs
 
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])

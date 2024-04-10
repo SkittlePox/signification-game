@@ -1,6 +1,6 @@
 program: ippo_ff.py
 method: bayes
-name: speaker-sweep-gauss-splat-small-fixed
+name: speaker-sweep-gauss-splat-small-freezing
 metric:
   goal: maximize
   name: reward/mean reward/all speakers
