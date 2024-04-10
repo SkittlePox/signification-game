@@ -518,7 +518,7 @@ def make_train(config):
             new_speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
 
             # EXPERIMENTAL: Check if the speakers were dead for the whole of the transition batch
-            new_speaker_train_state = jax.lax.cond(jnp.sum(trimmed_transition_batch.speaker_alive).item() == 0, lambda _: speaker_train_state, lambda _: new_speaker_train_state)
+            new_speaker_train_state = jax.lax.cond(jnp.sum(trimmed_transition_batch.speaker_alive) == 0, lambda _: speaker_train_state, lambda _: new_speaker_train_state, operand=None)
             
             runner_state = (new_listener_train_state, new_speaker_train_state, log_env_state, last_obs, rng)
 
