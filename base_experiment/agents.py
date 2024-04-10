@@ -305,10 +305,10 @@ class ActorCriticSpeakerGaussSplat(nn.Module):
         z = nn.Dense(32, kernel_init=nn.initializers.he_uniform())(y)
         z = nn.relu(z)
         z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
-        z = nn.Dense(256, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
         z = nn.relu(z)
         z = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(z)
-        z = nn.Dense(256, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
         z = nn.relu(z)
 
         # Actor Mean
@@ -326,13 +326,13 @@ class ActorCriticSpeakerGaussSplat(nn.Module):
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.001)
 
         # Critic
-        critic = nn.Dense(512)(z)
+        critic = nn.Dense(128)(z)
         critic = nn.sigmoid(critic)
         critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
-        critic = nn.Dense(512)(critic)
+        critic = nn.Dense(32)(critic)
         critic = nn.sigmoid(critic)
         critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
-        critic = nn.Dense(512)(critic)
+        critic = nn.Dense(32)(critic)
         critic = nn.sigmoid(critic)
         critic = nn.Dense(1)(critic)
 

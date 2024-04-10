@@ -142,6 +142,7 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
     policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
+    # log_prob = jnp.maximum(log_prob, jnp.ones_like(log_prob) * -1e8)
     return action, log_prob, value
 
 @jax.profiler.annotate_function
@@ -244,6 +245,8 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
         dropout_key = jax.random.fold_in(key=train_state.key, data=j)
         _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key})
         _i_log_prob = _i_policy.log_prob(_actions)
+        # _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * -1e8)
+        
 
         # CALCULATE VALUE LOSS
         value_pred_clipped = values + (
