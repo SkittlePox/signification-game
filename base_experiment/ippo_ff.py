@@ -100,9 +100,9 @@ def initialize_speaker(env, rng, config):
     elif config["ENV_SPEAKER_ARCH"] == 'gausssplat':
         speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=128, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'gausssplatcovar':
-        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=128, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["ENV_SPEAKER_ARCH"] == 'gausssplatchol':
-        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=128, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
