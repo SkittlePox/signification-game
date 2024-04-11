@@ -339,7 +339,8 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
                 - config["ENT_COEF_SPEAKER"] * entropy
         )
         return total_loss, (value_loss, loss_actor, entropy)
- 
+    
+    
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
 
     total_loss, grads = grad_fn(
@@ -356,7 +357,16 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
     train_state = train_state.apply_gradients(grads=grads)
 
     return train_state, total_loss
+    
+    # train_state, total_loss = jax.lax.cond(jnp.all(trans_batch_i.speaker_alive[j] == 0), 
+    #                                        lambda _: (train_state, (jnp.array(0.0, dtype=jnp.float32), (jnp.array(0.0, dtype=jnp.float32), jnp.array(0.0, dtype=jnp.float32), jnp.array(0.0, dtype=jnp.float32)))),
+    #                                        lambda _: backprop_loss_fn(),
+    #                                        operand=None)
+    
+    # return train_state, total_loss
 
+
+# def update_minibatch_speaker_fast(j, trans_batch_i, advantages_i, targets_i, train_state, config):
 
 
 @jax.profiler.annotate_function
