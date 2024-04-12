@@ -40,6 +40,18 @@ class Transition(NamedTuple):
     listener_alive: jnp.ndarray
 
 
+def get_train_freezing(name):
+    def off_at_300(epoch):
+        jax.lax.cond(epoch > 300, lambda _: 0.0, lambda _: 1.0, operand=None)
+    def on_at_300(epoch):
+        jax.lax.cond(epoch > 300, lambda _: 1.0, lambda _: 0.0, operand=None)
+
+    if name == "off_at_300":
+        return off_at_300
+    elif name == "on_at_300":
+        return on_at_300
+
+
 @jax.profiler.annotate_function
 def define_env(config):
     if config["ENV_DATASET"] == 'mnist':        
@@ -85,6 +97,7 @@ def initialize_listener(env, rng, config):
         key=rng,
         tx=tx,
     )
+
     return listener_network, train_state, lr_func
 
 @jax.profiler.annotate_function
@@ -129,6 +142,7 @@ def initialize_speaker(env, rng, config):
         key=rng,
         tx=tx,
     )
+
     return speaker_network, train_state, lr_func
 
 @jax.profiler.annotate_function
@@ -415,6 +429,12 @@ def make_train(config):
                 k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
+
+            ###### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
+
+            speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_FREEZE"])
+            listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_FREEZE"])
+
 
             # CALCULATE ADVANTAGE #############
             listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state

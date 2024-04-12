@@ -238,8 +238,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                     def compute_gaussian(params):
                         x_mu_norm, y_mu_norm, amplitude, L_11, L_21, L_22 = params
 
-                        L_11 *= 0.2
-                        L_22 *= 0.2
+                        amplitude = (amplitude * 0.5) + 1
+                        L_11 *= 0.15
+                        L_22 *= 0.15
                         L_21 = ((2 * L_21) - 1) * 0.005
                         
                         # Convert normalized mean to actual coordinates
@@ -264,7 +265,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                     gaussians = compute_gaussian(gaussians_params)
                     array += jnp.sum(gaussians, axis=0)  # Sum contributions from all Gaussians
 
-                    return jnp.clip(array, a_min=0.0, a_max=1.0)
+                    return jnp.nan_to_num(jnp.clip(array, a_min=0.0, a_max=1.0))
 
                 # Assuming 'actions' includes the Cholesky decomposition parameters
                 gaussians_params = actions.reshape(-1, 6)  # Reshape based on the new parameter structure
