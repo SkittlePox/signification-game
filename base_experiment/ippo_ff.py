@@ -503,6 +503,7 @@ def make_train(config):
                 listener_advantages_i = listener_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
                 listener_targets_i = listener_targets.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
                 
+                # TODO: These reshapes are likely very memory intensive. It might be a good idea to do some of this outside this function.
                 listener_trans_batch_i = Transition(
                     speaker_action=listener_trans_batch.speaker_action,
                     speaker_reward=listener_trans_batch.speaker_reward,
@@ -552,11 +553,11 @@ def make_train(config):
 
             # listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             listener_map_outputs = tuple(map(lambda i: jax.lax.cond(train_listener, lambda _: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets),
-                                                                    lambda _: (listener_train_states[i], (jnp.zeros((1,)), (jnp.zeros((1,)), jnp.zeros((1,)), jnp.zeros((1,))))), operand=None), range(len(listener_rngs))))
+                                                                    lambda _: (listener_train_states[i], (jnp.zeros((16,)), (jnp.zeros((16,)), jnp.zeros((16,)), jnp.zeros((16,))))), operand=None), range(len(listener_rngs))))
             
             # speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
             speaker_map_outputs = tuple(map(lambda i: jax.lax.cond(train_speaker, lambda _: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets),
-                                                                   lambda _: (speaker_train_states[i], (jnp.zeros((1,)), (jnp.zeros((1,)), jnp.zeros((1,)), jnp.zeros((1,))))), operand=None), range(len(speaker_rngs))))
+                                                                   lambda _: (speaker_train_states[i], (jnp.zeros((8,)), (jnp.zeros((8,)), jnp.zeros((8,)), jnp.zeros((8,))))), operand=None), range(len(speaker_rngs))))   # I frankly have no idea why its calling for jnp.zeros((8,)), it should be jnp.zeros((1,))
             
             
             new_listener_train_state = jax.lax.cond(train_listener, lambda _: tuple([lmo[0] for lmo in listener_map_outputs]), lambda _: listener_train_state, operand=None)
