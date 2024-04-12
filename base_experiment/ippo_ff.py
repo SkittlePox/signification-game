@@ -42,9 +42,9 @@ class Transition(NamedTuple):
 
 def get_train_freezing(name):
     def off_at_300(epoch):
-        jax.lax.cond(epoch > 300, lambda _: 0.0, lambda _: 1.0, operand=None)
+        return jax.lax.cond(epoch > 300, lambda _: 0.0, lambda _: 1.0, operand=None)
     def on_at_300(epoch):
-        jax.lax.cond(epoch > 300, lambda _: 1.0, lambda _: 0.0, operand=None)
+        return jax.lax.cond(epoch > 300, lambda _: 1.0, lambda _: 0.0, operand=None)
 
     if name == "off_at_300":
         return off_at_300
@@ -435,6 +435,9 @@ def make_train(config):
             speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_FREEZE"])
             listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_FREEZE"])
 
+            train_speaker = speaker_train_freezing_fn(update_step)
+            train_listener = listener_train_freezing_fn(update_step)
+
 
             # CALCULATE ADVANTAGE #############
             listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
@@ -482,8 +485,16 @@ def make_train(config):
                 )
                 return advantages, advantages + trans_batch.speaker_value
 
-            listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
-            speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1])
+            # listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
+            # speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1])
+
+            listener_advantages, listener_targets = jax.lax.cond(train_listener, lambda _: _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1]),
+                                                                 lambda _: (jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_listeners"])),
+                                                                            jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_listeners"]))), operand=None)
+            
+            speaker_advantages, speaker_targets = jax.lax.cond(train_speaker, lambda _: _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1]),
+                                                                 lambda _: (jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_speakers"])),
+                                                                            jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_speakers"]))), operand=None)
             
             ##########################
 
@@ -537,14 +548,22 @@ def make_train(config):
 
                 return new_speaker_train_state_i, total_loss
 
-            listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
-            new_listener_train_state = tuple([lmo[0] for lmo in listener_map_outputs])
             
-            speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
-            new_speaker_train_state = tuple([lmo[0] for lmo in speaker_map_outputs])
+
+            # listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
+            listener_map_outputs = tuple(map(lambda i: jax.lax.cond(train_listener, lambda _: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets),
+                                                                    lambda _: (listener_train_states[i], (jnp.zeros((1,)), (jnp.zeros((1,)), jnp.zeros((1,)), jnp.zeros((1,))))), operand=None), range(len(listener_rngs))))
+            
+            # speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
+            speaker_map_outputs = tuple(map(lambda i: jax.lax.cond(train_speaker, lambda _: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets),
+                                                                   lambda _: (speaker_train_states[i], (jnp.zeros((1,)), (jnp.zeros((1,)), jnp.zeros((1,)), jnp.zeros((1,))))), operand=None), range(len(speaker_rngs))))
+            
+            
+            new_listener_train_state = jax.lax.cond(train_listener, lambda _: tuple([lmo[0] for lmo in listener_map_outputs]), lambda _: listener_train_state, operand=None)
+            new_speaker_train_state = jax.lax.cond(train_speaker, lambda _: tuple([lmo[0] for lmo in speaker_map_outputs]), lambda _: speaker_train_state, operand=None)
 
             # EXPERIMENTAL: Check if the speakers were dead for the whole of the transition batch
-            new_speaker_train_state = jax.lax.cond(jnp.sum(trimmed_transition_batch.speaker_alive) == 0, lambda _: speaker_train_state, lambda _: new_speaker_train_state, operand=None)
+            # new_speaker_train_state = jax.lax.cond(jnp.sum(trimmed_transition_batch.speaker_alive) == 0, lambda _: speaker_train_state, lambda _: new_speaker_train_state, operand=None)
             
             runner_state = (new_listener_train_state, new_speaker_train_state, log_env_state, last_obs, rng)
 
