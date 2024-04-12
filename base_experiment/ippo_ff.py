@@ -45,11 +45,15 @@ def get_train_freezing(name):
         return jax.lax.cond(epoch > 300, lambda _: 0.0, lambda _: 1.0, operand=None)
     def on_at_300(epoch):
         return jax.lax.cond(epoch > 300, lambda _: 1.0, lambda _: 0.0, operand=None)
+    def always(epoch):
+        return 1.0
 
     if name == "off_at_300":
         return off_at_300
     elif name == "on_at_300":
         return on_at_300
+    else:
+        return always
 
 
 @jax.profiler.annotate_function

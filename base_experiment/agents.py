@@ -307,14 +307,14 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(1.0))(z)
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.6))(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        # scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
-        # scale_diag = nn.sigmoid(scale_diag) * 0.01
+        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
+        scale_diag = nn.sigmoid(scale_diag) * 0.2
         
         # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=jnp.ones_like(actor_mean)*0.01)
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
 
         # Critic
         critic = nn.Dense(128)(actor_mean)
