@@ -132,7 +132,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             
             @jax.vmap
             def image(actions: jnp.array):
-                return actions.reshape(-1, image_dim, image_dim)
+                return actions.reshape(image_dim, image_dim)
             
             @jax.vmap
             def gauss_splat(actions: jnp.array):

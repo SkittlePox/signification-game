@@ -489,18 +489,18 @@ def make_train(config):
                 )
                 return advantages, advantages + trans_batch.speaker_value
 
-            listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
-            speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1])
+            # listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
+            # speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1])
 
-            # listener_advantages, listener_targets = jax.lax.cond(train_listener, lambda _: _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1]),
-            #                                                      lambda _: (jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_listeners"])),
-            #                                                                 jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_listeners"]))), operand=None)
+            listener_advantages, listener_targets = jax.lax.cond(train_listener, lambda _: _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1]),
+                                                                 lambda _: (jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_listeners"])),
+                                                                            jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_listeners"]))), operand=None)
             
-            # speaker_advantages, speaker_targets = jax.lax.cond(train_speaker, lambda _: _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1]),
-            #                                                      lambda _: (jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_speakers"])),
-            #                                                                 jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_speakers"]))), operand=None)
+            speaker_advantages, speaker_targets = jax.lax.cond(train_speaker, lambda _: _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1]),
+                                                                 lambda _: (jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_speakers"])),
+                                                                            jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_speakers"]))), operand=None)
             
-            ##########################
+            ##### UPDATE AGENTS #####################
 
             def _update_a_listener(i, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):                
                 listener_train_state_i = listener_train_states[i]
@@ -553,17 +553,16 @@ def make_train(config):
 
                 return new_speaker_train_state_i, total_loss
 
+            # listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
+            # speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
             
+            listener_map_outputs = jax.lax.cond(train_listener, lambda _: tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs)))),
+                                                lambda _: tuple([(lts, (jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],)), (jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],)), jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],)), jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],))))) for lts in listener_train_state]), operand=None)
 
-            listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
-            # listener_map_outputs = tuple(map(lambda i: jax.lax.cond(train_listener, lambda _: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets),
-            #                                                         lambda _: (listener_train_states[i], (jnp.zeros((16,)), (jnp.zeros((16,)), jnp.zeros((16,)), jnp.zeros((16,))))), operand=None), range(len(listener_rngs))))
-            
-            speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
-            # speaker_map_outputs = tuple(map(lambda i: jax.lax.cond(train_speaker, lambda _: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets),
-            #                                                        lambda _: (speaker_train_states[i], (jnp.zeros((8,)), (jnp.zeros((8,)), jnp.zeros((8,)), jnp.zeros((8,))))), operand=None), range(len(speaker_rngs))))   # I frankly have no idea why its calling for jnp.zeros((8,)), it should be jnp.zeros((1,))
-            
-            
+            speaker_map_outputs = jax.lax.cond(train_speaker, lambda _: tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs)))),
+                                               lambda _: tuple([(sts, (jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],)), (jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],)), jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],)), jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],))))) for sts in speaker_train_state]), operand=None)
+
+
             new_listener_train_state = jax.lax.cond(train_listener, lambda _: tuple([lmo[0] for lmo in listener_map_outputs]), lambda _: listener_train_state, operand=None)
             new_speaker_train_state = jax.lax.cond(train_speaker, lambda _: tuple([lmo[0] for lmo in speaker_map_outputs]), lambda _: speaker_train_state, operand=None)
 
@@ -689,9 +688,8 @@ def main(config):
         mode=config["WANDB_MODE"],
         save_code=True
     )
-    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     rng = jax.random.PRNGKey(55)
-    # train_jit = jax.jit(make_train(config), device=jax.devices()[0]) # The environment may or may not be jittable.
+    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)
     out = train(rng)
     print("Done")
@@ -754,4 +752,4 @@ def test(config):
 if __name__ == "__main__":
     main()
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    #     test()
+    #     main()

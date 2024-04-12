@@ -12,19 +12,19 @@
 "ANNEAL_LR_LISTENER": False
 "ANNEAL_LR_LISTENER_MULTIPLIER": 1.0
 "SPEAKER_TRAIN_FREEZE": "on_at_300"
-"LISTENER_TRAIN_FREEZE": "off_at_300"
+"LISTENER_TRAIN_FREEZE": "on_at_300"
 
-"LISTENER_ARCH": 'conv'
+"LISTENER_ARCH": 'dense'
 "SPEAKER_ARCH": 'gauss_splatchol'
 "SPEAKER_LATENT_DIM": 64
 "SPEAKER_DROPOUT": 0.0
 "LISTENER_DROPOUT": 0.0
 
 "NUM_ENVS": 1
-"NUM_STEPS": 512 # 1024
-"UPDATE_EPOCHS": 3500
-"MINIBATCH_SIZE_LISTENER": 32 # 64 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 64 # 128  # This must be a whole divisor of NUM_STEPS
+"NUM_STEPS": 30 # 1024
+"UPDATE_EPOCHS": 3
+"MINIBATCH_SIZE_LISTENER": 5 # 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 5 # 128  # This must be a whole divisor of NUM_STEPS
 
 
 "ENV_NAME": "simple-sig-game"
@@ -32,8 +32,8 @@
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 1
-  "num_listeners": 20
-  "num_channels": 20
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
@@ -44,7 +44,7 @@
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 25
