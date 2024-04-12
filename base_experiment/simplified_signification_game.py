@@ -155,7 +155,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                     array += compute_gaussian(gaussians_params)
                     array = jnp.sum(array, axis=0)
 
-                    return jnp.clip(array, a_min=0.0, a_max=1.0)
+                    return jnp.nan_to_num(jnp.clip(array, a_min=0.0, a_max=1.0))
 
                 gaussians_params = actions.reshape(-1, 5)
                 array_shape = (image_dim, image_dim)
@@ -207,7 +207,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                     gaussians = compute_gaussian(gaussians_params)
                     array += jnp.sum(gaussians, axis=0)  # Sum contributions from all Gaussians
 
-                    return jnp.clip(array, a_min=0.0, a_max=1.0)
+                    return jnp.nan_to_num(jnp.clip(array, a_min=0.0, a_max=1.0))
 
                 # Assuming 'actions' includes the additional covariance parameters
                 gaussians_params = actions.reshape(-1, 6)  # Reshape based on the new parameter structure
