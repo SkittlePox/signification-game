@@ -239,8 +239,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                         x_mu_norm, y_mu_norm, amplitude, L_11, L_21, L_22 = params
 
                         amplitude = (amplitude * 0.5) + 1
-                        L_11 *= 0.15
-                        L_22 *= 0.15
+                        L_11 *= 0.1
+                        L_22 *= 0.1
                         L_21 = ((2 * L_21) - 1) * 0.005
                         
                         # Convert normalized mean to actual coordinates
