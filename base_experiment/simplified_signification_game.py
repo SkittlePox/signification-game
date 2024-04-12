@@ -81,6 +81,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             def tenth_at_500(x):
                 return jax.lax.cond(x < 500, lambda _: 0.0, lambda _: 0.1, None)
             
+            def tenth_at_300(x):
+                return jax.lax.cond(x < 300, lambda _: 0.0, lambda _: 0.1, None)
+            
             def fifth_at_1k(x):
                 return jax.lax.cond(x < 1000, lambda _: 0.0, lambda _: 0.2, None)
 
@@ -102,6 +105,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.channel_ratio_fn = tenth_at_500
             elif channel_ratio_fn == "fifth_at_1k":
                 self.channel_ratio_fn = fifth_at_1k
+            elif channel_ratio_fn == "tenth_at_300":
+                self.channel_ratio_fn = tenth_at_300
         else:
             self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
 
@@ -273,11 +278,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.speaker_action_transform = identity
             elif speaker_action_transform == "image":
                 self.speaker_action_transform = image
-            elif speaker_action_transform == "gausssplat":
+            elif speaker_action_transform == "gauss_splat":
                 self.speaker_action_transform = gauss_splat
-            elif speaker_action_transform == "gausssplatcovar":
+            elif speaker_action_transform == "gauss_splatcovar":
                 self.speaker_action_transform = gauss_splat_covar
-            elif speaker_action_transform == "gausssplatchol":
+            elif speaker_action_transform == "gauss_splatchol":
                 self.speaker_action_transform = gauss_splat_chol
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]

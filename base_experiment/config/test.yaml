@@ -1,18 +1,33 @@
-"LR": 1e-4
-"NUM_ENVS": 1
-"NUM_STEPS": 32
-"UPDATE_EPOCHS": 5000
-"MINIBATCH_SIZE": 32  # This must be a whole divisor of NUM_STEPS
+"LR_SPEAKER": 5e-5
+"LR_LISTENER": 1e-4
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
-"CLIP_EPS": 0.4
-"ENT_COEF": 0.02
+"CLIP_EPS": 0.02
 "VF_COEF": 0.5
 "MAX_GRAD_NORM": 0.5
+"ENT_COEF_LISTENER": 0.04
+"ENT_COEF_SPEAKER": 0.01
+"ANNEAL_LR_SPEAKER": False
+"ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
+"ANNEAL_LR_LISTENER": True
+"ANNEAL_LR_LISTENER_MULTIPLIER": 3.0
+
+"LISTENER_ARCH": 'conv'
+"SPEAKER_ARCH": 'gauss_splatchol'
+"SPEAKER_LATENT_DIM": 64
+"SPEAKER_DROPOUT": 0.0
+"LISTENER_DROPOUT": 0.2
+
+"NUM_ENVS": 1
+"NUM_STEPS": 4 # 256
+"UPDATE_EPOCHS": 1500
+"MINIBATCH_SIZE_LISTENER": 4 # 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 4 # 64  # This must be a whole divisor of NUM_STEPS
+
+
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
-"ENV_LISTENER_ARCH": 'conv'
-"ENV_NUM_DATAPOINTS": 20
+"ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
   "num_speakers": 1
   "num_listeners": 1
@@ -21,10 +36,13 @@
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "ret_0"
-"ANNEAL_LR": False
+  "channel_ratio_fn": "all_speakers"
+  "speaker_action_transform": "gauss_splatchol"
+  "speaker_action_dim": 30
+
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
+"SPEAKER_EXAMPLE_LOGGING_ITER": 50

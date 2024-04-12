@@ -307,7 +307,7 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(1.0))(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         # scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
@@ -328,3 +328,20 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
+
+
+def examine_speaker():
+    speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=64, num_classes=10, action_dim=30, config={})
+    
+    rng = jax.random.PRNGKey(51)
+    rng, _rng = jax.random.split(rng)
+
+    init_y = jnp.zeros(
+            (1, 1, 1),
+            dtype=jnp.int32
+        )
+    network_params = speaker_network.init({'params': _rng, 'dropout': _rng}, init_y)
+
+
+if __name__ == "__main__":
+    examine_speaker()
