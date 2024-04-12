@@ -11,36 +11,36 @@
 "ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
 "ANNEAL_LR_LISTENER": False
 "ANNEAL_LR_LISTENER_MULTIPLIER": 1.0
-"SPEAKER_TRAIN_FREEZE": ""
-"LISTENER_TRAIN_FREEZE": ""
+"SPEAKER_TRAIN_FREEZE": "on_at_300"
+"LISTENER_TRAIN_FREEZE": "off_at_300"
 
 "LISTENER_ARCH": 'conv'
 "SPEAKER_ARCH": 'gauss_splatchol'
 "SPEAKER_LATENT_DIM": 64
 "SPEAKER_DROPOUT": 0.0
-"LISTENER_DROPOUT": 0.2
+"LISTENER_DROPOUT": 0.0
 
 "NUM_ENVS": 1
-"NUM_STEPS": 32 # 1024
-"UPDATE_EPOCHS": 3000
+"NUM_STEPS": 512 # 1024
+"UPDATE_EPOCHS": 3500
 "MINIBATCH_SIZE_LISTENER": 32 # 64 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 32 # 128  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 64 # 128  # This must be a whole divisor of NUM_STEPS
 
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
-"ENV_NUM_DATAPOINTS": 1000
+"ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 1
-  "num_listeners": 1
-  "num_channels": 1
+  "num_listeners": 15
+  "num_channels": 15
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "all_speakers"
+  "channel_ratio_fn": "fifteenth_at_300"
   "speaker_action_transform": "gauss_splatchol"
-  "speaker_action_dim": 30
+  "speaker_action_dim": 60
 
 
 # WandB Params

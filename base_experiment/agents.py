@@ -307,7 +307,7 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.6))(z)
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.6))(z)  # TODO: Eventually I can sweep over these parameters
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)

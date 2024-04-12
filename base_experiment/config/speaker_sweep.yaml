@@ -1,19 +1,19 @@
 program: ippo_ff.py
 method: bayes
-name: speaker-sweep-gauss-splat-small-freezing
+name: speaker-sweep-high-ent-more-listeners
 metric:
   goal: maximize
   name: reward/mean reward/all speakers
 parameters:
   LR_SPEAKER:
     max: 1e-3
-    min: 1e-5
+    min: 1e-6
     distribution: log_uniform_values
   WANDB_MODE:
     value: online
   ENT_COEF_SPEAKER:
-    max: 0.1
-    min: 1e-5
+    max: 1e3
+    min: 1e-6
     distribution: log_uniform_values
 
 
