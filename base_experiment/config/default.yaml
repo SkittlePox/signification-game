@@ -1,4 +1,4 @@
-"LR_SPEAKER": 1e-4
+"LR_SPEAKER": 1e-5
 "LR_LISTENER": 5e-5
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
@@ -47,4 +47,4 @@
 "WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
-"SPEAKER_EXAMPLE_LOGGING_ITER": 50
+"SPEAKER_EXAMPLE_LOGGING_ITER": 25
