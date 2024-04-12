@@ -32,13 +32,13 @@
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 1
-  "num_listeners": 15
-  "num_channels": 15
+  "num_listeners": 20
+  "num_channels": 20
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "fifteenth_at_300"
+  "channel_ratio_fn": "20th_at_300"
   "speaker_action_transform": "gauss_splatchol"
   "speaker_action_dim": 60
 
