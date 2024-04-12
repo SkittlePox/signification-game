@@ -54,52 +54,9 @@ class SimpSigGameLogWrapper(LogWrapper):
         info["returned_episode_lengths"] = state.returned_episode_lengths
         # info["returned_episode"] = jnp.full((self._env.num_agents,), old_ep_done) # This doesn't work for some reason
         return obs, state, reward, done, info
-
-
-# There should be two kinds of ActorCritics, one for listeners and one for speakers. For now, this will be for listeners.
-class ActorCriticListenerConv(nn.Module):
-    action_dim: Sequence[int]
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, x):
-        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
-
-        # Convolutional layers
-        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
-        x = nn.sigmoid(x)
-        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
-        x = nn.sigmoid(x)
-        x = x.reshape((x.shape[0], -1))  # Flatten
         
-        # Embedding Layer
-        embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
-        embedding = nn.sigmoid(embedding)
-        embedding = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(embedding)
-        embedding = nn.sigmoid(embedding)
 
-        # Actor Layer
-        actor_mean = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        actor_mean = nn.sigmoid(actor_mean)
-        actor_mean = nn.Dense(self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0))(actor_mean)
-
-        # Action Logits
-        # unavail_actions = 1 - avail_actions
-        # action_logits = actor_mean - (unavail_actions * 1e10)
-        pi = distrax.Categorical(logits=actor_mean)
-
-        # Critic Layer
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-    
-
-class ActorCriticListenerConvSmall(nn.Module):
+class ActorCriticListenerConv(nn.Module):
     action_dim: Sequence[int]
     image_dim: Sequence[int]
     config: Dict
@@ -177,50 +134,7 @@ class ActorCriticListenerDense(nn.Module):
         return pi, jnp.squeeze(critic, axis=-1)
     
 
-class ActorCriticSpeaker(nn.Module):
-    latent_dim: int
-    num_classes: int
-    image_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, y):
-        y = nn.Embed(self.num_classes, self.latent_dim)(y)
-        # y = jnp.squeeze(y, axis=(0))
-        # z = jnp.concatenate([z, y], axis=-1)
-        z = nn.Dense(7 * 7 * 256)(y)
-        z = nn.relu(z)
-        z = z.reshape((-1, 7, 7, 256))
-        z = nn.ConvTranspose(128, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
-        z = nn.relu(z)
-        z = nn.ConvTranspose(64, kernel_size=(4, 4), strides=(2, 2), padding='SAME')(z)
-        z = nn.relu(z)
-        z = nn.ConvTranspose(1, kernel_size=(3, 3), padding='SAME')(z)
-        z = jnp.squeeze(z, axis=-1)  # Remove the channel dimension
-        z = jnp.reshape(z, (-1, self.image_dim ** 2))  # Flatten the image
-
-        # Actor Mean
-        actor_mean = nn.Dense(self.image_dim ** 2)(z)
-        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
-
-        # Actor Standard Deviation
-        actor_std = nn.Dense(self.image_dim ** 2, kernel_init=orthogonal(np.sqrt(2)))(z)
-        actor_std = nn.softplus(actor_std) * 0.25 + 1e-6  # Ensure positive standard deviation
-
-        # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_std)
-
-        # Critic
-        critic = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(z)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(512, kernel_init=orthogonal(2), bias_init=constant(0.0))(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
-
-        return pi, jnp.squeeze(critic, axis=-1)
-    
-
-class ActorCriticSpeakerGaussSmall(nn.Module):
+class ActorCriticSpeakerFullImage(nn.Module):
     latent_dim: int
     num_classes: int
     image_dim: Sequence[int]
@@ -254,7 +168,7 @@ class ActorCriticSpeakerGaussSmall(nn.Module):
 
         return pi, jnp.squeeze(critic, axis=-1)
 
-class ActorCriticSpeakerGaussSmallNovariance(nn.Module):
+class ActorCriticSpeakerFullImageSetVariance(nn.Module):
     latent_dim: int
     num_classes: int
     image_dim: Sequence[int]

@@ -55,11 +55,9 @@ def define_env(config):
 
 @jax.profiler.annotate_function
 def initialize_listener(env, rng, config):
-    if config["ENV_LISTENER_ARCH"] == 'conv':
+    if config["LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["ENV_LISTENER_ARCH"] == 'convsmall':
-        listener_network = ActorCriticListenerConvSmall(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["ENV_LISTENER_ARCH"] == 'dense':
+    elif config["LISTENER_ARCH"] == 'dense':
         listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
 
     rng, _rng = jax.random.split(rng)
@@ -91,18 +89,16 @@ def initialize_listener(env, rng, config):
 
 @jax.profiler.annotate_function
 def initialize_speaker(env, rng, config):
-    if config["ENV_SPEAKER_ARCH"] == 'gauss':
-        speaker_network = ActorCriticSpeaker(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["ENV_SPEAKER_ARCH"] == 'gausssmall':
-        speaker_network = ActorCriticSpeakerGaussSmall(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["ENV_SPEAKER_ARCH"] == 'gausssmallnovar':
-        speaker_network = ActorCriticSpeakerGaussSmallNovariance(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["ENV_SPEAKER_ARCH"] == 'gausssplat':
-        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["ENV_SPEAKER_ARCH"] == 'gausssplatcovar':
-        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["ENV_SPEAKER_ARCH"] == 'gausssplatchol':
-        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=32, num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+    if config["SPEAKER_ARCH"] == 'full_image':
+        speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["SPEAKER_ARCH"] == 'full_image_setvariance':
+        speaker_network = ActorCriticSpeakerFullImageSetVariance(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["SPEAKER_ARCH"] == 'gauss_splat':
+        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+    elif config["SPEAKER_ARCH"] == 'gauss_splatcovar':
+        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+    elif config["SPEAKER_ARCH"] == 'gauss_splatchol':
+        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
