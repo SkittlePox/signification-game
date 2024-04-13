@@ -1,12 +1,12 @@
 program: ippo_ff.py
 method: bayes
-name: speaker-sweep-high-ent-more-listeners
+name: speaker-sweep-dense-listeners
 metric:
   goal: maximize
   name: reward/mean reward/all speakers
 parameters:
   LR_SPEAKER:
-    max: 1e-3
+    max: 1e-4
     min: 1e-6
     distribution: log_uniform_values
   WANDB_MODE:
@@ -15,6 +15,18 @@ parameters:
     max: 1e3
     min: 1e-6
     distribution: log_uniform_values
+  SPEAKER_STD_DEV:
+    max: 1.0
+    min: 0.1
+    distribution: uniform
+  SPEAKER_STD_DEV2:
+    max: 1.0
+    min: 0.1
+    distribution: uniform
+  SPEAKER_LATENT_DIM:
+    values: [16, 32, 64, 128]
+  MINIBATCH_SIZE_SPEAKER:
+    values: [64, 128, 256]
 
 
 command:

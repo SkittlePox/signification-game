@@ -111,23 +111,23 @@ class ActorCriticListenerDense(nn.Module):
         # Embedding Layer
         embedding = nn.Dense(512)(obs)
         embedding = nn.sigmoid(embedding)
-        # embedding = nn.Dense(512)(embedding)
-        # embedding = nn.sigmoid(embedding)
-        embedding = nn.Dense(512)(embedding)
+        embedding = nn.Dense(256)(embedding)
+        embedding = nn.sigmoid(embedding)
+        embedding = nn.Dense(256)(embedding)
         embedding = nn.sigmoid(embedding)
 
         # Actor Layer
-        actor_mean = nn.Dense(32)(embedding)
+        actor_mean = nn.Dense(128)(embedding)
         actor_mean = nn.sigmoid(actor_mean)
         actor_mean = nn.Dense(self.action_dim)(actor_mean)
 
         # Action Logits
-        # unavail_actions = 1 - avail_actions
-        # action_logits = actor_mean - (unavail_actions * 1e10)
         pi = distrax.Categorical(logits=actor_mean)
 
         # Critic Layer
         critic = nn.Dense(512)(embedding)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(256)(critic)
         critic = nn.sigmoid(critic)
         critic = nn.Dense(1)(critic)
 
@@ -307,11 +307,11 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.6))(z)  # TODO: Eventually I can sweep over these parameters
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STD_DEV"]))(z)  # TODO: Eventually I can sweep over these parameters
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(0.33))(z)
-        scale_diag = nn.sigmoid(scale_diag) * 0.2 + 1e-5
+        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STD_DEV2"]))(z)
+        scale_diag = nn.sigmoid(scale_diag) * 0.2 + 1e-8
         
         # Create a multivariate normal distribution with diagonal covariance matrix
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)

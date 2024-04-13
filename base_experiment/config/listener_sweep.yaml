@@ -1,26 +1,38 @@
 program: ippo_ff.py
 method: bayes
-name: listener-sweep
+name: listener-sweep-conv
 metric:
   goal: maximize
   name: reward/mean reward/all listeners
 parameters:
   LR_LISTENER:
     max: 1e-3
-    min: 1e-6
+    min: 1e-5
     distribution: log_uniform_values
   WANDB_MODE:
     value: online
   UPDATE_EPOCHS:
-    value: 500
+    value: 250
   NUM_STEPS:
-    value: 512
+    value: 2048
   ANNEAL_LR_LISTENER:
-    value: True
+    value: False
   ANNEAL_LR_LISTENER_MULTIPLIER:
-    value: 0.25
+    value: 1.0
   ANNEAL_LR_SPEAKER:
     value: False
+  ENT_COEF_LISTENER:
+    max: 1.0
+    min: 1e-3
+    distribution: log_uniform_values
+  LISTENER_TRAIN_FREEZE:
+    value: "always_train"
+  SPEAKER_TRAIN_FREEZE:
+    value: "always_train"
+  MINIBATCH_SIZE_LISTENER:
+    values: [32, 64, 128]
+  LISTENER_ARCH:
+    value: "conv"
 
 
 command:

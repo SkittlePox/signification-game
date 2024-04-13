@@ -41,19 +41,16 @@ class Transition(NamedTuple):
 
 
 def get_train_freezing(name):
-    def off_at_300(epoch):
-        return jax.lax.cond(epoch > 300, lambda _: 0.0, lambda _: 1.0, operand=None)
-    def on_at_300(epoch):
-        return jax.lax.cond(epoch > 300, lambda _: 1.0, lambda _: 0.0, operand=None)
-    def always(epoch):
-        return 1.0
-
     if name == "off_at_300":
-        return off_at_300
+        return lambda epoch: jax.lax.cond(epoch > 300, lambda _: 0.0, lambda _: 1.0, operand=None)
     elif name == "on_at_300":
-        return on_at_300
+        return lambda epoch: jax.lax.cond(epoch > 300, lambda _: 1.0, lambda _: 0.0, operand=None)
+    elif name == "off_at_200":
+        return lambda epoch: jax.lax.cond(epoch > 200, lambda _: 0.0, lambda _: 1.0, operand=None)
+    elif name == "on_at_200":
+        return lambda epoch: jax.lax.cond(epoch > 200, lambda _: 1.0, lambda _: 0.0, operand=None)
     else:
-        return always
+        return lambda epoch: 1.0
 
 
 @jax.profiler.annotate_function
@@ -156,7 +153,6 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
     policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
-    # log_prob = jnp.maximum(log_prob, jnp.ones_like(log_prob) * -1e8)
     return action, log_prob, value
 
 @jax.profiler.annotate_function
@@ -166,7 +162,6 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i, rngs={'dropout': dropout_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
-    # log_prob = jnp.sum(policy.log_prob(action), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 
@@ -416,7 +411,10 @@ def make_train(config):
         def _update_step(runner_state, update_step, env, config):
             # runner_state is actually a tuple of runner_states, one per agent
 
-            new_reset_rng = jax.random.split(runner_state[4], config["NUM_ENVS"]+1)
+            rng = jax.random.fold_in(key=runner_state[4], data=update_step)
+            new_rng, next_rng = jax.random.split(rng)
+
+            new_reset_rng = jax.random.split(new_rng, config["NUM_ENVS"]+1)
             last_obs, log_env_state = env.reset(new_reset_rng[:-1], jnp.ones((config["NUM_ENVS"])) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
             runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, new_reset_rng[-1])
             
@@ -569,7 +567,7 @@ def make_train(config):
             # EXPERIMENTAL: Check if the speakers were dead for the whole of the transition batch
             # new_speaker_train_state = jax.lax.cond(jnp.sum(trimmed_transition_batch.speaker_alive) == 0, lambda _: speaker_train_state, lambda _: new_speaker_train_state, operand=None)
             
-            runner_state = (new_listener_train_state, new_speaker_train_state, log_env_state, last_obs, rng)
+            runner_state = (new_listener_train_state, new_speaker_train_state, log_env_state, last_obs, next_rng)
 
             ########## Below is just for logging
 
@@ -596,7 +594,7 @@ def make_train(config):
 
                 metric_dict = {}
 
-                metric_dict.update({"env/avg_num_speaker_images": jnp.mean(les.env_state.requested_num_speaker_images)})
+                metric_dict.update({"env/avg_channel_ratio": jnp.mean(les.env_state.requested_num_speaker_images) / env_kwargs["num_channels"]})
 
                 listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
                 

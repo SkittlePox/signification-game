@@ -75,8 +75,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             def half(x):
                 return 0.5
             
-            def fifth_at_500(x):
-                return jax.lax.cond(x < 500, lambda _: 0.0, lambda _: 0.2, None)
+            def fifth_at_200(x):
+                return jax.lax.cond(x < 200, lambda _: 0.0, lambda _: 0.2, None)
             
             def fifth_at_300(x):
                 return jax.lax.cond(x < 300, lambda _: 0.0, lambda _: 0.2, None)
@@ -90,8 +90,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             def fifth_at_1k(x):
                 return jax.lax.cond(x < 1000, lambda _: 0.0, lambda _: 0.2, None)
             
-            def fifteenth_at_300(x):
-                return jax.lax.cond(x < 300, lambda _: 0.0, lambda _: 1.0/15.0, None)
+            def fifteenth_at_200(x):
+                return jax.lax.cond(x < 200, lambda _: 0.0, lambda _: 1.0/15.0, None)
             
             def t20th_at_300(x):
                 return jax.lax.cond(x < 300, lambda _: 0.0, lambda _: 1.0/20.0, None)
@@ -108,8 +108,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.channel_ratio_fn = fifth
             elif channel_ratio_fn == "half":
                 self.channel_ratio_fn = half
-            elif channel_ratio_fn == "fifth_at_500":
-                self.channel_ratio_fn = fifth_at_500
+            elif channel_ratio_fn == "fifth_at_200":
+                self.channel_ratio_fn = fifth_at_200
             elif channel_ratio_fn == "tenth_at_500":
                 self.channel_ratio_fn = tenth_at_500
             elif channel_ratio_fn == "fifth_at_1k":
@@ -118,8 +118,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.channel_ratio_fn = tenth_at_300
             elif channel_ratio_fn == "fifth_at_300":
                 self.channel_ratio_fn = fifth_at_300
-            elif channel_ratio_fn == "fifteenth_at_300":
-                self.channel_ratio_fn = fifteenth_at_300
+            elif channel_ratio_fn == "15th_at_200":
+                self.channel_ratio_fn = fifteenth_at_200
             elif channel_ratio_fn == "20th_at_300":
                 self.channel_ratio_fn = t20th_at_300
         else:
