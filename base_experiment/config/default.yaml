@@ -24,9 +24,9 @@
 "SPEAKER_STD_DEV2": 0.5
 
 "NUM_ENVS": 1
-"NUM_STEPS": 2048
+"NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 1000
-"MINIBATCH_SIZE_LISTENER": 32 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 32 # 32 This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 
 
@@ -34,7 +34,7 @@
 "ENV_DATASET": 'mnist'
 "ENV_NUM_DATAPOINTS": 10000
 "ENV_KWARGS":
-  "num_speakers": 1
+  "num_speakers": 5
   "num_listeners": 5
   "num_channels": 5
   "num_classes": 10
@@ -51,3 +51,5 @@
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 10
+"SPEAKER_EXAMPLE_NUM": 2
+"SPEAKER_EXAMPLE_DEBUG": False

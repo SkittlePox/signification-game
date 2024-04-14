@@ -167,12 +167,14 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
 
 def get_speaker_examples(runner_state, env, config):    # TODO: parameterize this by how many example generations I want per speaker, then splice them consecutively.
     _, speaker_train_states, log_env_state, obs, rng = runner_state
-    env_rngs = jax.random.split(rng, len(speaker_train_states))
+    env_rngs = jax.random.split(rng, len(speaker_train_states) * config["SPEAKER_EXAMPLE_NUM"])
     speaker_obs = jnp.arange(config["ENV_KWARGS"]["num_classes"])
-    speaker_outputs = [execute_individual_speaker(env_rngs[i], speaker_train_states[i], speaker_obs) for i in range(config["ENV_KWARGS"]["num_speakers"])]
+    speaker_outputs = [[execute_individual_speaker(env_rngs[j*i+j], speaker_train_states[i], speaker_obs) for j in range(config["SPEAKER_EXAMPLE_NUM"])]
+                       for i in range(config["ENV_KWARGS"]["num_speakers"])]
+    speaker_outputs = [item for row in speaker_outputs for item in row]
     speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, config["ENV_KWARGS"]["speaker_action_dim"])
-    speaker_action = speaker_action.reshape((config["ENV_KWARGS"]["num_speakers"] * len(speaker_obs), -1))   # TODO: this could prob be changed
-    speaker_images = env._env.speaker_action_transform(speaker_action).reshape((config["ENV_KWARGS"]["num_speakers"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
+    speaker_action = speaker_action.reshape((config["ENV_KWARGS"]["num_speakers"] * len(speaker_obs) * config["SPEAKER_EXAMPLE_NUM"], -1))
+    speaker_images = env._env.speaker_action_transform(speaker_action).reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
     return speaker_images
 
 
@@ -576,7 +578,7 @@ def make_train(config):
 
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
-            speaker_examples = jax.lax.cond((update_step + 1) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1))).reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # TODO: This code is not robust to more than 1 env
 
             def wandb_callback(metrics):
@@ -650,8 +652,8 @@ def make_train(config):
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
                 metric_dict.update({"learning rate/average listener": jnp.mean(listener_lr).item()})
                 
-                if (u_step + 1) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0:
-                    speaker_example_images = make_grid(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"])
+                if (u_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0:
+                    speaker_example_images = make_grid(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"], pad_value=0.5)
                     final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
                     metric_dict.update({"env/speaker_examples": final_speaker_example_images})
                 
