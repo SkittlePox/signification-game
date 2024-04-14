@@ -358,13 +358,13 @@ class ActorCriticSpeakerSplines(nn.Module):
 
         # Critic
         critic = nn.Dense(128)(actor_mean)
-        critic = nn.sigmoid(critic)
+        critic = nn.relu(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(128)(critic)
-        critic = nn.sigmoid(critic)
+        critic = nn.relu(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(32)(critic)
-        critic = nn.sigmoid(critic)
+        critic = nn.relu(critic)
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)

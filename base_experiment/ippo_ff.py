@@ -41,16 +41,14 @@ class Transition(NamedTuple):
 
 
 def get_train_freezing(name):
-    if name == "off_at_300":
-        return lambda epoch: jax.lax.cond(epoch > 300, lambda _: 0.0, lambda _: 1.0, operand=None)
-    elif name == "on_at_300":
-        return lambda epoch: jax.lax.cond(epoch > 300, lambda _: 1.0, lambda _: 0.0, operand=None)
-    elif name == "off_at_200":
-        return lambda epoch: jax.lax.cond(epoch > 200, lambda _: 0.0, lambda _: 1.0, operand=None)
-    elif name == "on_at_200":
-        return lambda epoch: jax.lax.cond(epoch > 200, lambda _: 1.0, lambda _: 0.0, operand=None)
+    if " at " in name:
+        crf_params = name.split(" at ")
+        if crf_params[0] == "on":
+            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: 1.0, operand=None)
+        if crf_params[0] == "off":
+            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda _: 0.0, operand=None)
     else:
-        return lambda epoch: 1.0
+        return lambda x: 1.0
 
 
 @jax.profiler.annotate_function
@@ -167,7 +165,7 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 
-def get_speaker_examples(runner_state, env, config):
+def get_speaker_examples(runner_state, env, config):    # TODO: parameterize this by how many example generations I want per speaker, then splice them consecutively.
     _, speaker_train_states, log_env_state, obs, rng = runner_state
     env_rngs = jax.random.split(rng, len(speaker_train_states))
     speaker_obs = jnp.arange(config["ENV_KWARGS"]["num_classes"])

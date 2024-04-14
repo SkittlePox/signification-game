@@ -68,33 +68,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             
             def linear(x):
                 return x / 400.0
-            
-            def fifth(x):
-                return 1.0 / 5.0
-            
-            def half(x):
-                return 0.5
-            
-            def fifth_at_200(x):
-                return jax.lax.cond(x < 200, lambda _: 0.0, lambda _: 0.2, None)
-            
-            def fifth_at_300(x):
-                return jax.lax.cond(x < 300, lambda _: 0.0, lambda _: 0.2, None)
-            
-            def tenth_at_500(x):
-                return jax.lax.cond(x < 500, lambda _: 0.0, lambda _: 0.1, None)
-            
-            def tenth_at_300(x):
-                return jax.lax.cond(x < 300, lambda _: 0.0, lambda _: 0.1, None)
-            
-            def fifth_at_1k(x):
-                return jax.lax.cond(x < 1000, lambda _: 0.0, lambda _: 0.2, None)
-            
-            def fifteenth_at_200(x):
-                return jax.lax.cond(x < 200, lambda _: 0.0, lambda _: 1.0/15.0, None)
-            
-            def t20th_at_300(x):
-                return jax.lax.cond(x < 300, lambda _: 0.0, lambda _: 1.0/20.0, None)
 
             if channel_ratio_fn in ("all_env", "ret_0", "ret0"):
                 self.channel_ratio_fn = ret_0
@@ -104,24 +77,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.channel_ratio_fn = s_curve
             elif channel_ratio_fn == "linear":
                 self.channel_ratio_fn = linear
-            elif channel_ratio_fn == "fifth":
-                self.channel_ratio_fn = fifth
-            elif channel_ratio_fn == "half":
-                self.channel_ratio_fn = half
-            elif channel_ratio_fn == "fifth_at_200":
-                self.channel_ratio_fn = fifth_at_200
-            elif channel_ratio_fn == "tenth_at_500":
-                self.channel_ratio_fn = tenth_at_500
-            elif channel_ratio_fn == "fifth_at_1k":
-                self.channel_ratio_fn = fifth_at_1k
-            elif channel_ratio_fn == "tenth_at_300":
-                self.channel_ratio_fn = tenth_at_300
-            elif channel_ratio_fn == "fifth_at_300":
-                self.channel_ratio_fn = fifth_at_300
-            elif channel_ratio_fn == "15th_at_200":
-                self.channel_ratio_fn = fifteenth_at_200
-            elif channel_ratio_fn == "20th_at_300":
-                self.channel_ratio_fn = t20th_at_300
+            else:
+                if " at " in channel_ratio_fn:
+                    crf_params = channel_ratio_fn.split(" at ")
+                    self.channel_ratio_fn = lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: eval(crf_params[0]), operand=None)
+                else:
+                    self.channel_ratio_fn = lambda x: eval(channel_ratio_fn)
         else:
             self.channel_ratio_fn = channel_ratio_fn    # This function returns the ratio of the communication channels from the environment vs from the speakers. With 0 being all from the environment and 1 being all from the speakers.
 
@@ -304,7 +265,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                         P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
                         return P  # Returns shape (N, 2), a list of points on the spline
 
-                    brush_size = 0
+                    brush_size = 1
 
                     spline_params *= image_dim
                     
