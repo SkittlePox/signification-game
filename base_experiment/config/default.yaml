@@ -16,7 +16,7 @@
 "LISTENER_TRAIN_FREEZE": "off_at_200"
 
 "LISTENER_ARCH": 'dense'
-"SPEAKER_ARCH": 'gauss_splatchol'
+"SPEAKER_ARCH": 'splines'
 "SPEAKER_LATENT_DIM": 64
 "SPEAKER_DROPOUT": 0.0
 "LISTENER_DROPOUT": 0.0
@@ -34,16 +34,16 @@
 "ENV_DATASET": 'mnist'
 "ENV_NUM_DATAPOINTS": 10000
 "ENV_KWARGS":
-  "num_speakers": 3
-  "num_listeners": 15
-  "num_channels": 15
+  "num_speakers": 1
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
   "channel_ratio_fn": "fifth_at_200"
-  "speaker_action_transform": "gauss_splatchol"
-  "speaker_action_dim": 42
+  "speaker_action_transform": "splines"
+  "speaker_action_dim": 12
 
 
 # WandB Params

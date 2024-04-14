@@ -328,12 +328,52 @@ class ActorCriticSpeakerGaussSplatChol(nn.Module):
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
+    
+
+class ActorCriticSpeakerSplines(nn.Module):
+    latent_dim: int
+    num_classes: int
+    action_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, obs):
+        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
+        z = nn.Dense(32, kernel_init=nn.initializers.he_uniform())(y)
+        z = nn.relu(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.relu(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.relu(z)
+
+        # Actor Mean
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STD_DEV"]))(z)  # TODO: Eventually I can sweep over these parameters
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
+
+        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STD_DEV2"]))(z)
+        scale_diag = nn.sigmoid(scale_diag) * 0.2 + 1e-8
+        
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
+
+        # Critic
+        critic = nn.Dense(128)(actor_mean)
+        critic = nn.sigmoid(critic)
+        # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.sigmoid(critic)
+        # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(32)(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
 
 
 def examine_speaker():
-    speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=64, num_classes=10, action_dim=30, config={})
+    speaker_network = ActorCriticSpeakerSplines(latent_dim=64, num_classes=10, action_dim=12, config={"SPEAKER_STD_DEV": 0.6, "SPEAKER_STD_DEV2": 0.2})
     
-    rng = jax.random.PRNGKey(51)
+    rng = jax.random.PRNGKey(52)
     rng, _rng = jax.random.split(rng)
 
     init_y = jnp.zeros(
@@ -341,6 +381,12 @@ def examine_speaker():
             dtype=jnp.int32
         )
     network_params = speaker_network.init({'params': _rng, 'dropout': _rng}, init_y)
+
+    obs = jnp.array([0])
+    pi, critic = speaker_network.apply(network_params, obs)
+    a = pi.sample(seed=rng)
+    print(a.tolist())
+    
 
 
 if __name__ == "__main__":

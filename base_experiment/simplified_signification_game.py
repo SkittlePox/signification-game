@@ -290,6 +290,53 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 gaussian_array = paint_normalized_gaussians_on_array(array_shape, gaussians_params)
                 return gaussian_array
 
+            @jax.vmap
+            def paint_multiple_splines(all_spline_params: jnp.array):
+                """Paint multiple splines on a single canvas."""
+
+                @jax.vmap
+                def paint_spline_on_canvas(spline_params: jnp.array):
+                    """Paint a single spline on the canvas with specified thickness using advanced indexing."""
+
+                    def bezier_spline(t, P0, P1, P2):
+                        """Compute points on a quadratic Bézier spline for a given t."""
+                        t = t[:, None]  # Shape (N, 1) to broadcast with P0, P1, P2 of shape (2,)
+                        P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
+                        return P  # Returns shape (N, 2), a list of points on the spline
+
+                    brush_size = 0
+
+                    spline_params *= image_dim
+                    
+                    # P0, P1, P2 = spline_params.reshape((3, 2)) 
+                    P0, P1, P2 = spline_params[0:2], spline_params[2:4], spline_params[4:6]
+                    t_values = jnp.linspace(0, 1, num=50)
+                    spline_points = bezier_spline(t_values, P0, P1, P2)
+                    x_points, y_points = jnp.round(spline_points).astype(int).T
+
+                    # Generate brush offsets
+                    brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size + 1) 
+                                                        for dy in range(-brush_size, brush_size + 1)])
+                    x_offsets, y_offsets = brush_offsets.T
+
+                    # Calculate all indices to update for each point (broadcasting magic)
+                    all_x_indices = x_points[:, None] + x_offsets
+                    all_y_indices = y_points[:, None] + y_offsets
+
+                    # Flatten indices and filter out-of-bound ones
+                    all_x_indices = jnp.clip(all_x_indices.flatten(), 0, image_dim)
+                    all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
+
+                    # Update the canvas
+                    canvas = jnp.zeros(image_dim)
+                    canvas = canvas.at[all_x_indices, all_y_indices].add(1)
+                    return canvas
+
+                # Vmap over splines and sum contributions
+                all_spline_params = jnp.clip(all_spline_params, 0.0, 1.0)
+                canvas = jnp.clip(paint_spline_on_canvas(all_spline_params.reshape(-1, 6)).sum(axis=0), 0.0, 1.0)
+                return canvas
+
             if speaker_action_transform == "identity":
                 self.speaker_action_transform = identity
             elif speaker_action_transform == "image":
@@ -300,6 +347,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 self.speaker_action_transform = gauss_splat_covar
             elif speaker_action_transform == "gauss_splatchol":
                 self.speaker_action_transform = gauss_splat_chol
+            elif speaker_action_transform == "splines":
+                self.speaker_action_transform = paint_multiple_splines
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]

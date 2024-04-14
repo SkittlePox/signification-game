@@ -113,6 +113,8 @@ def initialize_speaker(env, rng, config):
         speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'gauss_splatchol':
         speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+    elif config["SPEAKER_ARCH"] == 'splines':
+        speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
