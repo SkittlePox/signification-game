@@ -328,7 +328,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                     all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
 
                     # Update the canvas
-                    canvas = jnp.zeros(image_dim)
+                    canvas = jnp.zeros((image_dim, image_dim))
                     canvas = canvas.at[all_x_indices, all_y_indices].add(1)
                     return canvas
 
