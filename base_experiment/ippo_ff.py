@@ -408,10 +408,15 @@ def make_train(config):
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
         obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
+
+        speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_FREEZE"])
+        listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_FREEZE"])
         
         # TRAIN LOOP
         def _update_step(runner_state, update_step, env, config):
             # runner_state is actually a tuple of runner_states, one per agent
+
+            
 
             rng = jax.random.fold_in(key=runner_state[4], data=update_step)
             new_rng, next_rng = jax.random.split(rng)
@@ -433,14 +438,6 @@ def make_train(config):
                 k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
-
-            ###### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
-
-            speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_FREEZE"])
-            listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_FREEZE"])
-
-            train_speaker = speaker_train_freezing_fn(update_step)
-            train_listener = listener_train_freezing_fn(update_step)
 
 
             # CALCULATE ADVANTAGE #############
@@ -491,6 +488,11 @@ def make_train(config):
 
             # listener_advantages, listener_targets = _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1])
             # speaker_advantages, speaker_targets = _calculate_gae_speakers(trimmed_transition_batch, transition_batch.speaker_value[-1])
+
+            ###### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
+
+            train_speaker = speaker_train_freezing_fn(update_step)
+            train_listener = listener_train_freezing_fn(update_step)
 
             listener_advantages, listener_targets = jax.lax.cond(train_listener, lambda _: _calculate_gae_listeners(trimmed_transition_batch, transition_batch.listener_value[-1]),
                                                                  lambda _: (jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_listeners"])),
