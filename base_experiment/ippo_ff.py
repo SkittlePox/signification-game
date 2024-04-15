@@ -610,7 +610,7 @@ def make_train(config):
                 
                 metric_dict.update({"env/speaker_images": final_speaker_images})
                 metric_dict.update({"env/last_listener_obs": final_listener_images})
-                metric_dict.update({f"env/speaker_labels/speaker {i}": les.env_state.speaker_labels[:, i].item() for i in range(les.env_state.speaker_labels.shape[-1])})
+                # metric_dict.update({f"env/speaker_labels/speaker {i}": les.env_state.speaker_labels[:, i].item() for i in range(les.env_state.speaker_labels.shape[-1])})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
@@ -640,16 +640,16 @@ def make_train(config):
                     metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_reward for i in range(len(sr))})
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 
-                optimal_expected_reward = env_kwargs["reward_success"]
-                if optimal_expected_reward != 0:
-                    metric_dict.update({f"reward/mean reward over optimal/listener {i}": jnp.mean(lr[i]).item()/optimal_expected_reward for i in range(len(lr))})
-                    metric_dict.update({f"reward/mean reward over optimal/speaker {i}": jnp.mean(sr[i]).item()/optimal_expected_reward for i in range(len(sr))})
+                # optimal_expected_reward = env_kwargs["reward_success"]
+                # if optimal_expected_reward != 0:
+                #     metric_dict.update({f"reward/mean reward over optimal/listener {i}": jnp.mean(lr[i]).item()/optimal_expected_reward for i in range(len(lr))})
+                #     metric_dict.update({f"reward/mean reward over optimal/speaker {i}": jnp.mean(sr[i]).item()/optimal_expected_reward for i in range(len(sr))})
                     # Average reward over optimal - based on success_reward
                 
                 logp = logp.T
                 lv = lv.T
                 metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
-                metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
+                # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
 
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
                 metric_dict.update({"learning rate/average listener": jnp.mean(listener_lr).item()})
@@ -745,6 +745,7 @@ def test(config):
         mode=config["WANDB_MODE"],
         save_code=True
     )
+    wandb.run.log_code(".")
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     rng = jax.random.PRNGKey(50)
     out = test_rollout_execution(config, rng)

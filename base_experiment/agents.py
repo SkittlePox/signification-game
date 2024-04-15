@@ -351,7 +351,7 @@ class ActorCriticSpeakerSplines(nn.Module):
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
         scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STD_DEV2"]))(z)
-        scale_diag = nn.sigmoid(scale_diag) * 0.2 + 1e-8
+        scale_diag = nn.sigmoid(scale_diag) * self.config["SPEAKER_SQUISH"] + 1e-8
         
         # Create a multivariate normal distribution with diagonal covariance matrix
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
