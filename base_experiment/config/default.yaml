@@ -12,8 +12,8 @@
 "ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
 "ANNEAL_LR_LISTENER": False
 "ANNEAL_LR_LISTENER_MULTIPLIER": 1.0
-"SPEAKER_TRAIN_FREEZE": "on at 300"
-"LISTENER_TRAIN_FREEZE": "off at 300"
+"SPEAKER_TRAIN_FREEZE": "on at 200"
+"LISTENER_TRAIN_FREEZE": "off at 200"
 
 "LISTENER_ARCH": 'dense'
 "SPEAKER_ARCH": 'splines'
@@ -41,7 +41,7 @@
   "image_dim": 28
   "reward_success": 1.0
   "reward_failure": -0.1
-  "channel_ratio_fn": "1.0 at 300"
+  "channel_ratio_fn": "1.0 at 200"
   "speaker_action_transform": "splines"
   "speaker_action_dim": 18
 

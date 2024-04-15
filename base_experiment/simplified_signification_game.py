@@ -265,7 +265,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                         P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
                         return P  # Returns shape (N, 2), a list of points on the spline
 
-                    brush_size = 1
+                    brush_size = 0
 
                     spline_params *= image_dim
                     
