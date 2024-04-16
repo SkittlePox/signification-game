@@ -71,7 +71,12 @@ python jaxmarl_testdrive.py
 ## Setting up the environment (Oscar)
 In general see [Oscar Jax Instructions](https://docs.ccv.brown.edu/oscar/gpu-computing/installing-frameworks-pytorch-tensorflow-jax/installing-jax).
 
-1. `module load python`
+1. Run the following:
+    ```shell
+        module purge
+        unset LD_LIBRARY_PATH
+        module load cuda/12.3 cudnn
+    ```
 2. In a separate directory, create a python virtual environment:
     ```shell
         python3.9 -m venv siggame

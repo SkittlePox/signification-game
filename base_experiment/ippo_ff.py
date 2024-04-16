@@ -73,9 +73,9 @@ def initialize_listener(env, rng, config):
 
     rng, _rng = jax.random.split(rng)
     init_x = jnp.zeros(
-            (1, config["NUM_ENVS"], config["ENV_KWARGS"]["image_dim"]**2)
+            (config["ENV_KWARGS"]["image_dim"]**2,)
         )
-    network_params = listener_network.init({'params': _rng, 'dropout': _rng}, init_x)
+    network_params = listener_network.init({'params': _rng, 'dropout': _rng, 'noise': _rng}, init_x)
     
     def linear_schedule(count):
         frac = 1.0 - jnp.minimum(((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"])), 1)
@@ -113,13 +113,15 @@ def initialize_speaker(env, rng, config):
         speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'splines':
         speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+    elif config["SPEAKER_ARCH"] == 'splinesnoise':
+        speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
 
     rng, _rng = jax.random.split(rng)
     init_y = jnp.zeros(
-            (1, config["NUM_ENVS"], 1),
+            (1,),
             dtype=jnp.int32
         )
-    network_params = speaker_network.init({'params': _rng, 'dropout': _rng}, init_y)
+    network_params = speaker_network.init({'params': _rng, 'dropout': _rng, 'noise': _rng}, init_y)
 
     # For the learning rate
     def linear_schedule(count):
@@ -148,18 +150,18 @@ def initialize_speaker(env, rng, config):
 
 @jax.profiler.annotate_function
 def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
-    __rng, dropout_key = jax.random.split(__rng)
+    __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
     _listener_obs_i = _listener_obs_i.ravel()
-    policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': dropout_key})
+    policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     return action, log_prob, value
 
 @jax.profiler.annotate_function
 def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
-    __rng, dropout_key = jax.random.split(__rng)
-    _speaker_obs_i = _speaker_obs_i.reshape((-1, 1))
-    policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i, rngs={'dropout': dropout_key})
+    __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
+    _speaker_obs_i = _speaker_obs_i.ravel()
+    policy, value = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
@@ -253,8 +255,9 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
 
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
-        dropout_key = jax.random.fold_in(key=train_state.key, data=j)
-        _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key})
+        new_key = jax.random.fold_in(key=train_state.key, data=j)
+        dropout_key, noise_key = jax.random.split(new_key)
+        _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
         _i_log_prob = _i_policy.log_prob(_actions)
         # _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * -1e8)
         
@@ -314,8 +317,9 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
 
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
-        dropout_key = jax.random.fold_in(key=train_state.key, data=j)
-        _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key})
+        new_key = jax.random.fold_in(key=train_state.key, data=j)
+        dropout_key, noise_key = jax.random.split(new_key)
+        _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
         _i_log_prob = _i_policy.log_prob(_actions)
 
@@ -438,6 +442,8 @@ def make_train(config):
                 k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
+
+            # TODO: Potentially at this point we can make the rewards some function of listener logprobs.
 
 
             # CALCULATE ADVANTAGE #############
@@ -588,6 +594,7 @@ def make_train(config):
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 logp = tb.listener_log_prob
+                slogp = tb.speaker_log_prob
                 lv = tb.listener_value
                 sv = tb.speaker_value
 
@@ -647,8 +654,10 @@ def make_train(config):
                     # Average reward over optimal - based on success_reward
                 
                 logp = logp.T
+                slogp = slogp.T
                 lv = lv.T
-                metric_dict.update({f"predictions/mean action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
+                metric_dict.update({f"predictions/action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
+                metric_dict.update({f"predictions/action log probs/speaker {i}": jnp.mean(slogp[i]).item() for i in range(len(slogp))})
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
 
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})

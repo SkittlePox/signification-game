@@ -347,10 +347,56 @@ class ActorCriticSpeakerSplines(nn.Module):
         z = nn.relu(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STD_DEV"]))(z)  # TODO: Eventually I can sweep over these parameters
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)  # TODO: Eventually I can sweep over these parameters
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STD_DEV2"]))(z)
+        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(z)
+        scale_diag = nn.sigmoid(scale_diag) * self.config["SPEAKER_SQUISH"] + 1e-8
+        
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
+
+        # Critic
+        critic = nn.Dense(128)(actor_mean)
+        critic = nn.sigmoid(critic)
+        # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.sigmoid(critic)
+        # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
+        critic = nn.Dense(32)(critic)
+        critic = nn.sigmoid(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+
+
+class ActorCriticSpeakerSplinesNoise(nn.Module):
+    latent_dim: int
+    num_classes: int
+    action_dim: Sequence[int]
+    noise_dim: int
+    noise_stddev: float
+    config: Dict
+
+    @nn.compact
+    def __call__(self, obs):
+        y = nn.Embed(self.num_classes, self.latent_dim)(obs)
+        noise = self.noise_stddev * jax.random.normal(self.make_rng('noise'), shape=(obs.shape[0], self.noise_dim,))
+        y = jnp.concatenate([y, noise], axis=-1)
+
+        z = nn.Dense(32, kernel_init=nn.initializers.he_uniform())(y)
+        z = nn.sigmoid(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.sigmoid(z)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        z = nn.sigmoid(z)
+
+        # Actor Mean
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)  # TODO: Eventually I can sweep over these parameters
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
+
+        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(z)   # TODO: I should stick to a consistent schema
         scale_diag = nn.sigmoid(scale_diag) * self.config["SPEAKER_SQUISH"] + 1e-8
         
         # Create a multivariate normal distribution with diagonal covariance matrix
@@ -371,7 +417,7 @@ class ActorCriticSpeakerSplines(nn.Module):
 
 
 def examine_speaker():
-    speaker_network = ActorCriticSpeakerSplines(latent_dim=64, num_classes=10, action_dim=12, config={"SPEAKER_STD_DEV": 0.6, "SPEAKER_STD_DEV2": 0.2})
+    speaker_network = ActorCriticSpeakerSplines(latent_dim=64, num_classes=10, action_dim=12, config={"SPEAKER_STDDEV": 0.6, "SPEAKER_STDDEV2": 0.2})
     
     rng = jax.random.PRNGKey(52)
     rng, _rng = jax.random.split(rng)

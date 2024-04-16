@@ -265,7 +265,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                         P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
                         return P  # Returns shape (N, 2), a list of points on the spline
 
-                    brush_size = 0
+                    brush_size = 1
 
                     spline_params *= image_dim
                     
@@ -276,8 +276,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                     x_points, y_points = jnp.round(spline_points).astype(int).T
 
                     # Generate brush offsets
-                    brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size + 1) 
-                                                        for dy in range(-brush_size, brush_size + 1)])
+                    brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size)    # brush_size + 1
+                                                        for dy in range(-brush_size, brush_size)])  # brush_size + 1
                     x_offsets, y_offsets = brush_offsets.T
 
                     # Calculate all indices to update for each point (broadcasting magic)
