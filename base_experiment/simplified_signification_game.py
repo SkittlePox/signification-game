@@ -404,7 +404,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             # Return reward based on whether the listener was correct. These are indexed by channel.
             speaker_channel_reward = jnp.where(listener_correct, self.speaker_reward_success, self.speaker_reward_failure)
-            speaker_channel_reward *= listener_confidence ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
+            speaker_channel_reward *= (listener_confidence**3) ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
             listener_channel_reward = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
 
             return speaker_index, listener_index, speaker_channel_reward, listener_channel_reward
