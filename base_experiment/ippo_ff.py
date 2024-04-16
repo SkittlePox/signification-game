@@ -444,7 +444,7 @@ def make_train(config):
                 for k, v in transition_batch._asdict().items()
             })
 
-            # TODO: Potentially at this point we can make the rewards some function of listener logprobs.
+            # TODO: This is significantly more complicated than I thought because the listeners are randomly assigned to the speakers. They don't correspond!! Do not run the LOG_PROB_REWARDS flag for now!!
 
 
             # CALCULATE ADVANTAGE #############
