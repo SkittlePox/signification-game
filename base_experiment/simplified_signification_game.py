@@ -400,30 +400,30 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             # Check if the listener's action matches the correct label and convert boolean to integer
             listener_correct = (listener_actions[listener_index] == label).astype(jnp.int32)
-            listener_confidence = jnp.exp((listener_log_prob[listener_index]).astype(jnp.float32))
+            listener_confidence = jnp.exp(listener_log_prob[listener_index])
 
-            # Return reward based on whether the listener was correct
-            speaker_reward = jnp.where(listener_correct, self.speaker_reward_success, self.speaker_reward_failure)
-            speaker_reward *= listener_confidence ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
-            listener_reward = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
+            # Return reward based on whether the listener was correct. These are indexed by channel.
+            speaker_channel_reward = jnp.where(listener_correct, self.speaker_reward_success, self.speaker_reward_failure)
+            speaker_channel_reward *= listener_confidence ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
+            listener_channel_reward = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
 
-            return speaker_index, listener_index, speaker_reward, listener_reward
+            return speaker_index, listener_index, speaker_channel_reward, listener_channel_reward
 
-        speaker_indices, listener_indices, speaker_rewards, listener_rewards = _evaluate_channel_rewards(jnp.arange(self.num_channels), listener_actions, listener_log_prob)
+        speaker_indices, listener_indices, speaker_channel_rewards, listener_channel_rewards = _evaluate_channel_rewards(jnp.arange(self.num_channels), listener_actions, listener_log_prob)
 
         # Generate a reward vector containing all the rewards for each speaker and listener
         speaker_rewards = jnp.zeros(self.num_speakers + self.num_channels)
         listener_rewards = jnp.zeros(self.num_listeners)
-        initial_rewards_tuple = (speaker_rewards, listener_rewards, speaker_indices, listener_indices, speaker_rewards, listener_rewards)
+        initial_rewards_tuple = (speaker_rewards, listener_rewards, speaker_indices, listener_indices, speaker_channel_rewards, listener_channel_rewards)
         
         def update_rewards(loop_idx, rewards_tuple):
-            speaker_rewards, listener_rewards, speaker_indices, listener_indices, speaker_rewards, listener_rewards = rewards_tuple
+            speaker_rewards, listener_rewards, speaker_indices, listener_indices, speaker_channel_rewards, listener_channel_rewards = rewards_tuple
             # Update speaker and listener rewards
-            speaker_reward = speaker_rewards[loop_idx]
-            listener_reward = listener_rewards[loop_idx]
+            speaker_reward = speaker_channel_rewards[loop_idx]
+            listener_reward = listener_channel_rewards[loop_idx]
             new_speaker_rewards = speaker_rewards.at[speaker_indices[loop_idx]].add(speaker_reward)
             new_listener_rewards = listener_rewards.at[listener_indices[loop_idx]].add(listener_reward)
-            return new_speaker_rewards, new_listener_rewards, speaker_indices, listener_indices, speaker_rewards, listener_rewards
+            return new_speaker_rewards, new_listener_rewards, speaker_indices, listener_indices, speaker_channel_rewards, listener_channel_rewards
 
         speaker_rewards_final, listener_rewards_final, _, _, _, _ = jax.lax.fori_loop(0, self.num_channels, update_rewards, initial_rewards_tuple)
         speaker_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_speakers + self.num_channels), speaker_rewards_final)

@@ -46,16 +46,16 @@
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "channel_ratio_fn": "1.0"
+  "channel_ratio_fn": "0.2 at 200"
   "speaker_action_transform": "splines"
   "speaker_action_dim": 12
-  "log_prob_rewards": True
+  "log_prob_rewards": False
 
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 10
 "SPEAKER_EXAMPLE_NUM": 5
-"SPEAKER_EXAMPLE_DEBUG": True
+"SPEAKER_EXAMPLE_DEBUG": False
