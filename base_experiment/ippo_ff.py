@@ -438,8 +438,9 @@ def make_train(config):
             # We'll need to get the final value in transition_batch and cut off the last index
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
             # trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
+
             trimmed_transition_batch = Transition(**{
-                k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
+                k: (v[1:, ...] * jnp.exp(transition_batch.listener_log_prob[:-1, ...])**config["LOG_PROB_REWARDS"] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
 
