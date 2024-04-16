@@ -38,6 +38,7 @@ class Transition(NamedTuple):
     listener_log_prob: jnp.ndarray
     listener_obs: jnp.ndarray
     listener_alive: jnp.ndarray
+    channel_map: jnp.ndarray
 
 
 def get_train_freezing(name):
@@ -241,7 +242,8 @@ def env_step(runner_state, env, config):
         listener_value,
         listener_log_prob,
         listener_obs,
-        listener_alive
+        listener_alive,
+        log_env_state.env_state.channel_map
     )
 
     runner_state = (listener_train_states, speaker_train_states, env_state, new_obs, rng)
@@ -526,7 +528,8 @@ def make_train(config):
                     listener_value=listener_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
                     listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
                     listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], listener_trans_batch.listener_obs.shape[1]*listener_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES_LISTENER"], -1, env_kwargs["image_dim"]**2)),
-                    listener_alive=jnp.float32(listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)))
+                    listener_alive=jnp.float32(listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))),
+                    channel_map=listener_trans_batch.channel_map
                 )
 
                 # Iterate through batches
@@ -551,7 +554,8 @@ def make_train(config):
                     listener_value=speaker_trans_batch.listener_value,
                     listener_log_prob=speaker_trans_batch.listener_log_prob,
                     listener_obs=speaker_trans_batch.listener_obs,
-                    listener_alive=speaker_trans_batch.listener_alive
+                    listener_alive=speaker_trans_batch.listener_alive,
+                    channel_map=speaker_trans_batch.channel_map
                 )
 
                 # Iterate through batches
@@ -595,6 +599,7 @@ def make_train(config):
                 slogp = tb.speaker_log_prob
                 lv = tb.listener_value
                 sv = tb.speaker_value
+                cm = tb.channel_map
 
                 listener_actions = tb.listener_action
                 listener_obs = tb.listener_obs
@@ -656,6 +661,14 @@ def make_train(config):
                 llogp = llogp.T
                 slogp = slogp.T
                 lv = lv.T
+
+                # TODO: Probably need to construct a boolean map of env images vs speaker images, then apply that map to llogp, then sum, then divide by sum of map. This is hard
+                # image_from_speaker_channel = jnp.where(cm[..., 0] < env_kwargs["num_speakers"], 1, 0)
+                # image_from_speaker_indices = cm[image_from_speaker_channel == 1, 1]
+                # image_from_speaker = jnp.zeros((llogp.shape[-1], env_kwargs["num_listeners"]))
+                # llogp[3]
+                
+
                 metric_dict.update({f"predictions/action log probs/listener {i}": jnp.mean(llogp[i]).item() for i in range(len(llogp))})
                 metric_dict.update({f"predictions/action log probs/speaker {i}": jnp.mean(slogp[i]).item() for i in range(len(slogp))})
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
