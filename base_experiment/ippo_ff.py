@@ -440,12 +440,9 @@ def make_train(config):
             # trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
 
             trimmed_transition_batch = Transition(**{
-                k: (v[1:, ...] * jnp.exp(transition_batch.listener_log_prob[:-1, ...])**config["LOG_PROB_REWARDS"] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
+                k: (v[1:, ...] if k in ('speaker_reward') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
             })
-
-            # TODO: This is significantly more complicated than I thought because the listeners are randomly assigned to the speakers. They don't correspond!! Do not run the LOG_PROB_REWARDS flag for now!!
-
 
             # CALCULATE ADVANTAGE #############
             listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
@@ -594,7 +591,7 @@ def make_train(config):
                 ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, u_step = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
-                logp = tb.listener_log_prob
+                llogp = tb.listener_log_prob
                 slogp = tb.speaker_log_prob
                 lv = tb.listener_value
                 sv = tb.speaker_value
@@ -642,22 +639,24 @@ def make_train(config):
                 metric_dict.update({f"reward/mean reward/speaker {i}": jnp.mean(sr[i]).item() for i in range(len(sr))})
                 metric_dict.update({"reward/mean reward/all speakers": jnp.mean(sr).item()})
                 
-                random_expected_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["reward_failure"] + env_kwargs["reward_success"]
-                if random_expected_reward != 0:
-                    metric_dict.update({f"reward/mean reward over random/listener {i}": jnp.mean(lr[i]).item()/random_expected_reward for i in range(len(lr))})
-                    metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_reward for i in range(len(sr))})
-                    # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
+                # random_expected_speaker_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["speaker_reward_failure"] + env_kwargs["speaker_reward_success"]
+                # if random_expected_speaker_reward != 0:
+                #     metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_speaker_reward for i in range(len(sr))})
+                #     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
+                # random_expected_listener_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["listener_reward_failure"] + env_kwargs["listener_reward_success"]
+                # if random_expected_listener_reward != 0:
+                #     metric_dict.update({f"reward/mean reward over random/listener {i}": jnp.mean(lr[i]).item()/random_expected_listener_reward for i in range(len(lr))})
                 
-                # optimal_expected_reward = env_kwargs["reward_success"]
+                # optimal_expected_reward = env_kwargs["reward_success"]    # TODO: This will no longer work, migrated to asymmetric reward payoff matrix
                 # if optimal_expected_reward != 0:
                 #     metric_dict.update({f"reward/mean reward over optimal/listener {i}": jnp.mean(lr[i]).item()/optimal_expected_reward for i in range(len(lr))})
                 #     metric_dict.update({f"reward/mean reward over optimal/speaker {i}": jnp.mean(sr[i]).item()/optimal_expected_reward for i in range(len(sr))})
                     # Average reward over optimal - based on success_reward
                 
-                logp = logp.T
+                llogp = llogp.T
                 slogp = slogp.T
                 lv = lv.T
-                metric_dict.update({f"predictions/action log probs/listener {i}": jnp.mean(logp[i]).item() for i in range(len(logp))})
+                metric_dict.update({f"predictions/action log probs/listener {i}": jnp.mean(llogp[i]).item() for i in range(len(llogp))})
                 metric_dict.update({f"predictions/action log probs/speaker {i}": jnp.mean(slogp[i]).item() for i in range(len(slogp))})
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
 
