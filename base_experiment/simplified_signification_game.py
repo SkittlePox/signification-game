@@ -377,9 +377,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         if isinstance(actions, dict):
             speaker_actions = jnp.array([actions[agent] for agent in self.speaker_agents])
             listener_actions = jnp.array([actions[agent] for agent in self.listener_agents])
+            listener_log_prob = jnp.ones_like(listener_actions)
         else:
             speaker_actions = actions[0]
             listener_actions = actions[1]
+            listener_log_prob = actions[2]
 
         ######## First, evaluate the current state.
 

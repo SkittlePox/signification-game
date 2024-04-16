@@ -218,7 +218,7 @@ def env_step(runner_state, env, config):
 
     ##### STEP ENV
     rng_step = jax.random.split(_rng, config["NUM_ENVS"])
-    new_obs, env_state, rewards, alives, info = env.step(rng_step, log_env_state, (speaker_action, listener_action))
+    new_obs, env_state, rewards, alives, info = env.step(rng_step, log_env_state, (speaker_action, listener_action, listener_log_prob))
 
     speaker_alive = jnp.array([alives[f"speaker_{v}"] for v in range(env_kwargs["num_speakers"])]).reshape(config["NUM_ENVS"], -1)
     listener_alive = jnp.array([alives[f"listener_{v}"] for v in range(env_kwargs["num_listeners"])]).reshape(config["NUM_ENVS"], -1)
