@@ -49,6 +49,8 @@ def get_train_freezing(name):
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: 1.0, operand=None)
         if crf_params[0] == "off":
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda _: 0.0, operand=None)
+    elif name == "off":
+        return lambda x: 0.0
     else:
         return lambda x: 1.0
 
@@ -85,11 +87,14 @@ def initialize_listener(env, rng, config):
     if config["ANNEAL_LR_LISTENER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-            optax.adam(learning_rate=linear_schedule, eps=1e-5),
+            optax.adam(learning_rate=linear_schedule, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
         )
         lr_func = linear_schedule
     else:
-        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR_LISTENER"], eps=1e-5))
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), 
+            optax.adam(config["LR_LISTENER"], b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5)
+            )
         lr_func = lambda *args: config["LR_LISTENER"]
     
     train_state = TrainState.create(
@@ -134,11 +139,14 @@ def initialize_speaker(env, rng, config):
     if config["ANNEAL_LR_SPEAKER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-            optax.adam(learning_rate=linear_schedule, eps=1e-5),
+            optax.adam(learning_rate=linear_schedule, b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5),
         )
         lr_func = linear_schedule
     else:
-        tx = optax.chain(optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), optax.adam(config["LR_SPEAKER"], eps=1e-5))
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), 
+            optax.adam(config["LR_SPEAKER"], b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5)
+            )
         lr_func = lambda *args: config["LR_SPEAKER"]
     
     train_state = TrainState.create(
@@ -408,8 +416,8 @@ def make_train(config):
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
         obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
 
-        speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_FREEZE"])
-        listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_FREEZE"])
+        speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_SCHEDULE"])
+        listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_SCHEDULE"])
         
         # TRAIN LOOP
         def _update_step(runner_state, update_step, env, config):
