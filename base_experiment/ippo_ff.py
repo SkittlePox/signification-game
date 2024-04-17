@@ -231,6 +231,8 @@ def env_step(runner_state, env, config):
     speaker_obs = speaker_obs.reshape((config["NUM_ENVS"], -1))
     listener_obs = listener_obs.reshape((config["NUM_ENVS"], env_kwargs["num_listeners"], env_kwargs["image_dim"], env_kwargs["image_dim"]))
 
+    channel_map = log_env_state.env_state.channel_map
+
     transition = Transition(
         speaker_action,
         speaker_reward,
@@ -244,7 +246,7 @@ def env_step(runner_state, env, config):
         listener_log_prob,
         listener_obs,
         listener_alive,
-        log_env_state.env_state.channel_map
+        channel_map
     )
 
     runner_state = (listener_train_states, speaker_train_states, env_state, new_obs, rng)
@@ -673,7 +675,12 @@ def make_train(config):
                 lv = lv.T
 
                 # TODO: Probably need to construct a boolean map of env images vs speaker images, then apply that map to llogp, then sum, then divide by sum of map. This is hard
-                # image_from_speaker_channel = jnp.where(cm[..., 0] < env_kwargs["num_speakers"], 1, 0)
+                image_from_speaker_channel = jnp.where(cm[..., 0] < env_kwargs["num_speakers"], 1, 0)
+                image_source_hotmap = jnp.where(image_from_speaker_channel, cm[:,:,:,1], jnp.ones_like(cm[:,:,:,1])*-1)
+                image_source_boolmap_speaker = jnp.array([(image_source_hotmap == i).any(axis=2).T for i in range(env_kwargs["num_listeners"])])
+                image_source_boolmap_env = jnp.invert(image_source_boolmap_speaker)
+                speaker_llogp = llogp * image_source_boolmap_speaker
+                env_llogp = llogp * image_source_boolmap_env
                 # image_from_speaker_indices = cm[image_from_speaker_channel == 1, 1]
                 # image_from_speaker = jnp.zeros((llogp.shape[-1], env_kwargs["num_listeners"]))
                 # llogp[3]
@@ -681,6 +688,8 @@ def make_train(config):
 
                 metric_dict.update({f"predictions/action log probs/listener {i}": jnp.mean(llogp[i]).item() for i in range(len(llogp))})
                 metric_dict.update({f"predictions/action log probs/speaker {i}": jnp.mean(slogp[i]).item() for i in range(len(slogp))})
+                metric_dict.update({f"predictions/action log probs for speaker images/listener {i}": (jnp.sum(speaker_llogp[i]) / jnp.sum(image_source_boolmap_speaker[i])) for i in range(env_kwargs["num_listeners"])})
+                metric_dict.update({f"predictions/action log probs for env images/listener {i}": (jnp.sum(env_llogp[i]) / jnp.sum(image_source_boolmap_env[i])) for i in range(env_kwargs["num_listeners"])})
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
 
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
