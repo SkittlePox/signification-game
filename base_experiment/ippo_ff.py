@@ -636,10 +636,12 @@ def make_train(config):
                 metric_dict.update({f"loss/actor loss/speaker {i}": jnp.mean(sl[i][1][1]).item() for i in range(len(sl))})
                 metric_dict.update({f"loss/entropy/speaker {i}": jnp.mean(sl[i][1][2]).item() for i in range(len(sl))})
 
-                metric_dict.update({"loss/optmizer/speaker mu": jnp.mean(s_optmizer_params[:, 0]).item()})
-                metric_dict.update({"loss/optmizer/listener mu": jnp.mean(l_optmizer_params[:, 0]).item()})
-                metric_dict.update({"loss/optmizer/speaker nu": jnp.mean(s_optmizer_params[:, 1]).item()})
-                metric_dict.update({"loss/optmizer/listener nu": jnp.mean(l_optmizer_params[:, 1]).item()})
+                metric_dict.update({"optimizer/mean speaker mu": jnp.mean(s_optmizer_params[:, 0]).item()})
+                metric_dict.update({"optimizer/mean listener mu": jnp.mean(l_optmizer_params[:, 0]).item()})
+                metric_dict.update({"optimizer/mean speaker nu": jnp.mean(s_optmizer_params[:, 1]).item()})
+                metric_dict.update({"optimizer/mean listener nu": jnp.mean(l_optmizer_params[:, 1]).item()})
+
+                #### Rewards
 
                 lr = lr.T
                 # metric_dict.update({f"cumulative reward/listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
@@ -664,6 +666,8 @@ def make_train(config):
                 #     metric_dict.update({f"reward/mean reward over optimal/speaker {i}": jnp.mean(sr[i]).item()/optimal_expected_reward for i in range(len(sr))})
                     # Average reward over optimal - based on success_reward
                 
+                ############
+
                 llogp = llogp.T
                 slogp = slogp.T
                 lv = lv.T
