@@ -67,7 +67,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                 return 1.0
             
             def s_curve(x):
-                return 1.0 / (1.0 + jnp.exp(-1 * (jnp.array(x, float) - 200))) + 0.01
+                return 1.0 / (1.0 + jnp.exp(-1 * (0.01*jnp.array(x, float) - 5)))
             
             def linear(x):
                 return x / 400.0

@@ -651,7 +651,7 @@ def make_train(config):
                 metric_dict.update({"optimizer/mean speaker nu": jnp.mean(s_optmizer_params[:, 1]).item()})
                 metric_dict.update({"optimizer/mean listener nu": jnp.mean(l_optmizer_params[:, 1]).item()})
 
-                #### Rewards
+                #### Reward Logging
 
                 lr = lr.T
                 # metric_dict.update({f"cumulative reward/listener {i}": jnp.sum(r[i]).item() for i in range(len(r))})
@@ -670,11 +670,13 @@ def make_train(config):
                 if random_expected_listener_reward != 0:
                     metric_dict.update({f"reward/mean reward over random/listener {i}": jnp.mean(lr[i]).item()/random_expected_listener_reward for i in range(len(lr))})
                 
-                # optimal_expected_reward = env_kwargs["reward_success"]    # TODO: This will no longer work, migrated to asymmetric reward payoff matrix
-                # if optimal_expected_reward != 0:
-                #     metric_dict.update({f"reward/mean reward over optimal/listener {i}": jnp.mean(lr[i]).item()/optimal_expected_reward for i in range(len(lr))})
-                #     metric_dict.update({f"reward/mean reward over optimal/speaker {i}": jnp.mean(sr[i]).item()/optimal_expected_reward for i in range(len(sr))})
-                    # Average reward over optimal - based on success_reward
+                optimal_expected_speaker_reward = env_kwargs["speaker_reward_success"]
+                if optimal_expected_speaker_reward != 0:
+                    metric_dict.update({f"reward/mean over optimal/speaker {i}": jnp.mean(sr[i]).item()/optimal_expected_speaker_reward for i in range(len(sr))})
+                    # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
+                optimal_expected_listener_reward = env_kwargs["listener_reward_success"]
+                if optimal_expected_listener_reward != 0:
+                    metric_dict.update({f"reward/mean over optimal/listener {i}": jnp.mean(lr[i]).item()/optimal_expected_listener_reward for i in range(len(lr))})
                 
                 ############
 
@@ -693,8 +695,10 @@ def make_train(config):
                 metric_dict.update({f"predictions/action log probs/speaker {i}": jnp.mean(slogp[i]).item() for i in range(len(slogp))})
                 metric_dict.update({f"predictions/action log probs/listener {i} for speaker images": (jnp.sum(speaker_llogp[i]) / jnp.sum(image_source_boolmap_speaker[i])) for i in range(env_kwargs["num_listeners"])})
                 metric_dict.update({f"predictions/action log probs/listener {i} for env images": (jnp.sum(env_llogp[i]) / jnp.sum(image_source_boolmap_env[i])) for i in range(env_kwargs["num_listeners"])})
-                metric_dict.update({f"predictions/action log probs/all listeners for speaker images": (jnp.sum(speaker_llogp) / jnp.sum(image_source_boolmap_speaker))})
-                metric_dict.update({f"predictions/action log probs/all listeners for env images": (jnp.sum(env_llogp) / jnp.sum(image_source_boolmap_env))})
+                metric_dict.update({"predictions/action log probs/all listeners": jnp.sum(llogp)})
+                metric_dict.update({"predictions/action log probs/all speakers": jnp.sum(slogp)})
+                metric_dict.update({"predictions/action log probs/all listeners for speaker images": (jnp.sum(speaker_llogp) / jnp.sum(image_source_boolmap_speaker))})
+                metric_dict.update({"predictions/action log probs/all listeners for env images": (jnp.sum(env_llogp) / jnp.sum(image_source_boolmap_env))})
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
 
                 metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
