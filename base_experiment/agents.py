@@ -398,13 +398,10 @@ class ActorCriticSpeakerSplines(nn.Module):
     def __call__(self, obs):
         y = nn.Embed(self.num_classes, self.latent_dim)(obs)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(y)
-        # z = CustomBatchNorm()(z)
         z = nn.relu(z)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
-        # z = CustomBatchNorm()(z)
         z = nn.relu(z)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
-        # z = CustomBatchNorm()(z)
         z = nn.relu(z)
 
         # Actor Mean
@@ -419,15 +416,12 @@ class ActorCriticSpeakerSplines(nn.Module):
 
         # Critic
         critic = nn.Dense(128)(actor_mean)
-        # z = CustomBatchNorm()(critic)
         critic = nn.sigmoid(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(128)(critic)
-        # z = CustomBatchNorm()(critic)
         critic = nn.sigmoid(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(32)(critic)
-        # z = CustomBatchNorm()(critic)
         critic = nn.sigmoid(critic)
         critic = nn.Dense(1)(critic)
 

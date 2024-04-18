@@ -339,8 +339,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     def get_obs(self, key: chex.PRNGKey, state: State, as_dict: bool = False):
         """Returns the observation for each agent."""
         
-        @partial(jax.vmap, in_axes=[0, 0, None])
-        def _speaker_observation(obs_key: chex.PRNGKey, aidx: int, state: State) -> jnp.ndarray:
+        @partial(jax.vmap, in_axes=[0, None])
+        def _speaker_observation(aidx: int, state: State) -> jnp.ndarray:
             # The speakers need to see the newly generated assigned classes
             return state.next_speaker_labels[aidx]
 
@@ -358,28 +358,24 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             noise = jax.random.normal(obs_key, image.shape) * self.gaussian_noise_stddev
             image += noise
             
-            return image
-        
-        speaker_obs_key, listener_obs_key = jax.random.split(key)
+            return jnp.clip(image, 0.0, 1.0)
         
         if as_dict:
             observations = {}
             if self.num_speakers != 0:
-                speaker_obs_keys = jax.random.split(speaker_obs_key, self.num_speakers)
-                speaker_obs = _speaker_observation(speaker_obs_keys, jnp.arange(self.num_speakers), state)
+                speaker_obs = _speaker_observation(jnp.arange(self.num_speakers), state)
                 observations = {agent: speaker_obs[i] for i, agent in enumerate(self.speaker_agents)}
 
-            listener_obs_keys = jax.random.split(listener_obs_key, self.num_listeners)
+            listener_obs_keys = jax.random.split(key, self.num_listeners)
             listener_obs = _listener_observation(listener_obs_keys, jnp.arange(self.num_listeners), state)
             observations.update({agent: listener_obs[i] for i, agent in enumerate(self.listener_agents)})
             return observations
         else:
             if self.num_speakers != 0:
-                speaker_obs_keys = jax.random.split(speaker_obs_key, self.num_speakers)
-                speaker_obs = _speaker_observation(speaker_obs_keys, jnp.arange(self.num_speakers), state)
+                speaker_obs = _speaker_observation(jnp.arange(self.num_speakers), state)
             else:
                 speaker_obs = None
-            listener_obs_keys = jax.random.split(listener_obs_key, self.num_listeners)
+            listener_obs_keys = jax.random.split(key, self.num_listeners)
             listener_obs = _listener_observation(listener_obs_keys, jnp.arange(self.num_listeners), state)
             return speaker_obs, listener_obs
 
