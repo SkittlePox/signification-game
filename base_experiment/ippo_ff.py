@@ -74,7 +74,9 @@ def initialize_listener(env, rng, config):
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense':
         listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-
+    elif config["LISTENER_ARCH"] == 'dense-batchnorm':
+        listener_network = ActorCriticListenerDenseBatchnorm(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    
     rng, _rng = jax.random.split(rng)
     init_x = jnp.zeros(
             (config["ENV_KWARGS"]["image_dim"]**2,)
@@ -695,8 +697,8 @@ def make_train(config):
                 metric_dict.update({f"predictions/action log probs/speaker {i}": jnp.mean(slogp[i]).item() for i in range(len(slogp))})
                 metric_dict.update({f"predictions/action log probs/listener {i} for speaker images": (jnp.sum(speaker_llogp[i]) / jnp.sum(image_source_boolmap_speaker[i])) for i in range(env_kwargs["num_listeners"])})
                 metric_dict.update({f"predictions/action log probs/listener {i} for env images": (jnp.sum(env_llogp[i]) / jnp.sum(image_source_boolmap_env[i])) for i in range(env_kwargs["num_listeners"])})
-                metric_dict.update({"predictions/action log probs/all listeners": jnp.sum(llogp)})
-                metric_dict.update({"predictions/action log probs/all speakers": jnp.sum(slogp)})
+                metric_dict.update({"predictions/action log probs/all listeners": jnp.mean(llogp)})
+                metric_dict.update({"predictions/action log probs/all speakers": jnp.mean(slogp)})
                 metric_dict.update({"predictions/action log probs/all listeners for speaker images": (jnp.sum(speaker_llogp) / jnp.sum(image_source_boolmap_speaker))})
                 metric_dict.update({"predictions/action log probs/all listeners for env images": (jnp.sum(env_llogp) / jnp.sum(image_source_boolmap_env))})
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})

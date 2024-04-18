@@ -42,7 +42,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, gaussian_noise_stddev: float = 0.0, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -56,6 +56,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.listener_reward_success = listener_reward_success
         self.listener_reward_failure = listener_reward_failure
         self.log_prob_rewards = log_prob_rewards
+        self.gaussian_noise_stddev = gaussian_noise_stddev
         self.kwargs = kwargs
         # TODO: Move the above comments to an actual docstring
 
@@ -334,17 +335,17 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         return images, labels
     
     
-    @partial(jax.jit, static_argnums=[0, 2])
-    def get_obs(self, state: State, as_dict: bool = False):
+    @partial(jax.jit, static_argnums=[0, 3])
+    def get_obs(self, key: chex.PRNGKey, state: State, as_dict: bool = False):
         """Returns the observation for each agent."""
         
-        @partial(jax.vmap, in_axes=[0, None])
-        def _speaker_observation(aidx: int, state: State) -> jnp.ndarray:
+        @partial(jax.vmap, in_axes=[0, 0, None])
+        def _speaker_observation(obs_key: chex.PRNGKey, aidx: int, state: State) -> jnp.ndarray:
             # The speakers need to see the newly generated assigned classes
             return state.next_speaker_labels[aidx]
 
-        @partial(jax.vmap, in_axes=[0, None])
-        def _listener_observation(aidx: int, state: State) -> jnp.ndarray:
+        @partial(jax.vmap, in_axes=[0, 0, None])
+        def _listener_observation(obs_key: chex.PRNGKey, aidx: int, state: State) -> jnp.ndarray:
             # The listeners need to see the newly generated images (which were generated from last-state's next_speaker_labels, i.e. speaker_labels) according to the channel map
             ch = state.channel_map
             speaker_index = ch[ch[:, 1].argsort()][:, 0][aidx]
@@ -353,24 +354,33 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                              lambda _: state.speaker_images[speaker_index],
                              lambda _: state.env_images[speaker_index-self.num_speakers],
                              operand=None)
+
+            noise = jax.random.normal(obs_key, image.shape) * self.gaussian_noise_stddev
+            image += noise
             
             return image
+        
+        speaker_obs_key, listener_obs_key = jax.random.split(key)
         
         if as_dict:
             observations = {}
             if self.num_speakers != 0:
-                speaker_obs = _speaker_observation(jnp.arange(self.num_speakers), state)
+                speaker_obs_keys = jax.random.split(speaker_obs_key, self.num_speakers)
+                speaker_obs = _speaker_observation(speaker_obs_keys, jnp.arange(self.num_speakers), state)
                 observations = {agent: speaker_obs[i] for i, agent in enumerate(self.speaker_agents)}
 
-            listener_obs = _listener_observation(jnp.arange(self.num_listeners), state)
+            listener_obs_keys = jax.random.split(listener_obs_key, self.num_listeners)
+            listener_obs = _listener_observation(listener_obs_keys, jnp.arange(self.num_listeners), state)
             observations.update({agent: listener_obs[i] for i, agent in enumerate(self.listener_agents)})
             return observations
         else:
             if self.num_speakers != 0:
-                speaker_obs = _speaker_observation(jnp.arange(self.num_speakers), state)
+                speaker_obs_keys = jax.random.split(speaker_obs_key, self.num_speakers)
+                speaker_obs = _speaker_observation(speaker_obs_keys, jnp.arange(self.num_speakers), state)
             else:
                 speaker_obs = None
-            listener_obs = _listener_observation(jnp.arange(self.num_listeners), state)
+            listener_obs_keys = jax.random.split(listener_obs_key, self.num_listeners)
+            listener_obs = _listener_observation(listener_obs_keys, jnp.arange(self.num_listeners), state)
             return speaker_obs, listener_obs
 
     @partial(jax.jit, static_argnums=[0, 4])
@@ -441,7 +451,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         alives["__all__"] = 0 # It's important that this is False. Because the MARL library thinks this variable is actually "dones", and __all__ True would signify end of episode
 
         ######## Then, update the state.
-        key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
+        key, k1, k2, k3, k4, k5, obs_key = jax.random.split(key, 7)
         
         next_env_images, next_env_labels = self.load_images(k5)
 
@@ -492,12 +502,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             requested_num_speaker_images=requested_num_speaker_images   # For next state
         )
         
-        return lax.stop_gradient(self.get_obs(state, as_dict)), lax.stop_gradient(state), rewards, alives, {}
+        return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state), rewards, alives, {}
     
     @partial(jax.jit, static_argnums=[0, 3])
     def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
         """Reset the environment"""
-        key, k1, k2, k3, k4, k5 = jax.random.split(key, 6)
+        key, k1, k2, k3, k4, k5, obs_key = jax.random.split(key, 7)
         
         next_env_images, next_env_labels = self.load_images(k5)
 
@@ -548,7 +558,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             requested_num_speaker_images=requested_num_speaker_images   # For next state
         )
 
-        return self.get_obs(state, as_dict), state
+        return self.get_obs(obs_key, state, as_dict), state
     
     def observation_space(self, agent: str):
         """Observation space for a given agent."""

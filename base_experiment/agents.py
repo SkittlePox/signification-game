@@ -54,6 +54,25 @@ class SimpSigGameLogWrapper(LogWrapper):
         info["returned_episode_lengths"] = state.returned_episode_lengths
         # info["returned_episode"] = jnp.full((self._env.num_agents,), old_ep_done) # This doesn't work for some reason
         return obs, state, reward, done, info
+    
+
+class CustomBatchNorm(nn.Module):
+    epsilon: float = 1e-5
+
+    @nn.compact
+    def __call__(self, x):
+        # Calculate mean and variance
+        mean = jnp.mean(x, axis=0, keepdims=True)
+        variance = jnp.var(x, axis=0, keepdims=True)
+
+        # Normalize
+        x_normalized = (x - mean) / jnp.sqrt(variance + self.epsilon)
+
+        # Learnable scale and shift parameters
+        gamma = self.param('gamma', nn.initializers.ones, (1, x.shape[-1]))
+        beta = self.param('beta', nn.initializers.zeros, (1, x.shape[-1]))
+
+        return gamma * x_normalized + beta
         
 
 class ActorCriticListenerConv(nn.Module):
@@ -129,6 +148,45 @@ class ActorCriticListenerDense(nn.Module):
         critic = nn.sigmoid(critic)
         critic = nn.Dense(256)(critic)
         critic = nn.sigmoid(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerDenseBatchnorm(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        obs = x
+        # Embedding Layer
+        embedding = nn.Dense(512, kernel_init=nn.initializers.he_normal())(obs)
+        embedding = CustomBatchNorm()(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(256, kernel_init=nn.initializers.he_normal())(embedding)
+        embedding = CustomBatchNorm()(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(256, kernel_init=nn.initializers.he_normal())(embedding)
+        embedding = CustomBatchNorm()(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = CustomBatchNorm()(actor_mean)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+
+        # Action Logits
+        pi = distrax.Categorical(logits=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(512)(embedding)
+        critic = CustomBatchNorm()(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(256)(critic)
+        critic = CustomBatchNorm()(critic)
+        critic = nn.relu(critic)
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
@@ -339,11 +397,14 @@ class ActorCriticSpeakerSplines(nn.Module):
     @nn.compact
     def __call__(self, obs):
         y = nn.Embed(self.num_classes, self.latent_dim)(obs)
-        z = nn.Dense(32, kernel_init=nn.initializers.he_uniform())(y)
+        z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(y)
+        # z = CustomBatchNorm()(z)
         z = nn.relu(z)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        # z = CustomBatchNorm()(z)
         z = nn.relu(z)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
+        # z = CustomBatchNorm()(z)
         z = nn.relu(z)
 
         # Actor Mean
@@ -358,12 +419,15 @@ class ActorCriticSpeakerSplines(nn.Module):
 
         # Critic
         critic = nn.Dense(128)(actor_mean)
+        # z = CustomBatchNorm()(critic)
         critic = nn.sigmoid(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(128)(critic)
+        # z = CustomBatchNorm()(critic)
         critic = nn.sigmoid(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(32)(critic)
+        # z = CustomBatchNorm()(critic)
         critic = nn.sigmoid(critic)
         critic = nn.Dense(1)(critic)
 

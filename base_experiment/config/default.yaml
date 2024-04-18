@@ -1,5 +1,5 @@
 "LR_SPEAKER": 1e-4
-"LR_LISTENER": 9e-4   # 2e-4 is good for conv, 9e-4 is good for dense
+"LR_LISTENER": 1e-3   # 2e-4 is good for conv, 1e-3 is good for dense
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -16,12 +16,12 @@
 "ANNEAL_LR_LISTENER": True
 "ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
 "ANNEAL_LR_LISTENER_MULTIPLIER": 0.5
-"SPEAKER_TRAIN_SCHEDULE": "on"
-"LISTENER_TRAIN_SCHEDULE": "on"
+"SPEAKER_TRAIN_SCHEDULE": "on at 200"
+"LISTENER_TRAIN_SCHEDULE": "off at 200"
 
 "LISTENER_ARCH": 'dense'
 "SPEAKER_ARCH": 'splines'
-"SPEAKER_LATENT_DIM": 200
+"SPEAKER_LATENT_DIM": 128
 "SPEAKER_DROPOUT": 0.0
 "LISTENER_DROPOUT": 0.0
 "SPEAKER_STDDEV": 0.7
@@ -41,19 +41,20 @@
 "ENV_DATASET": 'mnist'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 3
-  "num_listeners": 3
-  "num_channels": 3
+  "num_speakers": 1
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 28
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "channel_ratio_fn": "1.0"
+  "channel_ratio_fn": "0.2 at 200"
   "speaker_action_transform": "splines"
   "speaker_action_dim": 12
   "log_prob_rewards": False
+  "gaussian_noise_stddev": 0.2
 
 
 # WandB Params
