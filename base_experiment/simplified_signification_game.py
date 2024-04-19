@@ -440,12 +440,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         rewards["__all__"] = sum(rewards.values())
 
 
-        speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.previous_channel_map[:, 0]).astype(jnp.int32) # NOTE: I'm going to change this to the previous channel map, when the speaker actually was required to speak
+        speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.channel_map[:, 0]).astype(jnp.int32)
         listener_alives = jnp.isin(jnp.arange(self.num_listeners), state.channel_map[:, 1]).astype(jnp.int32)
 
         alives = {**{agent: speaker_alives[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_alives[i] for i, agent in enumerate(self.listener_agents)}}
         # alives = {**{agent: 1 if i in state.channel_map[:, 0] else 0 for i, agent in enumerate(self.speaker_agents)}, **{agent: 1 if i in state.channel_map[:, 1] else 0 for i, agent in enumerate(self.listener_agents)}}
-        alives["__all__"] = 0 # It's important that this is False. Because the MARL library thinks this variable is actually "dones", and __all__ True would signify end of episode
+        alives["__all__"] = 0 # It's important that this is False at all times. Because the MARL library thinks this variable is actually "dones", and __all__==True would signify end of episode
 
         ######## Then, update the state.
         key, k1, k2, k3, k4, k5, obs_key = jax.random.split(key, 7)
