@@ -16,7 +16,7 @@
 "ANNEAL_LR_LISTENER": True
 "ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
 "ANNEAL_LR_LISTENER_MULTIPLIER": 0.75
-"SPEAKER_TRAIN_SCHEDULE": "off then on at 100"
+"SPEAKER_TRAIN_SCHEDULE": "on"
 "LISTENER_TRAIN_SCHEDULE": "on then off at 100"
 
 "LISTENER_ARCH": 'dense'
@@ -32,17 +32,17 @@
 "SPEAKER_NOISE_LATENT_STDDEV": 0.05
 
 "NUM_ENVS": 1
-"NUM_STEPS": 2048 # 2048
+"NUM_STEPS": 4 # 2048
 "UPDATE_EPOCHS": 2000
-"MINIBATCH_SIZE_LISTENER": 32 # 32 This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 4 # 32 This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 4 # 128  # This must be a whole divisor of NUM_STEPS
 
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 2
+  "num_speakers": 1
   "num_listeners": 5
   "num_channels": 5
   "num_classes": 10
@@ -51,7 +51,7 @@
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "channel_ratio_fn": "0.2 at 100"
+  "channel_ratio_fn": "0.2"
   "speaker_action_transform": "splines"
   "speaker_action_dim": 12
   "log_prob_rewards": False
@@ -60,7 +60,7 @@
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 10

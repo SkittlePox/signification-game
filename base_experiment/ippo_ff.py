@@ -477,6 +477,7 @@ def make_train(config):
                     )
                     delta = reward + config["GAMMA"] * next_value * alive - value
                     gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
+                    gae = gae * alive
                     return (gae, value), gae
 
                 _, advantages = jax.lax.scan(
@@ -486,7 +487,7 @@ def make_train(config):
                     reverse=True,
                     unroll=16,
                 )
-                return advantages, advantages + trans_batch.listener_value
+                return advantages, advantages + trans_batch.listener_value * trans_batch.listener_alive
 
             def _calculate_gae_speakers(trans_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
@@ -498,6 +499,7 @@ def make_train(config):
                     )
                     delta = reward + config["GAMMA"] * next_value * alive - value
                     gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
+                    gae = gae * alive
                     return (gae, value), gae
 
                 _, advantages = jax.lax.scan(
@@ -507,7 +509,7 @@ def make_train(config):
                     reverse=True,
                     unroll=16,
                 )
-                return advantages, advantages + trans_batch.speaker_value
+                return advantages, advantages + trans_batch.speaker_value * trans_batch.speaker_alive
 
             ###### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
 

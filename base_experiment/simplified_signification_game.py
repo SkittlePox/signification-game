@@ -464,7 +464,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # NOTE: jax.lax.cond might actually be slower because it runs both branches when this function is vmapped. However, self.speaker_assignment_method does not change over time.
         if self.speaker_assignment_method == "random":
             speaker_ids = jax.random.permutation(k2, self.num_speakers)
-        else:
+        elif self.speaker_assignment_method == "arange":
             speaker_ids = jnp.arange(self.num_speakers) # NOTE: I'm not sure this will work with more than one env in its current state.
         # TODO: This still doesn't work!!!
         
