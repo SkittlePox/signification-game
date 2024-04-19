@@ -439,7 +439,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         rewards["__all__"] = sum(rewards.values())
 
 
-        speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.channel_map[:, 0]).astype(jnp.int32)
+        speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.previous_channel_map[:, 0]).astype(jnp.int32) # NOTE: I'm going to change this to the previous channel map, when the speaker actually was required to speak
         listener_alives = jnp.isin(jnp.arange(self.num_listeners), state.channel_map[:, 1]).astype(jnp.int32)
 
         alives = {**{agent: speaker_alives[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_alives[i] for i, agent in enumerate(self.listener_agents)}}

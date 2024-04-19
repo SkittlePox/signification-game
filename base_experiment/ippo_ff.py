@@ -63,6 +63,10 @@ def get_train_freezing(name):
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda x: ((x + 1) % 2).astype(float), operand=x)
     elif name == "off":
         return lambda x: 0.0
+    elif name == "even":
+        return lambda x: (x % 2).astype(float)
+    elif name == "odd":
+        return lambda x: ((x + 1) % 2).astype(float)
     else:
         return lambda x: 1.0
 
