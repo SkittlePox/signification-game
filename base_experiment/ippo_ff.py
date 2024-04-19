@@ -43,12 +43,24 @@ class Transition(NamedTuple):
 
 
 def get_train_freezing(name):
-    if " at " in name:
-        crf_params = name.split(" at ")
-        if crf_params[0] == "on":
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: 1.0, operand=None)
+    if name.startswith("on then"):
+        param_str = name.split(" then ")[1]
+        crf_params = param_str.split(" at ")
         if crf_params[0] == "off":
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda _: 0.0, operand=None)
+        if crf_params[0] == "even":
+            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda x: (x % 2).astype(float), operand=x)
+        if crf_params[0] == "odd":
+            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda x: ((x + 1) % 2).astype(float), operand=x)
+    elif name.startswith("off then"):
+        param_str = name.split(" then ")[1]
+        crf_params = param_str.split(" at ")
+        if crf_params[0] == "on":
+            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: 1.0, operand=None)
+        if crf_params[0] == "even":
+            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda x: (x % 2).astype(float), operand=x)
+        if crf_params[0] == "odd":
+            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda x: ((x + 1) % 2).astype(float), operand=x)
     elif name == "off":
         return lambda x: 0.0
     else:
@@ -652,6 +664,8 @@ def make_train(config):
                 metric_dict.update({"optimizer/mean listener mu": jnp.mean(l_optmizer_params[:, 0]).item()})
                 metric_dict.update({"optimizer/mean speaker nu": jnp.mean(s_optmizer_params[:, 1]).item()})
                 metric_dict.update({"optimizer/mean listener nu": jnp.mean(l_optmizer_params[:, 1]).item()})
+                metric_dict.update({"optimizer/mean learning rate speaker": jnp.mean(speaker_lr).item()})
+                metric_dict.update({"optimizer/mean learning rate listener": jnp.mean(listener_lr).item()})
 
                 #### Reward Logging
 
@@ -702,9 +716,6 @@ def make_train(config):
                 metric_dict.update({"predictions/action log probs/all listeners for speaker images": (jnp.sum(speaker_llogp) / jnp.sum(image_source_boolmap_speaker))})
                 metric_dict.update({"predictions/action log probs/all listeners for env images": (jnp.sum(env_llogp) / jnp.sum(image_source_boolmap_env))})
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
-
-                metric_dict.update({"learning rate/average speaker": jnp.mean(speaker_lr).item()})
-                metric_dict.update({"learning rate/average listener": jnp.mean(listener_lr).item()})
                 
                 if (u_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0:
                     speaker_example_images = make_grid(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"], pad_value=0.25)
