@@ -42,7 +42,7 @@
 "ENV_DATASET": 'mnist'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 1
+  "num_speakers": 2
   "num_listeners": 5
   "num_channels": 5
   "num_classes": 10
