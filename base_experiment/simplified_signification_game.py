@@ -460,7 +460,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
         # Collect num_speakers speakers
-        speaker_ids = jax.random.permutation(k2, self.num_speakers)
+        speaker_ids = jax.lax.cond(self.speaker_assignment_method == "random", lambda _: jax.random.permutation(k2, self.num_speakers), lambda _: jnp.arange(self.num_speakers), operand=None)     # NOTE: I'm not sure if the second branch will work for more than 1 env.
         speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))
         # Collect num_env environment channels
         env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers
@@ -516,7 +516,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
         # Collect num_speakers speakers
-        speaker_ids = jax.lax.cond(self.speaker_assignment_method == "random", lambda _: jax.random.permutation(k2, self.num_speakers), lambda _: jnp.arange(self.num_speakers).reshape((1, k2.shape[0])), operand=None)     # NOTE: I'm not sure if the second branch reshape will work for more than 1 env.
+        speaker_ids = jax.lax.cond(self.speaker_assignment_method == "random", lambda _: jax.random.permutation(k2, self.num_speakers), lambda _: jnp.arange(self.num_speakers), operand=None)     # NOTE: I'm not sure if the second branch will work for more than 1 env.
         speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))    # TODO: and I can replace padding with 0s to padding with random speaker ids eventually
         # Collect num_env environment channels
         env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers
