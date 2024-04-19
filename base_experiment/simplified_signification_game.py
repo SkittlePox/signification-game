@@ -42,7 +42,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, gaussian_noise_stddev: float = 0.0, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -57,6 +57,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.listener_reward_failure = listener_reward_failure
         self.log_prob_rewards = log_prob_rewards
         self.gaussian_noise_stddev = gaussian_noise_stddev
+        self.speaker_assignment_method = speaker_assignment_method
         self.kwargs = kwargs
         # TODO: Move the above comments to an actual docstring
 
@@ -515,8 +516,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
         # Collect num_speakers speakers
-        speaker_ids = jax.random.permutation(k2, self.num_speakers)
-        speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))
+        speaker_ids = jax.lax.cond(self.speaker_assignment_method == "random", lambda _: jax.random.permutation(k2, self.num_speakers), lambda _: jnp.arange(self.num_speakers).reshape((1, k2.shape[0])), operand=None)     # NOTE: I'm not sure if the second branch reshape will work for more than 1 env.
+        speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))    # TODO: and I can replace padding with 0s to padding with random speaker ids eventually
         # Collect num_env environment channels
         env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers
 
