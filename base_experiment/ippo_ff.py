@@ -93,11 +93,11 @@ def initialize_listener(env, rng, config):
     elif config["LISTENER_ARCH"] == 'dense-batchnorm':
         listener_network = ActorCriticListenerDenseBatchnorm(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     
-    rng, _rng = jax.random.split(rng)
+    rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
             (config["ENV_KWARGS"]["image_dim"]**2,)
         )
-    network_params = listener_network.init({'params': _rng, 'dropout': _rng, 'noise': _rng}, init_x)
+    network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
     
     def linear_schedule(count):
         frac = 1.0 - jnp.minimum(((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"])), 1)
@@ -141,12 +141,12 @@ def initialize_speaker(env, rng, config):
     elif config["SPEAKER_ARCH"] == 'splinesnoise':
         speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
 
-    rng, _rng = jax.random.split(rng)
+    rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_y = jnp.zeros(
             (1,),
             dtype=jnp.int32
         )
-    network_params = speaker_network.init({'params': _rng, 'dropout': _rng, 'noise': _rng}, init_y)
+    network_params = speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_y)
 
     # For the learning rate
     def linear_schedule(count):
