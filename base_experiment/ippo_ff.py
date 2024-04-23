@@ -688,7 +688,7 @@ def make_train(config):
                 
                 random_expected_speaker_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["speaker_reward_failure"] + env_kwargs["speaker_reward_success"]
                 if random_expected_speaker_reward != 0:
-                    metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_speaker_reward for i in range(len(sr))})
+                    metric_dict.update({f"reward/mean reward over random/speaker {i}": jnp.mean(sr[i]).item()/random_expected_speaker_reward for i in range(len(sr))})  # NOTE: This calculation will likely fail when speakers are dead.
                     # Average reward over random - based on (num_classes-1)*fail_reward + success_reward
                 random_expected_listener_reward = (env_kwargs["num_classes"] - 1) * env_kwargs["listener_reward_failure"] + env_kwargs["listener_reward_success"]
                 if random_expected_listener_reward != 0:

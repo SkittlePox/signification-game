@@ -463,7 +463,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # speaker_ids = jax.lax.cond(self.speaker_assignment_method == "random", lambda _: jax.random.permutation(k2, self.num_speakers), lambda _: jnp.arange(self.num_speakers), operand=None)     # NOTE: I'm not sure if the second branch will work for more than 1 env.
         # NOTE: jax.lax.cond might actually be slower because it runs both branches when this function is vmapped. However, self.speaker_assignment_method does not change over time.
         if self.speaker_assignment_method == "random":
-            speaker_ids = jax.random.permutation(k2, self.num_speakers)
+            speaker_ids = jax.random.permutation(k2, self.num_speakers) # NOTE: This seems to output something differently shaped if self.num_speakers is >1
         elif self.speaker_assignment_method == "arange":
             speaker_ids = jnp.arange(self.num_speakers) # NOTE: I'm not sure this will work with more than one env in its current state.
         # TODO: This still doesn't work!!!
@@ -568,7 +568,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             requested_num_speaker_images=requested_num_speaker_images   # For next state
         )
 
-        return self.get_obs(obs_key, state, as_dict), state
+        return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state)
     
     def observation_space(self, agent: str):
         """Observation space for a given agent."""
