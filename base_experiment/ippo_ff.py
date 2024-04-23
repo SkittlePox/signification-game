@@ -220,17 +220,18 @@ def env_step(runner_state, env, config):
     listener_obs = listener_obs.reshape((listener_obs.shape[0]*listener_obs.shape[1], listener_obs.shape[2]*listener_obs.shape[3]))
 
     ##### COLLECT ACTIONS FROM AGENTS
-    rng, _rng = jax.random.split(rng)
-    env_rngs = jax.random.split(_rng, len(listener_train_states))
+    rng, l_rng, r_rng = jax.random.split(rng, 3)
+    listener_rngs = jax.random.split(l_rng, len(listener_train_states))
+    speaker_rngs = jax.random.split(r_rng, len(speaker_train_states))
 
     # COLLECT LISTENER ACTIONS
-    listener_outputs = [execute_individual_listener(*args) for args in zip(env_rngs, listener_train_states, listener_obs)]
+    listener_outputs = [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)]
     listener_action = jnp.array([o[0] for o in listener_outputs], dtype=jnp.int32).reshape(config["NUM_ENVS"], -1)
     listener_log_prob = jnp.array([o[1] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
     listener_value = jnp.array([o[2] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
 
     # COLLECT SPEAKER ACTIONS
-    speaker_outputs = [execute_individual_speaker(*args) for args in zip(env_rngs, speaker_train_states, speaker_obs)]
+    speaker_outputs = [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)]
     speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, env_kwargs["speaker_action_dim"])
     speaker_log_prob = jnp.array([o[1] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
@@ -245,7 +246,8 @@ def env_step(runner_state, env, config):
     ###############################################
 
     ##### STEP ENV
-    rng_step = jax.random.split(_rng, config["NUM_ENVS"])
+    next_rng, rng = jax.random.split(rng)
+    rng_step = jax.random.split(rng, config["NUM_ENVS"])
     new_obs, env_state, rewards, alives, info = env.step(rng_step, log_env_state, (speaker_action, listener_action, listener_log_prob)) # Passing speaker actions, listener actions, AND listener log probs
 
     speaker_alive = jnp.array([alives[f"speaker_{v}"] for v in range(env_kwargs["num_speakers"])]).reshape(config["NUM_ENVS"], -1)
@@ -275,7 +277,7 @@ def env_step(runner_state, env, config):
         channel_map
     )
 
-    runner_state = (listener_train_states, speaker_train_states, env_state, new_obs, rng)
+    runner_state = (listener_train_states, speaker_train_states, env_state, new_obs, next_rng)
     
     return runner_state, transition
 
