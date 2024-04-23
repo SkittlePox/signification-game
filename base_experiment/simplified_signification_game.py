@@ -529,6 +529,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_ids = jax.random.permutation(k2, self.num_speakers)
         else:
             speaker_ids = jnp.arange(self.num_speakers)
+        # TODO: The below line doesn't work when the number of speakers is more than the number of channels!!!
         speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))    # TODO: and I can replace padding with 0s to padding with random speaker ids eventually
         # Collect num_env environment channels
         env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers

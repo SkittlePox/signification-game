@@ -56,7 +56,7 @@
   "speaker_action_dim": 12
   "log_prob_rewards": False
   "gaussian_noise_stddev": 0.4
-  "speaker_assignment_method": "arange"
+  "speaker_assignment_method": "random"
 
 
 # WandB Params
