@@ -567,12 +567,14 @@ def make_train(config):
                 speaker_targets_i = speaker_targets.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))
                 
                 speaker_trans_batch_i = Transition(
-                    speaker_action=speaker_trans_batch.speaker_action.reshape((config["NUM_STEPS"], env_kwargs["speaker_action_dim"], -1))[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1, env_kwargs["speaker_action_dim"])),
-                    speaker_reward=speaker_trans_batch.speaker_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
-                    speaker_value=speaker_trans_batch.speaker_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
-                    speaker_log_prob=speaker_trans_batch.speaker_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
-                    speaker_obs=speaker_trans_batch.speaker_obs.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
-                    speaker_alive=jnp.float32(speaker_trans_batch.speaker_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))),
+                    # speaker_action=speaker_trans_batch.speaker_action.reshape((config["NUM_STEPS"], env_kwargs["speaker_action_dim"], -1))[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1, env_kwargs["speaker_action_dim"])),
+                    speaker_action=speaker_trans_batch.speaker_action[:, :, i, :].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1, env_kwargs["speaker_action_dim"])),
+                    # speaker_reward=speaker_trans_batch.speaker_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
+                    speaker_reward=speaker_trans_batch.speaker_reward[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
+                    speaker_value=speaker_trans_batch.speaker_value[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
+                    speaker_log_prob=speaker_trans_batch.speaker_log_prob[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
+                    speaker_obs=speaker_trans_batch.speaker_obs[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
+                    speaker_alive=jnp.float32(speaker_trans_batch.speaker_alive[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))),
                     listener_action=speaker_trans_batch.listener_action,
                     listener_reward=speaker_trans_batch.listener_reward,
                     listener_value=speaker_trans_batch.listener_value,
