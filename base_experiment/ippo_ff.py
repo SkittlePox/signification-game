@@ -536,8 +536,8 @@ def make_train(config):
 
             def _update_a_listener(i, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):                
                 listener_train_state_i = listener_train_states[i]
-                listener_advantages_i = listener_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
-                listener_targets_i = listener_targets.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
+                listener_advantages_i = listener_advantages[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
+                listener_targets_i = listener_targets[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
                 
                 # TODO: These reshapes are likely very memory intensive. It might be a good idea to do some of this outside this function.
                 listener_trans_batch_i = Transition(
@@ -547,12 +547,12 @@ def make_train(config):
                     speaker_log_prob=listener_trans_batch.speaker_log_prob,
                     speaker_obs=listener_trans_batch.speaker_obs,
                     speaker_alive=listener_trans_batch.speaker_alive,
-                    listener_action=jnp.float32(listener_trans_batch.listener_action.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))),
-                    listener_reward=listener_trans_batch.listener_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
-                    listener_value=listener_trans_batch.listener_value.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
-                    listener_log_prob=listener_trans_batch.listener_log_prob.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
-                    listener_obs=listener_trans_batch.listener_obs.reshape((config["NUM_STEPS"], listener_trans_batch.listener_obs.shape[1]*listener_trans_batch.listener_obs.shape[2], -1))[:, i, :].reshape((config["NUM_MINIBATCHES_LISTENER"], -1, env_kwargs["image_dim"]**2)),
-                    listener_alive=jnp.float32(listener_trans_batch.listener_alive.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))),
+                    listener_action=jnp.float32(listener_trans_batch.listener_action[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))),
+                    listener_reward=listener_trans_batch.listener_reward[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
+                    listener_value=listener_trans_batch.listener_value[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
+                    listener_log_prob=listener_trans_batch.listener_log_prob[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1)),
+                    listener_obs=listener_trans_batch.listener_obs[:, :, i, :, :].reshape((config["NUM_MINIBATCHES_LISTENER"], -1, env_kwargs["image_dim"]**2)),
+                    listener_alive=jnp.float32(listener_trans_batch.listener_alive[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))),
                     channel_map=listener_trans_batch.channel_map
                 )
 
@@ -563,8 +563,8 @@ def make_train(config):
             
             def _update_a_speaker(i, speaker_train_states, speaker_trans_batch, speaker_advantages, speaker_targets):                
                 speaker_train_state_i = speaker_train_states[i]
-                speaker_advantages_i = speaker_advantages.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))
-                speaker_targets_i = speaker_targets.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))
+                speaker_advantages_i = speaker_advantages[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))
+                speaker_targets_i = speaker_targets[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))
                 
                 speaker_trans_batch_i = Transition(
                     # speaker_action=speaker_trans_batch.speaker_action.reshape((config["NUM_STEPS"], env_kwargs["speaker_action_dim"], -1))[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1, env_kwargs["speaker_action_dim"])),
