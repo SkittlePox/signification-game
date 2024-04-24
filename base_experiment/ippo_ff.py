@@ -194,7 +194,7 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 
-def get_speaker_examples(runner_state, env, config):    # TODO: parameterize this by how many example generations I want per speaker, then splice them consecutively.
+def get_speaker_examples(runner_state, env, config):
     _, speaker_train_states, log_env_state, obs, rng = runner_state
     env_rngs = jax.random.split(rng, len(speaker_train_states) * config["SPEAKER_EXAMPLE_NUM"])
     speaker_obs = jnp.arange(config["ENV_KWARGS"]["num_classes"])
@@ -535,7 +535,6 @@ def make_train(config):
                 listener_advantages_i = listener_advantages[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
                 listener_targets_i = listener_targets[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
                 
-                # TODO: These reshapes are likely very memory intensive. It might be a good idea to do some of this outside this function.
                 listener_trans_batch_i = Transition(
                     speaker_action=listener_trans_batch.speaker_action,
                     speaker_reward=listener_trans_batch.speaker_reward,
@@ -563,9 +562,7 @@ def make_train(config):
                 speaker_targets_i = speaker_targets[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))
                 
                 speaker_trans_batch_i = Transition(
-                    # speaker_action=speaker_trans_batch.speaker_action.reshape((config["NUM_STEPS"], env_kwargs["speaker_action_dim"], -1))[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1, env_kwargs["speaker_action_dim"])),
                     speaker_action=speaker_trans_batch.speaker_action[:, :, i, :].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1, env_kwargs["speaker_action_dim"])),
-                    # speaker_reward=speaker_trans_batch.speaker_reward.reshape((config["NUM_STEPS"], -1))[:, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
                     speaker_reward=speaker_trans_batch.speaker_reward[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
                     speaker_value=speaker_trans_batch.speaker_value[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
                     speaker_log_prob=speaker_trans_batch.speaker_log_prob[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1)),
@@ -609,7 +606,7 @@ def make_train(config):
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
             speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
-            speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1))).reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # TODO: This code is not robust to more than 1 env
+            speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1))).reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # NOTE: This code is not robust to more than 1 env
 
             def get_optimizer_param_mean(opt_state, param_name):    # Assumes Adam optimizer!
                 # Extract the specified parameter pytree
