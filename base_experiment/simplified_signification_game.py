@@ -466,16 +466,15 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
         # Collect num_speakers speakers
-        # speaker_ids = jax.lax.cond(self.speaker_assignment_method == "random", lambda _: jax.random.permutation(k2, self.num_speakers), lambda _: jnp.arange(self.num_speakers), operand=None)     # NOTE: I'm not sure if the second branch will work for more than 1 env.
-        # NOTE: jax.lax.cond might actually be slower because it runs both branches when this function is vmapped. However, self.speaker_assignment_method does not change over time.
         if self.speaker_assignment_method == "random":
-            speaker_ids = jax.random.permutation(k2, self.num_speakers) # NOTE: This seems to output something differently shaped if self.num_speakers is >1
+            speaker_ids = jax.random.permutation(k2, self.num_speakers)
         elif self.speaker_assignment_method == "arange":
             speaker_ids = jnp.arange(self.num_speakers) # NOTE: I'm not sure this will work with more than one env in its current state.
-        # TODO: This still doesn't work!!!
+        # NOTE: It appears that this does work, but I have not tested it rigorously
         
-        # speaker_ids = jax.random.permutation(k2, self.num_speakers)
-        speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))
+        speaker_ids = jnp.pad(speaker_ids, (0, jax.lax.max(self.num_channels-self.num_speakers, 0)), mode='wrap')
+        speaker_ids = speaker_ids[:self.num_channels]
+
         # Collect num_env environment channels
         env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers
 
@@ -484,7 +483,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         possible_speakers = jnp.where(mask, speaker_ids, env_ids)
         speakers = jax.random.permutation(k4, possible_speakers).reshape((-1, 1))
 
-        # listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]
         listeners = jax.lax.slice(jax.random.permutation(k1, self.num_listeners).reshape((-1, 1)), [0, 0], [self.num_channels, 1])
         next_channel_map = jnp.hstack((speakers, listeners))
 
@@ -530,13 +528,14 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
         # Collect num_speakers speakers
-        # speaker_ids = jax.lax.cond(self.speaker_assignment_method == "random", lambda _: jax.random.permutation(k2, self.num_speakers), lambda _: jnp.arange(self.num_speakers), operand=None)     # NOTE: I'm not sure if the second branch will work for more than 1 env.
         if self.speaker_assignment_method == "random":
             speaker_ids = jax.random.permutation(k2, self.num_speakers)
-        else:
+        elif self.speaker_assignment_method == "arange":
             speaker_ids = jnp.arange(self.num_speakers)
-        # TODO: The below line doesn't work when the number of speakers is more than the number of channels!!!
-        speaker_ids = jnp.pad(speaker_ids, (0, self.num_channels-self.num_speakers))    # TODO: and I can replace padding with 0s to padding with random speaker ids eventually
+        
+        speaker_ids = jnp.pad(speaker_ids, (0, jax.lax.max(self.num_channels-self.num_speakers, 0)), mode='wrap')
+        speaker_ids = speaker_ids[:self.num_channels]
+        
         # Collect num_env environment channels
         env_ids = jax.random.permutation(k3, self.num_channels) + self.num_speakers
 
@@ -545,7 +544,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         possible_speakers = jnp.where(mask, speaker_ids, env_ids)
         speakers = jax.random.permutation(k4, possible_speakers).reshape((-1, 1))
 
-        # listeners = jax.random.permutation(k1, self.num_listeners).reshape((-1, 1))[:self.num_channels]
         listeners = jax.lax.slice(jax.random.permutation(k1, self.num_listeners).reshape((-1, 1)), [0, 0], [self.num_channels, 1])
         next_channel_map = jnp.hstack((speakers, listeners))
 
