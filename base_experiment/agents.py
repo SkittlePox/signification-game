@@ -415,7 +415,7 @@ class ActorCriticSpeakerSplines(nn.Module):
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
 
         # Critic
-        critic = nn.Dense(128)(actor_mean)
+        critic = nn.Dense(128)(z)
         critic = nn.sigmoid(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(128)(critic)

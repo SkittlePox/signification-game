@@ -436,12 +436,18 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         speaker_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_speakers + self.num_channels), speaker_rewards_final)
         # listener_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_listeners), listener_rewards_final)
 
+        # speaker_rewards_final = lax.stop_gradient(speaker_rewards_final)
+        # listener_rewards_final = lax.stop_gradient(listener_rewards_final)
+
         rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
         rewards["__all__"] = sum(rewards.values())
 
 
         speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.channel_map[:, 0]).astype(jnp.int32)
         listener_alives = jnp.isin(jnp.arange(self.num_listeners), state.channel_map[:, 1]).astype(jnp.int32)
+
+        # speaker_alives = lax.stop_gradient(speaker_alives)
+        # listener_alives = lax.stop_gradient(listener_alives)
 
         alives = {**{agent: speaker_alives[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_alives[i] for i, agent in enumerate(self.listener_agents)}}
         # alives = {**{agent: 1 if i in state.channel_map[:, 0] else 0 for i, agent in enumerate(self.speaker_agents)}, **{agent: 1 if i in state.channel_map[:, 1] else 0 for i, agent in enumerate(self.listener_agents)}}
@@ -507,7 +513,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             requested_num_speaker_images=requested_num_speaker_images   # For next state
         )
         
-        return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state), rewards, alives, {}
+        return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state), lax.stop_gradient(rewards), lax.stop_gradient(alives), {}
     
     @partial(jax.jit, static_argnums=[0, 3])
     def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
@@ -680,18 +686,18 @@ def test_mnist_signification_game():
         return 0.5
     
     # Define parameters for a signification game
-    num_speakers = 10
-    num_listeners = 10
-    num_channels = 10
+    num_speakers = 2
+    num_listeners = 4
+    num_channels = 4
     num_classes = 10
 
     mnist_dataset = MNIST('/tmp/mnist/', download=True)
     images, labels = to_jax(mnist_dataset, num_datapoints=100)
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.PRNGKey(7)
     key, key_reset, key_act, key_step = jax.random.split(key, 4)
     
-    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28)
+    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, speaker_action_transform='image')
     obs, state = env.reset(key_reset, epoch=10, as_dict=True)
     
     print(list(obs.keys()))

@@ -24,6 +24,7 @@ from agents import *
 
 class TrainState(train_state.TrainState):
     key: jax.Array
+    name: str
 
 
 class Transition(NamedTuple):
@@ -85,7 +86,7 @@ def define_env(config):
 
 
 @jax.profiler.annotate_function
-def initialize_listener(env, rng, config):
+def initialize_listener(env, rng, config, i):
     if config["LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense':
@@ -120,12 +121,13 @@ def initialize_listener(env, rng, config):
         params=network_params,
         key=rng,
         tx=tx,
+        name=f"listener_{i}"
     )
 
     return listener_network, train_state, lr_func
 
 @jax.profiler.annotate_function
-def initialize_speaker(env, rng, config):
+def initialize_speaker(env, rng, config, i):
     if config["SPEAKER_ARCH"] == 'full_image':
         speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'full_image_setvariance':
@@ -172,6 +174,7 @@ def initialize_speaker(env, rng, config):
         params=network_params,
         key=rng,
         tx=tx,
+        name=f"speaker_{i}"
     )
 
     return speaker_network, train_state, lr_func
@@ -367,7 +370,7 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
 
         # CALCULATE ACTOR LOSS
         ratio = jnp.exp(_i_log_prob - log_probs)
-        gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)    # NOTE: Probably need to change this for dead grads!
         loss_actor1 = ratio * gae_for_i * alive
         loss_actor2 = (
                 jnp.clip(
@@ -425,10 +428,10 @@ def make_train(config):
         listener_rngs = jax.random.split(rng_l, env_kwargs["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
         speaker_rngs = jax.random.split(rng_s, env_kwargs["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
         
-        listeners_stuff = [initialize_listener(env, x_rng, config) for x_rng in listener_rngs]
+        listeners_stuff = [initialize_listener(env, x_rng, config, i) for i, x_rng in enumerate(listener_rngs)]
         _listener_networks, listener_train_states, listener_lr_funcs = zip(*listeners_stuff) # listener_lr_funcs is for logging only, it's not actually used directly by the optimizer
         
-        speakers_stuff = [initialize_speaker(env, x_rng, config) for x_rng in speaker_rngs]
+        speakers_stuff = [initialize_speaker(env, x_rng, config, i) for i, x_rng in enumerate(speaker_rngs)]
         _speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
 
         # INIT ENV
@@ -459,7 +462,6 @@ def make_train(config):
             # We'll need to get the final value in transition_batch and cut off the last index
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
             # trimmed_transition_batch = Transition(**{k: v[:-1, ...] for k, v in transition_batch._asdict().items()})
-
             trimmed_transition_batch = Transition(**{
                 k: (v[1:, ...] if k in ('speaker_reward', 'speaker_alive') else v[:-1, ...]) # We need to shift rewards for speakers over by 1 to the left. speaker gets a delayed reward.
                 for k, v in transition_batch._asdict().items()
@@ -624,6 +626,8 @@ def make_train(config):
             listener_optimizer_params = jnp.array([[get_optimizer_param_mean(lts.opt_state[1][0], "mu"), get_optimizer_param_mean(lts.opt_state[1][0], "nu")] for lts in new_listener_train_state])
             speaker_optimizer_params = jnp.array([[get_optimizer_param_mean(sts.opt_state[1][0], "mu"), get_optimizer_param_mean(sts.opt_state[1][0], "nu")] for sts in new_speaker_train_state])
 
+
+
             def wandb_callback(metrics):
                 ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step = metrics
                 lr = tb.listener_reward
@@ -761,7 +765,7 @@ def main(config):
         mode=config["WANDB_MODE"],
         save_code=True
     )
-    rng = jax.random.PRNGKey(55)
+    rng = jax.random.PRNGKey(56)
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)
     out = train(rng)
