@@ -24,8 +24,6 @@ from agents import *
 
 class TrainState(train_state.TrainState):
     key: jax.Array
-    name: str
-
 
 class Transition(NamedTuple):
     speaker_action: jnp.ndarray
@@ -121,7 +119,6 @@ def initialize_listener(env, rng, config, i):
         params=network_params,
         key=rng,
         tx=tx,
-        name=f"listener_{i}"
     )
 
     return listener_network, train_state, lr_func
@@ -174,7 +171,6 @@ def initialize_speaker(env, rng, config, i):
         params=network_params,
         key=rng,
         tx=tx,
-        name=f"speaker_{i}"
     )
 
     return speaker_network, train_state, lr_func
