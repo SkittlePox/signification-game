@@ -472,7 +472,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_ids = jnp.arange(self.num_speakers) # NOTE: I'm not sure this will work with more than one env in its current state.
         # NOTE: It appears that this does work, but I have not tested it rigorously
         
-        speaker_ids = jnp.pad(speaker_ids, (0, jax.lax.max(self.num_channels-self.num_speakers, 0)), mode='wrap')
+        speaker_ids = jnp.pad(speaker_ids, (0, max(self.num_channels-self.num_speakers, 0)), mode='wrap')
         speaker_ids = speaker_ids[:self.num_channels]
 
         # Collect num_env environment channels
@@ -533,7 +533,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         elif self.speaker_assignment_method == "arange":
             speaker_ids = jnp.arange(self.num_speakers)
         
-        speaker_ids = jnp.pad(speaker_ids, (0, jax.lax.max(self.num_channels-self.num_speakers, 0)), mode='wrap')
+        speaker_ids = jnp.pad(speaker_ids, (0, max(self.num_channels-self.num_speakers, 0)), mode='wrap')
         speaker_ids = speaker_ids[:self.num_channels]
         
         # Collect num_env environment channels
