@@ -1,5 +1,5 @@
 "LR_SPEAKER": 1e-4
-"LR_LISTENER": 1e-3   # 2e-4 is good for conv, 1e-3 is good for dense
+"LR_LISTENER": 1e-4   # 2e-4 is good for conv, 1e-3 is good for dense
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -21,7 +21,7 @@
 "SPEAKER_TRAIN_SCHEDULE": "off then on at 100"
 "LISTENER_TRAIN_SCHEDULE": "on then off at 100"
 
-"LISTENER_ARCH": 'dense'
+"LISTENER_ARCH": 'conv'
 "SPEAKER_ARCH": 'splines'
 "SPEAKER_LATENT_DIM": 128
 "SPEAKER_DROPOUT": 0.0
