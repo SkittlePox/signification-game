@@ -70,11 +70,41 @@ def get_train_freezing(phrase):
         return lambda x: 1.0
     
 
-def get_anneal_schedule(phrase):
-    if "at" in phrase:
-        legs = phrase.split(" at ")
-    else:
-        return eval(phrase)
+def get_anneal_schedule(description, num_minibatches=1):
+    segments = description.split()
+    changes = []
+    i = 0
+    starter_lr = float(segments[0])
+    while i < len(segments):
+        if segments[i] in ['jump', 'anneal']:
+            # Determine initial_lr based on whether it's the start or a subsequent segment
+            if i == 1:
+                initial_lr = float(segments[i-1])
+                start_step = 0
+            else:
+                initial_lr = float(changes[-1][3])  # Use the final_lr of the last segment
+                start_step = int(segments[i-1]) * num_minibatches
+            change_type = segments[i]
+            final_lr = float(segments[i+2])
+            at_step = int(segments[i+4]) * num_minibatches
+            changes.append((start_step, initial_lr, change_type, final_lr, at_step))
+            i += 4  # skip to the next relevant segment
+        i += 1
+
+    def schedule(step):
+        lr = starter_lr  # Default to the initial LR in the first segment
+
+        for index, (start_step, start_lr, change_type, end_lr, change_step) in enumerate(changes):
+            if change_type == 'jump':
+                lr = jnp.where(step >= start_step, start_lr, lr)
+            elif change_type == 'anneal':
+                duration = change_step - start_step
+                fraction = (step - start_step) / duration
+                lr = jnp.where(step >= start_step, jnp.interp(fraction, jnp.array([0, 1]), jnp.array([start_lr, end_lr])), lr)
+
+        return lr
+
+    return schedule
 
 
 @jax.profiler.annotate_function
@@ -105,22 +135,18 @@ def initialize_listener(env, rng, config, i):
         )
     network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
     
-    def linear_schedule(count):
-        frac = 1.0 - jnp.minimum(((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"])), 1)    # NOTE: count corresponds to number of minibatches that has passed. So epoch 5 would be count == 5 * num_minibatches
-        return config["LR_LISTENER"] * frac
+    lr_func = get_anneal_schedule(config["LISTENER_ANNEAL_SCHEDULE"], config["NUM_MINIBATCHES_LISTENER"])
     
     if config["ANNEAL_LR_LISTENER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-            optax.adam(learning_rate=linear_schedule, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
+            optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
         )
-        lr_func = linear_schedule
     else:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), 
             optax.adam(config["LR_LISTENER"], b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5)
             )
-        lr_func = lambda *args: config["LR_LISTENER"]
     
     train_state = TrainState.create(
         apply_fn=listener_network.apply,
@@ -149,30 +175,24 @@ def initialize_speaker(env, rng, config, i):
         speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
 
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
-    init_y = jnp.zeros(
+    init_x = jnp.zeros(
             (1,),
             dtype=jnp.int32
         )
-    network_params = speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_y)
+    network_params = speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
 
-    # For the learning rate
-    def linear_schedule(count):
-        frac = 1.0 - jnp.minimum(((count * config["ANNEAL_LR_SPEAKER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_SPEAKER"] * config["UPDATE_EPOCHS"])), 1)
-        # jax.debug.print(str(count))
-        return config["LR_SPEAKER"] * frac
+    lr_func = get_anneal_schedule(config["SPEAKER_ANNEAL_SCHEDULE"], config["NUM_MINIBATCHES_SPEAKER"])
 
     if config["ANNEAL_LR_SPEAKER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-            optax.adam(learning_rate=linear_schedule, b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5),
+            optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5),
         )
-        lr_func = linear_schedule
     else:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), 
             optax.adam(config["LR_SPEAKER"], b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5)
             )
-        lr_func = lambda *args: config["LR_SPEAKER"]
     
     train_state = TrainState.create(
         apply_fn=speaker_network.apply,
