@@ -41,9 +41,9 @@ class Transition(NamedTuple):
     channel_map: jnp.ndarray
 
 
-def get_train_freezing(name):
-    if name.startswith("on then"):
-        param_str = name.split(" then ")[1]
+def get_train_freezing(phrase):
+    if phrase.startswith("on then"):
+        param_str = phrase.split(" then ")[1]
         crf_params = param_str.split(" at ")
         if crf_params[0] == "off":
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda _: 0.0, operand=None)
@@ -51,8 +51,8 @@ def get_train_freezing(name):
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda x: (x % 2).astype(float), operand=x)
         if crf_params[0] == "odd":
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda x: ((x + 1) % 2).astype(float), operand=x)
-    elif name.startswith("off then"):
-        param_str = name.split(" then ")[1]
+    elif phrase.startswith("off then"):
+        param_str = phrase.split(" then ")[1]
         crf_params = param_str.split(" at ")
         if crf_params[0] == "on":
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: 1.0, operand=None)
@@ -60,14 +60,21 @@ def get_train_freezing(name):
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda x: (x % 2).astype(float), operand=x)
         if crf_params[0] == "odd":
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda x: ((x + 1) % 2).astype(float), operand=x)
-    elif name == "off":
+    elif phrase == "off":
         return lambda x: 0.0
-    elif name == "even":
+    elif phrase == "even":
         return lambda x: (x % 2).astype(float)
-    elif name == "odd":
+    elif phrase == "odd":
         return lambda x: ((x + 1) % 2).astype(float)
     else:
         return lambda x: 1.0
+    
+
+def get_anneal_schedule(phrase):
+    if "at" in phrase:
+        legs = phrase.split(" at ")
+    else:
+        return eval(phrase)
 
 
 @jax.profiler.annotate_function
@@ -99,8 +106,9 @@ def initialize_listener(env, rng, config, i):
     network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
     
     def linear_schedule(count):
-        frac = 1.0 - jnp.minimum(((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"])), 1)
+        frac = 1.0 - jnp.minimum(((count * config["ANNEAL_LR_LISTENER_MULTIPLIER"]) / (config["NUM_MINIBATCHES_LISTENER"] * config["UPDATE_EPOCHS"])), 1)    # NOTE: count corresponds to number of minibatches that has passed. So epoch 5 would be count == 5 * num_minibatches
         return config["LR_LISTENER"] * frac
+    
     if config["ANNEAL_LR_LISTENER"]:
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
