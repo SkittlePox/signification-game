@@ -20,6 +20,7 @@ from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
+from utils import get_anneal_schedule, get_train_freezing
 
 
 class TrainState(train_state.TrainState):
@@ -39,72 +40,6 @@ class Transition(NamedTuple):
     listener_obs: jnp.ndarray
     listener_alive: jnp.ndarray
     channel_map: jnp.ndarray
-
-
-def get_train_freezing(phrase):
-    if phrase.startswith("on then"):
-        param_str = phrase.split(" then ")[1]
-        crf_params = param_str.split(" at ")
-        if crf_params[0] == "off":
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda _: 0.0, operand=None)
-        if crf_params[0] == "even":
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda x: (x % 2).astype(float), operand=x)
-        if crf_params[0] == "odd":
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 1.0, lambda x: ((x + 1) % 2).astype(float), operand=x)
-    elif phrase.startswith("off then"):
-        param_str = phrase.split(" then ")[1]
-        crf_params = param_str.split(" at ")
-        if crf_params[0] == "on":
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: 1.0, operand=None)
-        if crf_params[0] == "even":
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda x: (x % 2).astype(float), operand=x)
-        if crf_params[0] == "odd":
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda x: ((x + 1) % 2).astype(float), operand=x)
-    elif phrase == "off":
-        return lambda x: 0.0
-    elif phrase == "even":
-        return lambda x: (x % 2).astype(float)
-    elif phrase == "odd":
-        return lambda x: ((x + 1) % 2).astype(float)
-    else:
-        return lambda x: 1.0
-    
-
-def get_anneal_schedule(description, num_minibatches=1):
-    segments = description.split()
-    changes = []
-    i = 0
-    starter_lr = float(segments[0])
-    while i < len(segments):
-        if segments[i] in ['jump', 'anneal']:
-            # Determine initial_lr based on whether it's the start or a subsequent segment
-            if i == 1:
-                initial_lr = float(segments[i-1])
-                start_step = 0
-            else:
-                initial_lr = float(changes[-1][3])  # Use the final_lr of the last segment
-                start_step = int(segments[i-1]) * num_minibatches
-            change_type = segments[i]
-            final_lr = float(segments[i+2])
-            at_step = int(segments[i+4]) * num_minibatches
-            changes.append((start_step, initial_lr, change_type, final_lr, at_step))
-            i += 4  # skip to the next relevant segment
-        i += 1
-
-    def schedule(step):
-        lr = starter_lr  # Default to the initial LR in the first segment
-
-        for index, (start_step, start_lr, change_type, end_lr, change_step) in enumerate(changes):
-            if change_type == 'jump':
-                lr = jnp.where(step >= start_step, start_lr, lr)
-            elif change_type == 'anneal':
-                duration = change_step - start_step
-                fraction = (step - start_step) / duration
-                lr = jnp.where(step >= start_step, jnp.interp(fraction, jnp.array([0, 1]), jnp.array([start_lr, end_lr])), lr)
-
-        return lr
-
-    return schedule
 
 
 @jax.profiler.annotate_function
