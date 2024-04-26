@@ -135,18 +135,18 @@ def initialize_listener(env, rng, config, i):
         )
     network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
     
-    lr_func = get_anneal_schedule(config["LISTENER_ANNEAL_SCHEDULE"], config["NUM_MINIBATCHES_LISTENER"])
-    
     if config["ANNEAL_LR_LISTENER"]:
+        lr_func = get_anneal_schedule(config["LISTENER_ANNEAL_SCHEDULE"], config["NUM_MINIBATCHES_LISTENER"])
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
             optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
         )
     else:
+        lr_func = lambda *args: config["LR_LISTENER"]
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), 
             optax.adam(config["LR_LISTENER"], b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5)
-            )
+        )
     
     train_state = TrainState.create(
         apply_fn=listener_network.apply,
@@ -181,18 +181,18 @@ def initialize_speaker(env, rng, config, i):
         )
     network_params = speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
 
-    lr_func = get_anneal_schedule(config["SPEAKER_ANNEAL_SCHEDULE"], config["NUM_MINIBATCHES_SPEAKER"])
-
     if config["ANNEAL_LR_SPEAKER"]:
+        lr_func = get_anneal_schedule(config["SPEAKER_ANNEAL_SCHEDULE"], config["NUM_MINIBATCHES_SPEAKER"])
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
             optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5),
         )
     else:
+        lr_func = lambda *args: config["LR_SPEAKER"]
         tx = optax.chain(
             optax.clip_by_global_norm(config["MAX_GRAD_NORM"]), 
             optax.adam(config["LR_SPEAKER"], b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5)
-            )
+        )
     
     train_state = TrainState.create(
         apply_fn=speaker_network.apply,
