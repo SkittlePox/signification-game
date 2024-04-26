@@ -208,7 +208,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        requested_num_speaker_images = min(jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(jnp.int32), self.num_channels)
+        requested_num_speaker_images = jax.lax.min(jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(jnp.int32), self.num_channels)
         # requested_num_speaker_images should not be greater than self.num_speakers
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         
