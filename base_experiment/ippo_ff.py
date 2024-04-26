@@ -59,6 +59,8 @@ def define_env(config):
 def initialize_listener(env, rng, config, i):
     if config["LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-sigmoid':
+        listener_network = ActorCriticListenerConvSigmoid(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense':
         listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense-batchnorm':
