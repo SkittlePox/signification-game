@@ -49,7 +49,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.num_listeners = num_listeners
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
-        self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn) if isinstance(channel_ratio_fn, str) else channel_ratio_fn
+        self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else channel_ratio_fn
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.stored_env_images = dataset[0]
         self.stored_env_labels = dataset[1]
@@ -62,7 +62,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.gaussian_noise_stddev = gaussian_noise_stddev
         self.speaker_assignment_method = speaker_assignment_method
         self.kwargs = kwargs
-        # TODO: Move the above comments to an actual docstring
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]
@@ -209,7 +208,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
-        requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(jnp.int32)
+        requested_num_speaker_images = min(jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(jnp.int32), self.num_channels)
         # requested_num_speaker_images should not be greater than self.num_speakers
         # assert requested_num_speaker_images <= self.num_speakers, f"requested_num_speaker_images ({requested_num_speaker_images}) cannot be greater than self.num_speakers ({self.num_speakers})"
         

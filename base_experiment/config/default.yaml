@@ -1,5 +1,3 @@
-"LR_SPEAKER": 1e-4
-"LR_LISTENER": 1e-4   # 2e-4 is good for conv, 1e-3 is good for dense
 "GAMMA": 0.0
 "GAE_LAMBDA": 0.0
 "CLIP_EPS": 0.02
@@ -12,14 +10,12 @@
 "OPTIMIZER_LISTENER_B1": 0.9
 "OPTIMIZER_LISTENER_B2": 0.999
 
-"ANNEAL_LR_SPEAKER": False
-"ANNEAL_LR_LISTENER": True
-"SPEAKER_ANNEAL_SCHEDULE": "1e-4"
-"LISTENER_ANNEAL_SCHEDULE": "1e-4 jump to 1e-5 at 200"
+"SPEAKER_LR_SCHEDULE": "1e-4"
+"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-5 at 50" # 2e-4 is good for conv, 1e-3 is good for dense
 "SPEAKER_TRAIN_SCHEDULE": "off then on at 200"
 "LISTENER_TRAIN_SCHEDULE": "on"
 
-"LISTENER_ARCH": 'conv'
+"LISTENER_ARCH": 'conv-sigmoid'
 "SPEAKER_ARCH": 'splines'
 "SPEAKER_LATENT_DIM": 128
 "SPEAKER_DROPOUT": 0.0
@@ -42,27 +38,29 @@
 "ENV_DATASET": 'mnist'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 5
-  "num_listeners": 5
-  "num_channels": 5
+  "num_speakers": 10
+  "num_listeners": 10
+  "num_channels": 10
   "num_classes": 10
   "image_dim": 28
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "channel_ratio_fn": "1.0 at 200"
   "speaker_action_transform": "splines"
   "speaker_action_dim": 12
-  "log_prob_rewards": True
+  "log_prob_rewards": False
   "gaussian_noise_stddev": 0.4
   "speaker_assignment_method": "arange"
+  "channel_ratio_fn": "sigmoid-custom"
+  "sigmoid_offset": 1000
+  "sigmoid_stretch": 3e-3
 
 
 # WandB Params
 "WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
-"SPEAKER_EXAMPLE_LOGGING_ITER": 10
+"SPEAKER_EXAMPLE_LOGGING_ITER": 5
 "SPEAKER_EXAMPLE_NUM": 2
 "SPEAKER_EXAMPLE_DEBUG": False

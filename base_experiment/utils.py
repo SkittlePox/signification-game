@@ -85,13 +85,18 @@ def get_anneal_schedule(description, num_minibatches=1):
 
 ############ Used in simplified_signification_game.py ############
 
-def get_channel_ratio_fn(phrase):
+def get_channel_ratio_fn(phrase, params):
     # TODO: Eventually I will parameterize this better.
     def s_curve(x):
         return 1.0 / (1.0 + jnp.exp(-1 * (0.01*jnp.array(x, float) - 5))) + 1e-2
     
     def linear(x):
         return x / 400.0
+
+    def get_sigmoid(sigmoid_offset, sigmoid_stretch, **kwargs):
+        def sig_ch_fn(x):
+            return 1.0 / (1.0 + jnp.exp(-1 * sigmoid_stretch * (jnp.array(x, float) - sigmoid_offset))) + 1e-2
+        return sig_ch_fn
 
     if phrase in ("all_env", "ret_0", "ret0"):
         return lambda _: 0.0
@@ -101,6 +106,8 @@ def get_channel_ratio_fn(phrase):
         return s_curve
     elif phrase == "linear":
         return linear
+    elif phrase == "sigmoid-custom":
+        return get_sigmoid(**params)
     else:
         if " at " in phrase:
             crf_params = phrase.split(" at ")
