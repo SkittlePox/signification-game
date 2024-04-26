@@ -95,7 +95,7 @@ def get_channel_ratio_fn(phrase, params):
 
     def get_sigmoid(sigmoid_offset, sigmoid_stretch, **kwargs):
         def sig_ch_fn(x):
-            return 1.0 / (1.0 + jnp.exp(-1 * sigmoid_stretch * (jnp.array(x, float) - sigmoid_offset))) + 1e-2
+            return 1.0 / (1.0 + jnp.exp(-1 * jnp.array(sigmoid_stretch, float) * (jnp.array(x, float) - jnp.array(sigmoid_offset, float)))) + 1e-2
         return sig_ch_fn
 
     if phrase in ("all_env", "ret_0", "ret0"):
