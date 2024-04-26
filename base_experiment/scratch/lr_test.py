@@ -28,6 +28,8 @@ def parse_schedule(description):
         for index, (start_step, start_lr, change_type, end_lr, change_step) in enumerate(changes):
             if change_type == 'jump':
                 lr = jnp.where(step >= start_step, start_lr, lr)
+                if index + 1 == len(changes):
+                    lr = jnp.where(step >= change_step, end_lr, lr)
             elif change_type == 'anneal':
                 duration = change_step - start_step
                 fraction = (step - start_step) / duration
@@ -42,12 +44,14 @@ lr_schedule_description_1 = "1e-3 jump to 1e-2 at 100 anneal to 1e-4 at 300"
 lr_schedule_description_2 = "1e-3 anneal to 1e-2 at 200 jump to 1e-5 at 400"
 lr_schedule_description_3 = "1e-3 anneal to 1e-2 at 100 jump to 1e-1 at 200 anneal to 1e-2 at 300"
 lr_schedule_description_4 = "1e-6"
+lr_schedule_description_5 = "1e-4 jump to 1e-5 at 200"
 
 # Compiling the schedules
 compiled_schedule_1 = jit(parse_schedule(lr_schedule_description_1))
 compiled_schedule_2 = jit(parse_schedule(lr_schedule_description_2))
 compiled_schedule_3 = jit(parse_schedule(lr_schedule_description_3))
 compiled_schedule_4 = jit(parse_schedule(lr_schedule_description_4))
+compiled_schedule_5 = jit(parse_schedule(lr_schedule_description_5))
 
 # Testing various points in the schedule
 test_cases = [
@@ -65,7 +69,10 @@ test_cases = [
     (compiled_schedule_3, 250, 0.05),    # Post jump, before second anneal
     (compiled_schedule_3, 350, 0.01),# Post second anneal
 
-    (compiled_schedule_4, 1, 0.000001)# Post second anneal
+    (compiled_schedule_4, 1, 0.000001),# Post second anneal
+
+    (compiled_schedule_5, 1, 1e-4),# Post second anneal
+    (compiled_schedule_5, 202, 1e-5)# Post second anneal
 ]
 
 # Running the test cases

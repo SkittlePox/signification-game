@@ -70,6 +70,8 @@ def get_anneal_schedule(description, num_minibatches=1):
         for index, (start_step, start_lr, change_type, end_lr, change_step) in enumerate(changes):
             if change_type == 'jump':
                 lr = jnp.where(step >= start_step, start_lr, lr)
+                if index + 1 == len(changes):
+                    lr = jnp.where(step >= change_step, end_lr, lr)
             elif change_type == 'anneal':
                 duration = change_step - start_step
                 fraction = (step - start_step) / duration
