@@ -14,12 +14,10 @@
 
 "ANNEAL_LR_SPEAKER": False
 "ANNEAL_LR_LISTENER": True
-"ANNEAL_LR_SPEAKER_MULTIPLIER": 1.0
-"ANNEAL_LR_LISTENER_MULTIPLIER": 0.75
-"LISTENER_ANNEAL_SCHEDULE": "1e-3 anneal to 1e-4 at 300"
-"SPEAKER_ANNEAL_SCHEDULE": "1e-4 jump to 1e-4 at 300 anneal to 1e-6 at 400"
-"SPEAKER_TRAIN_SCHEDULE": "off then on at 100"
-"LISTENER_TRAIN_SCHEDULE": "on then off at 100"
+"SPEAKER_ANNEAL_SCHEDULE": "1e-4"
+"LISTENER_ANNEAL_SCHEDULE": "1e-4 jump to 1e-5 at 200"
+"SPEAKER_TRAIN_SCHEDULE": "off then on at 200"
+"LISTENER_TRAIN_SCHEDULE": "on"
 
 "LISTENER_ARCH": 'conv'
 "SPEAKER_ARCH": 'splines'
@@ -44,16 +42,16 @@
 "ENV_DATASET": 'mnist'
 "ENV_NUM_DATAPOINTS": 1000
 "ENV_KWARGS":
-  "num_speakers": 10
-  "num_listeners": 10
-  "num_channels": 10
+  "num_speakers": 5
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 28
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "channel_ratio_fn": "sigmoid1"
+  "channel_ratio_fn": "1.0 at 200"
   "speaker_action_transform": "splines"
   "speaker_action_dim": 12
   "log_prob_rewards": True

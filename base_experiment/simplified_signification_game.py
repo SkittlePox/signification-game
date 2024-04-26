@@ -50,7 +50,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn) if isinstance(channel_ratio_fn, str) else channel_ratio_fn
-        self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform) if isinstance(speaker_action_transform, str) else speaker_action_transform
+        self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.stored_env_images = dataset[0]
         self.stored_env_labels = dataset[1]
         self.image_dim = image_dim
