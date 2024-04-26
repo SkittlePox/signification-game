@@ -107,7 +107,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             noise = jax.random.normal(obs_key, image.shape) * self.gaussian_noise_stddev
             image += noise
             
-            return jnp.clip(image, 0.0, 1.0)
+            return jnp.nan_to_num(jnp.clip(image, 0.0, 1.0))
         
         if as_dict:
             observations = {}
