@@ -689,6 +689,8 @@ def main(config):
     config = OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
+    # print(OmegaConf.to_yaml(config))
+    # return
     wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
