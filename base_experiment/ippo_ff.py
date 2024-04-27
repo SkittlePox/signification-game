@@ -4,14 +4,10 @@ Based on PureJaxRL Implementation of PPO
 from functools import partial
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
-import numpy as np
 import optax
-from flax.linen.initializers import constant, orthogonal
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
 from flax.training import train_state
 from jax.tree_util import tree_flatten, tree_map
-import jaxmarl
 import wandb
 import hydra
 import torch
@@ -42,7 +38,6 @@ class Transition(NamedTuple):
     channel_map: jnp.ndarray
 
 
-@jax.profiler.annotate_function
 def define_env(config):
     if config["ENV_DATASET"] == 'mnist':        
         from utils import to_jax
@@ -55,12 +50,13 @@ def define_env(config):
         return env
 
 
-@jax.profiler.annotate_function
 def initialize_listener(env, rng, config, i):
     if config["LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-sigmoid':
         listener_network = ActorCriticListenerConvSigmoid(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-small':
+        listener_network = ActorCriticListenerConvSmall(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense':
         listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense-batchnorm':
@@ -87,7 +83,6 @@ def initialize_listener(env, rng, config, i):
 
     return listener_network, train_state, lr_func
 
-@jax.profiler.annotate_function
 def initialize_speaker(env, rng, config, i):
     if config["SPEAKER_ARCH"] == 'full_image':
         speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
@@ -126,7 +121,6 @@ def initialize_speaker(env, rng, config, i):
 
     return speaker_network, train_state, lr_func
 
-@jax.profiler.annotate_function
 def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i):
     __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
     _listener_obs_i = _listener_obs_i.ravel()
@@ -135,7 +129,6 @@ def execute_individual_listener(__rng, _listener_train_state_i, _listener_obs_i)
     log_prob = policy.log_prob(action)
     return action, log_prob, value
 
-@jax.profiler.annotate_function
 def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
     _speaker_obs_i = _speaker_obs_i.ravel()
@@ -157,8 +150,6 @@ def get_speaker_examples(runner_state, env, config):
     speaker_images = env._env.speaker_action_transform(speaker_action).reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
     return speaker_images
 
-
-@jax.profiler.annotate_function
 def env_step(runner_state, env, config):
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, speaker_train_states, log_env_state, obs, rng = runner_state
@@ -232,7 +223,6 @@ def env_step(runner_state, env, config):
     return runner_state, transition
 
 
-@jax.profiler.annotate_function
 def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_state, config):
     # j is for iterating through minibatches
 
@@ -294,7 +284,6 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
 
     return train_state, total_loss
 
-@jax.profiler.annotate_function
 def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_state, config):
     # j is for iterating through minibatches
 
@@ -357,7 +346,6 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
     return train_state, total_loss
 
 
-@jax.profiler.annotate_function
 def make_train(config):
     env = define_env(config)
     env = SimpSigGameLogWrapper(env)
@@ -368,7 +356,6 @@ def make_train(config):
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
     
-    @jax.profiler.annotate_function
     def train(rng):
         # MAKE AGENTS
         rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
@@ -593,18 +580,6 @@ def make_train(config):
 
                 metric_dict.update({"env/avg_channel_ratio": jnp.mean(les.env_state.requested_num_speaker_images) / env_kwargs["num_channels"]})
 
-                listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
-                
-                listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
-                final_listener_images = wandb.Image(listener_images, caption=f"classified as: {str(listener_actions[-1, 0, :].ravel())}")
-
-                speaker_images = make_grid(torch.tensor(speaker_imgs), nrow=env_kwargs["num_speakers"])
-                final_speaker_images = wandb.Image(speaker_images, caption=f"tried generating: {str(speaker_obs[-2, 0, :].ravel())}")
-                
-                metric_dict.update({"env/speaker_images": final_speaker_images})
-                metric_dict.update({"env/last_listener_obs": final_listener_images})
-                # metric_dict.update({f"env/speaker_labels/speaker {i}": les.env_state.speaker_labels[:, i].item() for i in range(les.env_state.speaker_labels.shape[-1])})
-
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
                 metric_dict.update({f"loss/value loss/listener {i}": jnp.mean(ll[i][1][0]).item() for i in range(len(ll))})
@@ -679,6 +654,17 @@ def make_train(config):
                     speaker_example_images = make_grid(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"], pad_value=0.25)
                     final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
                     metric_dict.update({"env/speaker_examples": final_speaker_example_images})
+
+                    listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
+                
+                    listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
+                    final_listener_images = wandb.Image(listener_images, caption=f"classified as: {str(listener_actions[-1, 0, :].ravel())}")
+
+                    speaker_images = make_grid(torch.tensor(speaker_imgs), nrow=env_kwargs["num_speakers"])
+                    final_speaker_images = wandb.Image(speaker_images, caption=f"tried generating: {str(speaker_obs[-2, 0, :].ravel())}")
+                    
+                    metric_dict.update({"env/speaker_images": final_speaker_images})
+                    metric_dict.update({"env/last_listener_obs": final_listener_images})
                 
                 wandb.log(metric_dict)
             jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step))
@@ -709,9 +695,10 @@ def main(config):
         tags=["main"],
         config=config,
         mode=config["WANDB_MODE"],
-        save_code=True
+        save_code=True,
+        notes=config["WANDB_NOTES"]
     )
-    rng = jax.random.PRNGKey(56)
+    rng = jax.random.PRNGKey(50)
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)
     out = train(rng)
