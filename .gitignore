@@ -3,3 +3,5 @@
 **/outputs/
 **/__pycache__/
 **/wandb/
+*.e
+*.o
