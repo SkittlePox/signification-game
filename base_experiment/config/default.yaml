@@ -29,7 +29,7 @@
 
 "NUM_ENVS": 1
 "NUM_STEPS": 2048 # 2048
-"UPDATE_EPOCHS": 3000
+"UPDATE_EPOCHS": 4000
 "MINIBATCH_SIZE_LISTENER": 64 # 32 This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 

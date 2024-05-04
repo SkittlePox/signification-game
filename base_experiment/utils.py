@@ -108,6 +108,9 @@ def get_channel_ratio_fn(phrase, params):
         return linear
     elif phrase == "sigmoid-custom":
         return get_sigmoid(**params)
+    elif phrase.startswith("sigmoid-custom-cutoff"):
+        fn = get_sigmoid(**params)
+        return lambda x: jax.lax.cond(x < eval(phrase.split("-")[-1]), fn, lambda _: 0.0, operand=x)
     else:
         if " at " in phrase:
             crf_params = phrase.split(" at ")
