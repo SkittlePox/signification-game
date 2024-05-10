@@ -35,14 +35,15 @@
 
 
 "ENV_NAME": "simple-sig-game"
-"ENV_DATASET": 'mnist'
+"ENV_DATASET": 'veg'
+"ENV_DATASET_CATEGORIES": ["Capsicum", "Pumpkin", "Potato", "Bean", "Cauliflower", "Tomato", "Carrot", "Cabbage", "Broccoli", "Radish"]
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 10
   "num_listeners": 10
   "num_channels": 10
   "num_classes": 10
-  "image_dim": 28
+  "image_dim": 64
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
@@ -58,7 +59,7 @@
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5

@@ -1,6 +1,7 @@
 """
 Based on PureJaxRL Implementation of PPO
 """
+import os
 from functools import partial
 import jax
 import jax.numpy as jnp
@@ -8,6 +9,7 @@ import optax
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
 from flax.training import train_state
 from jax.tree_util import tree_flatten, tree_map
+from kaggle.api.kaggle_api_extended import KaggleApi
 import wandb
 import hydra
 import torch
@@ -17,6 +19,9 @@ from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
 from utils import get_anneal_schedule, get_train_freezing
+
+api = KaggleApi()
+api.authenticate()
 
 
 class TrainState(train_state.TrainState):
@@ -46,6 +51,26 @@ def define_env(config):
         images, labels = to_jax(mnist_dataset, num_datapoints=config["ENV_NUM_DATAPOINTS"])  # This should also be in ENV_KWARGS
         images = images.astype('float32') / 255.0
         
+        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
+        return env
+    elif config["ENV_DATASET"] == "veg":
+        from utils import load_images_to_array
+
+        download_path = '/tmp/veggies/'
+        if not os.path.exists(download_path):
+            os.makedirs(download_path)
+
+        # Check if dataset already exists
+        dataset_files = os.listdir(download_path)
+        if len(dataset_files) > 0:
+            print(f"Dataset already exists in {download_path}.")
+        else:
+            dataset = 'misrakahmed/vegetable-image-dataset'
+            api.dataset_download_files(dataset, path=download_path, unzip=True)
+        
+        images, labels = load_images_to_array(directory=download_path+"Vegetable Images/train/", categories=config["ENV_DATASET_CATEGORIES"], target_size=(config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]), num_datapoints=config["ENV_NUM_DATAPOINTS"])
+        images /= 255.0
+
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
         return env
 

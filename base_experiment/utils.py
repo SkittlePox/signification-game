@@ -1,6 +1,11 @@
+import os
+from PIL import Image
 from torchvision import datasets
 import jax
 import jax.numpy as jnp
+import numpy as np
+import math
+
 
 def to_jax(dataset, num_datapoints=100):
     images = []
@@ -10,6 +15,53 @@ def to_jax(dataset, num_datapoints=100):
         images.append(jnp.array(img, dtype=jnp.float32))
         labels.append(jnp.array(label, dtype=jnp.int32))
     return jnp.array(images), jnp.array(labels)
+
+
+def load_images_to_array(directory, categories=14, num_datapoints=100, target_size=(224, 224), seed=50):
+    """
+    Load all images from the specified directory and resize them to target_size.
+    Returns a JAX array with shape (B, N, N, 3).
+    
+    Args:
+    directory (str): The path to the directory containing images.
+    target_size (tuple): Desired (width, height) of images.
+    
+    Returns:
+    jnp.ndarray: JAX array of images with shape (B, N, N, 3).
+    """
+
+    if isinstance(categories, int):
+        num_categories = categories
+        categories = os.listdir(directory)[:num_categories]
+    elif isinstance(categories, list):
+        num_categories = len(categories)
+
+    num_images_per_cat = math.ceil(num_datapoints/num_categories)
+    images = []
+    labels = []
+
+    for i, cat in enumerate(categories):
+        image_files = [f for f in os.listdir(directory+cat) if f.endswith(('.png', '.jpg', '.jpeg'))][:num_images_per_cat]
+        # TODO: Think about selecting out specific categories at this point if categories is a one-hot vector
+        for filename in image_files:
+            img_path = os.path.join(directory+cat, filename)
+            with Image.open(img_path) as img:
+                img = img.convert('L').resize(target_size)
+                img_array = np.array(img)
+                images.append(img_array)
+                label = np.zeros((num_categories))
+                label[i] = 1
+                labels.append(label)
+    # Stack images into a single numpy array and convert to JAX array
+    images_array = jnp.array(np.stack(images, axis=0), dtype=jnp.float32)
+    labels_array = jnp.array(np.stack(labels, axis=0), dtype=jnp.int32)
+
+    key = jax.random.PRNGKey(seed)
+    indices = jax.random.permutation(key, len(images))
+    images_array = images_array[indices][:num_datapoints]
+    labels_array = labels_array[indices][:num_datapoints]
+
+    return images_array, labels_array
 
 
 ######## Used in ippo_ff.py ##########
