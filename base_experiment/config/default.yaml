@@ -39,17 +39,17 @@
 "ENV_DATASET_CATEGORIES": ["Capsicum", "Pumpkin", "Potato", "Bean", "Cauliflower", "Tomato", "Carrot", "Cabbage", "Broccoli", "Radish"]
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
-  "num_speakers": 10
-  "num_listeners": 10
-  "num_channels": 10
+  "num_speakers": 3
+  "num_listeners": 3
+  "num_channels": 3
   "num_classes": 10
   "image_dim": 64
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "speaker_action_transform": "splines"
-  "speaker_action_dim": 12
+  "speaker_action_transform": "splines_weight"
+  "speaker_action_dim": 14
   "log_prob_rewards": True
   "gaussian_noise_stddev": 0.4
   "speaker_assignment_method": "arange"
