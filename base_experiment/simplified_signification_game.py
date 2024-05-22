@@ -67,8 +67,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.listener_agents = ["listener_{}".format(i) for i in range(num_listeners)]
         self.agents = self.speaker_agents + self.listener_agents
 
-        self.observation_spaces = {**{agent: Discrete(num_classes) for agent in self.speaker_agents}, **{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.listener_agents}}
-        self.action_spaces = {**{agent: Box(low=0, high=255, shape=(28, 28), dtype=jnp.float32) for agent in self.speaker_agents}, **{agent: Discrete(num_classes) for agent in self.listener_agents}}  # TODO migrate: This may need to change, unsure. Sampling randomly from this may fail.
+        self.observation_spaces = {**{agent: Discrete(num_classes) for agent in self.speaker_agents}, **{agent: Box(low=0, high=255, shape=(image_dim, image_dim), dtype=jnp.float32) for agent in self.listener_agents}}
+        self.action_spaces = {**{agent: Box(low=0, high=255, shape=(image_dim, image_dim), dtype=jnp.float32) for agent in self.speaker_agents}, **{agent: Discrete(num_classes) for agent in self.listener_agents}}  # TODO migrate: This may need to change, unsure. Sampling randomly from this may fail.
 
     @partial(jax.jit, static_argnums=(0,))
     def load_images(self, key: chex.PRNGKey, num_imgs: int = -1):

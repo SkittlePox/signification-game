@@ -49,9 +49,9 @@ def load_images_to_array(directory, categories=14, num_datapoints=100, target_si
                 img = img.convert('L').resize(target_size)
                 img_array = np.array(img)
                 images.append(img_array)
-                label = np.zeros((num_categories))
-                label[i] = 1
-                labels.append(label)
+                # label = np.zeros((num_categories))    # This would be for one-hot labels
+                # label[i] = 1
+                labels.append(i)
     # Stack images into a single numpy array and convert to JAX array
     images_array = jnp.array(np.stack(images, axis=0), dtype=jnp.float32)
     labels_array = jnp.array(np.stack(labels, axis=0), dtype=jnp.int32)
