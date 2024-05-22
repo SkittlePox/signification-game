@@ -154,6 +154,8 @@ def get_channel_ratio_fn(phrase, params):
         return lambda _: 0.0
     elif phrase in ("all_speakers", "all_speaker", "ret_1", "ret1"):
         return lambda _: 1.0
+    elif phrase in ("half", "0.5"):
+        return lambda _: 0.5
     elif phrase == "sigmoid1":
         return s_curve
     elif phrase == "linear":
@@ -396,12 +398,13 @@ def get_speaker_action_transform(fn_name, image_dim):
                 P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
                 return P  # Returns shape (N, 2), a list of points on the spline
 
-            brush_size = 1
+            brush_size = 2
 
             spline_params *= image_dim
             
             # P0, P1, P2 = spline_params.reshape((3, 2)) 
             P0, P1, P2, W = spline_params[0:2], spline_params[2:4], spline_params[4:6], spline_params[6]
+            W *= -0.005
             t_values = jnp.linspace(0, 1, num=50)
             spline_points = bezier_spline(t_values, P0, P1, P2)
             x_points, y_points = jnp.round(spline_points).astype(int).T
@@ -420,7 +423,7 @@ def get_speaker_action_transform(fn_name, image_dim):
             all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
 
             # Update the canvas
-            canvas = jnp.ones((image_dim, image_dim)) * 0.3
+            canvas = jnp.ones((image_dim, image_dim)) * 0.2 # This is the background color!
             canvas = canvas.at[all_x_indices, all_y_indices].add(W)
             return canvas
 

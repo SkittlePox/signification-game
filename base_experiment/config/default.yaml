@@ -11,8 +11,8 @@
 "OPTIMIZER_LISTENER_B2": 0.999
 
 "SPEAKER_LR_SCHEDULE": "1e-4"
-"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-6 at 350" # 2e-4 is good for conv, 1e-3 is good for dense
-"SPEAKER_TRAIN_SCHEDULE": "off then on at 350"
+"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-6 at 400" # 2e-4 is good for conv, 1e-3 is good for dense
+"SPEAKER_TRAIN_SCHEDULE": "off then on at 400"
 "LISTENER_TRAIN_SCHEDULE": "on"
 
 "LISTENER_ARCH": 'conv'
@@ -28,10 +28,10 @@
 "SPEAKER_NOISE_LATENT_STDDEV": 0.05
 
 "NUM_ENVS": 1
-"NUM_STEPS": 12 # 2048
+"NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 4000
-"MINIBATCH_SIZE_LISTENER": 12 # 32 This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 12 # 128  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 32 # 32 This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 
 
 "ENV_NAME": "simple-sig-game"
@@ -39,11 +39,11 @@
 "ENV_DATASET_CATEGORIES": ["Capsicum", "Pumpkin", "Potato", "Bean", "Cauliflower", "Tomato", "Carrot", "Cabbage", "Broccoli", "Radish"]
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
-  "num_speakers": 3
-  "num_listeners": 3
-  "num_channels": 3
+  "num_speakers": 5
+  "num_listeners": 10
+  "num_channels": 10
   "num_classes": 10
-  "image_dim": 28
+  "image_dim": 100
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
@@ -51,15 +51,15 @@
   "speaker_action_transform": "splines_weight"
   "speaker_action_dim": 14
   "log_prob_rewards": True
-  "gaussian_noise_stddev": 0.4
+  "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"
-  "channel_ratio_fn": "all_speakers"
+  "channel_ratio_fn": "off then 0.5 at 400"
   "sigmoid_offset": 800
   "sigmoid_stretch": 5e-3
 
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5
