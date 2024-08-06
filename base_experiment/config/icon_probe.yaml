@@ -1,0 +1,11 @@
+"ENV_NUM_DATAPOINTS": 5000
+"PROBE_NUM_DATAPOINTS_VALIDATION": 1000
+"BATCH_SIZE": 128
+"NUM_EPOCHS": 3
+"LEARNING_RATE": 0.001
+
+# WandB Params
+"WANDB_MODE": "disabled"
+"ENTITY": "signification-team"
+"PROJECT": "icon-probe"
+"WANDB_NOTES": "Initial testing of icon probe training."
