@@ -40,8 +40,8 @@
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 5
-  "num_listeners": 10
-  "num_channels": 10
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 100
   "speaker_reward_success": 1.0
@@ -53,7 +53,7 @@
   "log_prob_rewards": True
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"
-  "channel_ratio_fn": "off then 0.5 at 400"
+  "channel_ratio_fn": "sigmoid-custom"
   "sigmoid_offset": 800
   "sigmoid_stretch": 5e-3
 
