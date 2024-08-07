@@ -20,10 +20,10 @@ class CNN(nn.Module):
     def __call__(self, x):
         x = nn.Conv(features=16, kernel_size=(3, 3))(x)
         x = nn.relu(x)
-        # x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
+        x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
         x = nn.Conv(features=16, kernel_size=(3, 3))(x)
         x = nn.relu(x)
-        # x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
+        x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
         x = x.reshape((x.shape[0], -1))  # flatten
         x = nn.Dense(features=256)(x)
         x = nn.relu(x)
@@ -89,7 +89,6 @@ def get_dataset(config):
     images = images.astype('float32') / 255.0
 
     images = np.expand_dims(images, -1)
-    labels = np.expand_dims(labels, -1)
 
     env_images = images[:n_env_imgs]
     env_labels = labels[:n_env_imgs]
@@ -107,7 +106,7 @@ def create_train_state(rng, config):
     """Creates initial `TrainState`."""
     cnn = CNN()
     params = cnn.init(rng, jnp.ones([1, 28, 28, 1]))['params']
-    tx = optax.adam(config["LEARNING_RATE"])
+    tx = optax.sgd(config["LEARNING_RATE"], config["MOMENTUM"])
     return train_state.TrainState.create(apply_fn=cnn.apply, params=params, tx=tx)
 
 
