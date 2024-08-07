@@ -1,6 +1,7 @@
 from torchvision.datasets import MNIST
 from flax import linen as nn
-from flax.training import train_state
+from flax.training import train_state, orbax_utils
+import orbax.checkpoint
 import wandb
 import jax
 import jax.numpy as jnp
@@ -9,6 +10,7 @@ import numpy as np
 from omegaconf import OmegaConf
 import hydra
 from absl import logging
+import uuid
 
 from utils import to_jax
 
@@ -106,7 +108,10 @@ def create_train_state(rng, config):
     """Creates initial `TrainState`."""
     cnn = CNN()
     params = cnn.init(rng, jnp.ones([1, 28, 28, 1]))['params']
-    tx = optax.sgd(config["LEARNING_RATE"], config["MOMENTUM"])
+    if config["OPTIMIZER"] == "sgd":
+        tx = optax.sgd(config["LEARNING_RATE"], config["MOMENTUM"])
+    elif config["OPTIMIZER"] == "adam":
+        tx = optax.adam(config["LEARNING_RATE"])
     return train_state.TrainState.create(apply_fn=cnn.apply, params=params, tx=tx)
 
 
@@ -156,6 +161,45 @@ def train_and_evaluate(config) -> train_state.TrainState:
         wandb.log(metric_dict)
     return state
 
+def evaluate_model(state, config):
+    train_ds, test_ds = get_dataset(config)
+
+    _, train_loss, train_accuracy = apply_model(
+            state, train_ds['image'], train_ds['label']
+        )
+
+    _, test_loss, test_accuracy = apply_model(
+            state, test_ds['image'], test_ds['label']
+        )
+    
+    logging.info(
+            'train_loss: %.4f, train_accuracy: %.2f, test_loss: %.4f,'
+            ' test_accuracy: %.2f'
+            % (
+                
+                train_loss,
+                train_accuracy * 100,
+                test_loss,
+                test_accuracy * 100,
+            )
+        )
+    
+
+def load_model(checkpoint_name, config):
+    empty_state = create_train_state(jax.random.key(0), config)
+    empty_checkpoint = {'model': empty_state, 'config': config}
+
+    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+    raw_restored = orbax_checkpointer.restore(checkpoint_name, item=empty_checkpoint)
+    return raw_restored
+
+
+def save_model(train_state, config, model_name):
+    checkpoint = {'model': train_state, 'config': config}
+    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+    save_args = orbax_utils.save_args_from_target(checkpoint)
+    orbax_checkpointer.save('/users/bspiegel/signification-game/base_experiment/models/'+model_name, checkpoint, save_args=save_args)
+
 
 @hydra.main(version_base=None, config_path="config", config_name="icon_probe")
 def train_probe(config):
@@ -170,7 +214,22 @@ def train_probe(config):
         mode=config["WANDB_MODE"],
         save_code=True
     )
-    train_and_evaluate(config)
+    
+    train_state = train_and_evaluate(config)
+
+    if config["SAVE_MODEL"]:
+        random_uuid = uuid.uuid4()
+        model_name = config["MODEL_NAME_PREFIX"]
+        model_name += str(random_uuid)[-4:]
+        save_model(train_state, config, model_name)
+    
+    if config["EVAL_MODEL"]:
+        raw_restored = load_model('/users/bspiegel/signification-game/base_experiment/models/'+config["MODEL_NAME_EVAL"], config)
+        train_state = raw_restored['model']
+
+        evaluate_model(train_state, config)
+
+
 
 
 if __name__ == "__main__":

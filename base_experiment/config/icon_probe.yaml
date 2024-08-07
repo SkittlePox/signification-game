@@ -1,13 +1,18 @@
 "ENV_NUM_DATAPOINTS": 5000
-"PROBE_NUM_DATAPOINTS_VALIDATION": 5000
+"PROBE_NUM_DATAPOINTS_VALIDATION": 20000
 "BATCH_SIZE": 128
-"NUM_EPOCHS": 100
+"NUM_EPOCHS": 20
 "LEARNING_RATE": 0.05
 "MOMENTUM": 0.9
+"OPTIMIZER": "sgd"
+
+"SAVE_MODEL": True
+"MODEL_NAME_PREFIX": "probe-5k-20k-20e-sgd-"
+"MODEL_NAME_EVAL": "probe-5k-20k-20e-sgd-653d"
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "icon-probe"
 "WANDB_NOTES": "Initial testing of icon probe training."
