@@ -7,14 +7,14 @@
 "OPTIMIZER": "sgd"
 
 "TRAIN_MODEL": True
-"SAVE_MODEL": False
+"SAVE_MODEL": True
 "EVAL_MODEL": False
 "MODEL_NAME_PREFIX": "probe-5k-20k-20e-sgd-"
 "MODEL_NAME_EVAL": "probe-5k-20k-20e-sgd-bedc"
 
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "icon-probe"
 "WANDB_NOTES": "Initial testing of icon probe training."

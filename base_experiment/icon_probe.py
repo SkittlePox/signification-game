@@ -116,10 +116,17 @@ def create_train_state(rng, config):
     return train_state.TrainState.create(apply_fn=cnn.apply, params=params, tx=tx)
 
 
-def calculate_entropy(logits):
+def calculate_entropy(logits, labels=None):
     softmax_probs = jax.nn.softmax(logits, axis=-1)
     entropies = -jnp.sum(softmax_probs * jnp.log(softmax_probs + 1e-9), axis=-1)
-    return jnp.mean(entropies)
+    mean_entropy = jnp.mean(entropies)
+
+    if labels is not None:
+        unique_labels = jnp.unique(labels)
+        per_class_entropy = jnp.array([jnp.mean(entropies[labels == c]) for c in unique_labels])
+        return mean_entropy, per_class_entropy
+
+    return mean_entropy
 
 
 def train_and_evaluate(config) -> train_state.TrainState:
@@ -146,20 +153,25 @@ def train_and_evaluate(config) -> train_state.TrainState:
             state, test_ds['image'], test_ds['label']
         )
 
-        train_entropy = calculate_entropy(train_logits)
-        test_entropy = calculate_entropy(test_logits)
+        train_entropy, train_per_class_entropy = calculate_entropy(train_logits, train_ds['label'][epoch*config["BATCH_SIZE"]:(epoch+1)*config["BATCH_SIZE"]])
+        test_entropy, test_per_class_entropy = calculate_entropy(test_logits, test_ds['label'])
+
+        train_entropy_str = ', '.join([f'{e:.4f}' for e in train_per_class_entropy])
+        test_entropy_str = ', '.join([f'{e:.4f}' for e in test_per_class_entropy])
 
         logging.info(
-            'epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f, train_entropy: %.4f,'
-            ' test_loss: %.4f, test_accuracy: %.2f, test_entropy: %.4f'
+            'epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f, train_entropy: %.4f, train_entropy_per_class: [%s],'
+            ' test_loss: %.4f, test_accuracy: %.2f, test_entropy: %.4f, test_entropy_per_class: [%s]'
             % (
                 epoch,
                 train_loss,
                 train_accuracy * 100,
                 train_entropy,
+                train_entropy_str,
                 test_loss,
                 test_accuracy * 100,
-                test_entropy
+                test_entropy,
+                test_entropy_str
             )
         )
 
@@ -167,8 +179,15 @@ def train_and_evaluate(config) -> train_state.TrainState:
 
         metric_dict.update({'train_loss': train_loss})
         metric_dict.update({'train_accuracy': train_accuracy})
+        metric_dict.update({'entropy/train_avg': train_entropy})
         metric_dict.update({'test_loss': test_loss})
         metric_dict.update({'test_accuracy': test_accuracy})
+        metric_dict.update({'entropy/test_avg': test_entropy})
+
+        
+        for i in range(0, 10):
+            metric_dict.update({f'entropy/train_{i}': train_per_class_entropy[i]})
+            metric_dict.update({f'entropy/test_{i}': test_per_class_entropy[i]})
 
         wandb.log(metric_dict)
     return state
@@ -185,23 +204,25 @@ def evaluate_model(state, config):
         )
     
 
-    train_entropy = calculate_entropy(train_logits)
-    test_entropy = calculate_entropy(test_logits)
+    train_entropy, train_per_class_entropy = calculate_entropy(train_logits, train_ds['label'])
+    test_entropy, test_per_class_entropy = calculate_entropy(test_logits, test_ds['label'])
 
-    test_softmax_probs = jax.nn.softmax(test_logits, axis=-1)
-    test_entropy = -jnp.sum(test_softmax_probs * jnp.log(test_softmax_probs + 1e-9), axis=-1)
+    train_entropy_str = ', '.join([f'{e:.4f}' for e in train_per_class_entropy])
+    test_entropy_str = ', '.join([f'{e:.4f}' for e in test_per_class_entropy])
     
     
     logging.info(
-            'train_loss: %.4f, train_accuracy: %.2f, train_entropy: %.4f,'
-            ' test_loss: %.4f, test_accuracy: %.2f, test_entropy: %.4f'
+            'train_loss: %.4f, train_accuracy: %.2f, train_entropy: %.4f, train_entropy_per_class: [%s],'
+            ' test_loss: %.4f, test_accuracy: %.2f, test_entropy: %.4f, test_entropy_per_class: [%s]'
             % (
                 train_loss,
                 train_accuracy * 100,
                 train_entropy,
+                train_entropy_str,
                 test_loss,
                 test_accuracy * 100,
-                test_entropy
+                test_entropy,
+                test_entropy_str
             )
         )
     
