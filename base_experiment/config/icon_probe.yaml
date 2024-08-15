@@ -6,9 +6,11 @@
 "MOMENTUM": 0.9
 "OPTIMIZER": "sgd"
 
-"SAVE_MODEL": True
+"TRAIN_MODEL": True
+"SAVE_MODEL": False
+"EVAL_MODEL": False
 "MODEL_NAME_PREFIX": "probe-5k-20k-20e-sgd-"
-"MODEL_NAME_EVAL": "probe-5k-20k-20e-sgd-653d"
+"MODEL_NAME_EVAL": "probe-5k-20k-20e-sgd-bedc"
 
 
 # WandB Params

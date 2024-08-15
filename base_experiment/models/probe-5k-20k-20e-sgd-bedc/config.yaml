@@ -1,0 +1,16 @@
+BATCH_SIZE: 128
+ENTITY: signification-team
+ENV_NUM_DATAPOINTS: 5000
+EVAL_MODEL: false
+LEARNING_RATE: 0.05
+MODEL_NAME_EVAL: probe-5k-20k-20e-sgd-653d
+MODEL_NAME_PREFIX: probe-5k-20k-20e-sgd-
+MOMENTUM: 0.9
+NUM_EPOCHS: 20
+OPTIMIZER: sgd
+PROBE_NUM_DATAPOINTS_VALIDATION: 20000
+PROJECT: icon-probe
+SAVE_MODEL: true
+TRAIN_MODEL: true
+WANDB_MODE: disabled
+WANDB_NOTES: Initial testing of icon probe training.

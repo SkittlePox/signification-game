@@ -11,6 +11,7 @@ from omegaconf import OmegaConf
 import hydra
 from absl import logging
 import uuid
+import yaml
 
 from utils import to_jax
 
@@ -49,7 +50,7 @@ def apply_model(state, images, labels):
     grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
     (loss, logits), grads = grad_fn(state.params)
     accuracy = jnp.mean(jnp.argmax(logits, -1) == labels)
-    return grads, loss, accuracy
+    return logits, grads, loss, accuracy
 
 
 @jax.jit
@@ -72,13 +73,13 @@ def train_epoch(state, train_ds, batch_size, rng):
     for perm in perms:
         batch_images = train_ds['image'][perm, ...]
         batch_labels = train_ds['label'][perm, ...]
-        grads, loss, accuracy = apply_model(state, batch_images, batch_labels)
+        logits, grads, loss, accuracy = apply_model(state, batch_images, batch_labels)
         state = update_model(state, grads)
         epoch_loss.append(loss)
         epoch_accuracy.append(accuracy)
     train_loss = np.mean(epoch_loss)
     train_accuracy = np.mean(epoch_accuracy)
-    return state, train_loss, train_accuracy
+    return logits, state, train_loss, train_accuracy
 
 
 def get_dataset(config):
@@ -115,6 +116,12 @@ def create_train_state(rng, config):
     return train_state.TrainState.create(apply_fn=cnn.apply, params=params, tx=tx)
 
 
+def calculate_entropy(logits):
+    softmax_probs = jax.nn.softmax(logits, axis=-1)
+    entropies = -jnp.sum(softmax_probs * jnp.log(softmax_probs + 1e-9), axis=-1)
+    return jnp.mean(entropies)
+
+
 def train_and_evaluate(config) -> train_state.TrainState:
     """Execute model training and evaluation loop.
 
@@ -132,22 +139,27 @@ def train_and_evaluate(config) -> train_state.TrainState:
 
     for epoch in range(1, config["NUM_EPOCHS"] + 1):
         rng, input_rng = jax.random.split(rng)
-        state, train_loss, train_accuracy = train_epoch(
+        train_logits, state, train_loss, train_accuracy = train_epoch(
             state, train_ds, config["BATCH_SIZE"], input_rng
         )
-        _, test_loss, test_accuracy = apply_model(
+        test_logits, _, test_loss, test_accuracy = apply_model(
             state, test_ds['image'], test_ds['label']
         )
 
+        train_entropy = calculate_entropy(train_logits)
+        test_entropy = calculate_entropy(test_logits)
+
         logging.info(
-            'epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f, test_loss: %.4f,'
-            ' test_accuracy: %.2f'
+            'epoch:% 3d, train_loss: %.4f, train_accuracy: %.2f, train_entropy: %.4f,'
+            ' test_loss: %.4f, test_accuracy: %.2f, test_entropy: %.4f'
             % (
                 epoch,
                 train_loss,
                 train_accuracy * 100,
+                train_entropy,
                 test_loss,
                 test_accuracy * 100,
+                test_entropy
             )
         )
 
@@ -164,41 +176,51 @@ def train_and_evaluate(config) -> train_state.TrainState:
 def evaluate_model(state, config):
     train_ds, test_ds = get_dataset(config)
 
-    _, train_loss, train_accuracy = apply_model(
+    train_logits, _, train_loss, train_accuracy = apply_model(
             state, train_ds['image'], train_ds['label']
         )
 
-    _, test_loss, test_accuracy = apply_model(
+    test_logits, _, test_loss, test_accuracy = apply_model(
             state, test_ds['image'], test_ds['label']
         )
     
+
+    train_entropy = calculate_entropy(train_logits)
+    test_entropy = calculate_entropy(test_logits)
+
+    test_softmax_probs = jax.nn.softmax(test_logits, axis=-1)
+    test_entropy = -jnp.sum(test_softmax_probs * jnp.log(test_softmax_probs + 1e-9), axis=-1)
+    
+    
     logging.info(
-            'train_loss: %.4f, train_accuracy: %.2f, test_loss: %.4f,'
-            ' test_accuracy: %.2f'
+            'train_loss: %.4f, train_accuracy: %.2f, train_entropy: %.4f,'
+            ' test_loss: %.4f, test_accuracy: %.2f, test_entropy: %.4f'
             % (
-                
                 train_loss,
                 train_accuracy * 100,
+                train_entropy,
                 test_loss,
                 test_accuracy * 100,
+                test_entropy
             )
         )
     
 
 def load_model(checkpoint_name, config):
     empty_state = create_train_state(jax.random.key(0), config)
-    empty_checkpoint = {'model': empty_state, 'config': config}
-
+    empty_checkpoint = {'model': empty_state}
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     raw_restored = orbax_checkpointer.restore(checkpoint_name, item=empty_checkpoint)
     return raw_restored
 
 
 def save_model(train_state, config, model_name):
-    checkpoint = {'model': train_state, 'config': config}
+    checkpoint = {'model': train_state}
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     save_args = orbax_utils.save_args_from_target(checkpoint)
     orbax_checkpointer.save('/users/bspiegel/signification-game/base_experiment/models/'+model_name, checkpoint, save_args=save_args)
+    with open('/users/bspiegel/signification-game/base_experiment/models/'+model_name+'/config.yaml', 'w') as f:
+        yaml.dump(config, f)
 
 
 @hydra.main(version_base=None, config_path="config", config_name="icon_probe")
@@ -215,13 +237,14 @@ def train_probe(config):
         save_code=True
     )
     
-    train_state = train_and_evaluate(config)
+    if config["TRAIN_MODEL"]:
+        train_state = train_and_evaluate(config)
 
-    if config["SAVE_MODEL"]:
-        random_uuid = uuid.uuid4()
-        model_name = config["MODEL_NAME_PREFIX"]
-        model_name += str(random_uuid)[-4:]
-        save_model(train_state, config, model_name)
+        if config["SAVE_MODEL"]:
+            random_uuid = uuid.uuid4()
+            model_name = config["MODEL_NAME_PREFIX"]
+            model_name += str(random_uuid)[-4:]
+            save_model(train_state, config, model_name)
     
     if config["EVAL_MODEL"]:
         raw_restored = load_model('/users/bspiegel/signification-game/base_experiment/models/'+config["MODEL_NAME_EVAL"], config)
