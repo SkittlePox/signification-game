@@ -14,7 +14,7 @@
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "icon-probe"
 "WANDB_NOTES": "Initial testing of icon probe training."

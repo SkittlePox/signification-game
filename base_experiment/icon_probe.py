@@ -227,7 +227,9 @@ def evaluate_model(state, config):
         )
     
 
-def load_model(checkpoint_name, config):
+def load_model(checkpoint_name, config, no_train=False):
+    if no_train:
+        config = dict({"OPTIMIZER": "sgd", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001})
     empty_state = create_train_state(jax.random.key(0), config)
     empty_checkpoint = {'model': empty_state}
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()

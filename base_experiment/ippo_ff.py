@@ -18,6 +18,7 @@ from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
+import icon_probe
 from utils import get_anneal_schedule, get_train_freezing
 
 api = KaggleApi()
@@ -393,6 +394,11 @@ def make_train(config):
         speakers_stuff = [initialize_speaker(env, x_rng, config, i) for i, x_rng in enumerate(speaker_rngs)]
         _speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
 
+        # LOAD ICON PROBE
+
+        raw_restored = icon_probe.load_model('/users/bspiegel/signification-game/base_experiment/models/'+config["PROBE_MODEL_NAME"], None, no_train=True)
+        probe_train_state = raw_restored['model']
+
         # INIT ENV
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
@@ -583,6 +589,15 @@ def make_train(config):
 
             listener_optimizer_params = jnp.array([[get_optimizer_param_mean(lts.opt_state[1][0], "mu"), get_optimizer_param_mean(lts.opt_state[1][0], "nu")] for lts in new_listener_train_state])
             speaker_optimizer_params = jnp.array([[get_optimizer_param_mean(sts.opt_state[1][0], "mu"), get_optimizer_param_mean(sts.opt_state[1][0], "nu")] for sts in new_speaker_train_state])
+
+
+            ##### Evaluate iconicity probe
+
+            logits = probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images)
+            labels = jnp.arange(config["ENV_KWARGS"]["num_classes"])    # I think there needs to be multiples of this but how many depends on num speaker examples I think.
+            # TODO: More work to be done on sampling images from speakers and calculating the icon probe entropy. Also need to figure out how to report the icon accuracy as well.
+
+            icon_probe.calculate_entropy(logits, labels)
 
 
 

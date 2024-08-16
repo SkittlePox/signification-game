@@ -34,8 +34,11 @@
 "MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 
 
+"PROBE_MODEL_NAME": "probe-5k-20k-20e-sgd-bedc"
+
+
 "ENV_NAME": "simple-sig-game"
-"ENV_DATASET": 'veg'
+"ENV_DATASET": 'mnist'
 "ENV_DATASET_CATEGORIES": ["Capsicum", "Pumpkin", "Potato", "Bean", "Cauliflower", "Tomato", "Carrot", "Cabbage", "Broccoli", "Radish"]
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
@@ -43,13 +46,13 @@
   "num_listeners": 5
   "num_channels": 5
   "num_classes": 10
-  "image_dim": 100
+  "image_dim": 28
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "speaker_action_transform": "splines_weight"
-  "speaker_action_dim": 14
+  "speaker_action_transform": "splines"
+  "speaker_action_dim": 12
   "log_prob_rewards": True
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"
@@ -59,7 +62,7 @@
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5
