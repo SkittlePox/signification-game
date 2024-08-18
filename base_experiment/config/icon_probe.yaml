@@ -6,6 +6,8 @@
 "MOMENTUM": 0.9
 "OPTIMIZER": "sgd"
 
+"NUM_CLASSES": 10
+
 "TRAIN_MODEL": False
 "SAVE_MODEL": True
 "EVAL_MODEL": True

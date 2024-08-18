@@ -185,7 +185,7 @@ def train_and_evaluate(config) -> train_state.TrainState:
         metric_dict.update({'entropy/test_avg': test_entropy})
 
         
-        for i in range(0, 10):
+        for i in range(0, config["NUM_CLASSES"]):
             metric_dict.update({f'entropy/train_{i}': train_per_class_entropy[i]})
             metric_dict.update({f'entropy/test_{i}': test_per_class_entropy[i]})
 

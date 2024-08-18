@@ -28,14 +28,14 @@
 "SPEAKER_NOISE_LATENT_STDDEV": 0.05
 
 "NUM_ENVS": 1
-"NUM_STEPS": 18 # 2048
+"NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 4000
-"MINIBATCH_SIZE_LISTENER": 6 # 32 This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 6 # 128  # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 32 # 32 This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 
 
 "PROBE_MODEL_NAME": "probe-5k-20k-20e-sgd-bedc"
-"PROBE_NUM_EXAMPLES": 18 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 2048 # This must be less than or equal to "NUM_STEPS"
 
 
 "ENV_NAME": "simple-sig-game"

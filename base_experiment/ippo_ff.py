@@ -599,14 +599,8 @@ def make_train(config):
             probe_logits = probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
             probe_labels = trimmed_transition_batch.speaker_obs[:config["PROBE_NUM_EXAMPLES"]].reshape(config["PROBE_NUM_EXAMPLES"], -1)
 
-            # icon_probe.calculate_entropy(probe_logits, labels)
-
-            # TODO: Calculate probe accuracy on whole dataset
-            # TODO: Calculate probe accuracy per agent
-
-
             def wandb_callback(metrics):
-                ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step = metrics
+                ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step, p_logits, p_labels = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 llogp = tb.listener_log_prob
@@ -709,9 +703,31 @@ def make_train(config):
                     
                     metric_dict.update({"env/speaker_images": final_speaker_images})
                     metric_dict.update({"env/last_listener_obs": final_listener_images})
+
+                ##### Iconicity Probe
+
+                aggregate_probe_entropy, aggregate_probe_per_class_entropy = icon_probe.calculate_entropy(p_logits, p_labels)
+                
+                metric_dict.update({f'probe/entropy/all speakers average': aggregate_probe_entropy})
+                metric_dict.update({f'probe/entropy/all speakers class {i}': aggregate_probe_per_class_entropy[i] for i in range(config["NUM_CLASSES"])})
+                
+                # for j in range(0, config["NUM_CLASSES"]):
+                #     metric_dict.update({f'probe/entropy/all speakers class {j}': probe_per_class_entropy[j]})
+
+                for i in range(env_kwargs["num_speakers"]):
+                    probe_entropy, probe_per_class_entropy = icon_probe.calculate_entropy(p_logits[:, i, :], p_labels[:, i])
+
+                    metric_dict.update({f'probe/entropy/speaker {i} average': probe_entropy})
+                    metric_dict.update({f'probe/entropy/speaker {i} class {j}': probe_per_class_entropy[i] for j in range(config["NUM_CLASSES"])})
+
+                    # for j in range(config["NUM_CLASSES"]):
+                    #     metric_dict.update({f'probe/entropy/speaker {i} class {j}': probe_per_class_entropy[i]})
+
+
+                # TODO: Report probe accuracy!!! And entropy over accurate classes.
                 
                 wandb.log(metric_dict)
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits, probe_labels))
             
             return runner_state, update_step + 1
 
