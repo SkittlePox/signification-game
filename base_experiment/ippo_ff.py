@@ -594,10 +594,10 @@ def make_train(config):
 
             ##### Evaluate iconicity probe
 
-            speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action.reshape((len(speaker_train_state)*config["NUM_STEPS"], -1))).reshape((-1, 28, 28, 1))
+            speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, 28, 28, 1))
 
-            probe_logits = probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, len(speaker_train_state), env_kwargs["num_classes"]))
-            probe_labels = trimmed_transition_batch.speaker_obs.reshape(env_kwargs["num_steps"], -1)
+            probe_logits = probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
+            probe_labels = trimmed_transition_batch.speaker_obs[:config["PROBE_NUM_EXAMPLES"]].reshape(config["PROBE_NUM_EXAMPLES"], -1)
 
             # icon_probe.calculate_entropy(probe_logits, labels)
 
