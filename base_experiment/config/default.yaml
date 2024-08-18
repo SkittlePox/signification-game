@@ -11,8 +11,8 @@
 "OPTIMIZER_LISTENER_B2": 0.999
 
 "SPEAKER_LR_SCHEDULE": "1e-4"
-"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-6 at 200" # 2e-4 is good for conv, 1e-3 is good for dense
-"SPEAKER_TRAIN_SCHEDULE": "off then on at 200"
+"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-6 at 324" # 2e-4 is good for conv, 1e-3 is good for dense
+"SPEAKER_TRAIN_SCHEDULE": "off then on at 324"
 "LISTENER_TRAIN_SCHEDULE": "on"
 
 "LISTENER_ARCH": 'conv'
@@ -34,7 +34,7 @@
 "MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 
 "PROBE_MODEL_NAME": "probe-5k-20k-20e-sgd-bedc"
-"PROBE_NUM_EXAMPLES": 2048 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 1000 # This must be less than or equal to "NUM_STEPS"
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
@@ -55,8 +55,8 @@
   "log_prob_rewards": True
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"
-  "channel_ratio_fn": "1.0 at 200"  # E.g. "1.0 at 300", "sigmoid-custom"
-  "sigmoid_offset": 800
+  "channel_ratio_fn": "sigmoid-custom"  # E.g. "1.0 at 300", "sigmoid-custom"
+  "sigmoid_offset": 600
   "sigmoid_stretch": 5e-3
 
 
