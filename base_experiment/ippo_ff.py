@@ -397,7 +397,7 @@ def make_train(config):
 
         # LOAD ICON PROBE
         local_path = str(pathlib.Path().resolve())
-        raw_restored = icon_probe.load_model(local_path+'/base_experiment/models/'+config["PROBE_MODEL_NAME"], None, no_train=True)
+        raw_restored = icon_probe.load_model(local_path+'/models/'+config["PROBE_MODEL_NAME"], None, no_train=True)
         probe_train_state = raw_restored['model']
 
         # INIT ENV
@@ -594,13 +594,14 @@ def make_train(config):
 
             ##### Evaluate iconicity probe
 
-            speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, 28, 28, 1))
-
-            probe_logits = probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
-            probe_labels = trimmed_transition_batch.speaker_obs[:config["PROBE_NUM_EXAMPLES"]].reshape(config["PROBE_NUM_EXAMPLES"], -1)
+            def get_probe_logits():
+                speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, 28, 28, 1))
+                return probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
+            
+            probe_logits = jax.lax.cond((update_step + 1) % config["PROBE_LOGGING_ITER"] == 0, lambda _: get_probe_logits(), lambda _: jnp.zeros((config["PROBE_NUM_EXAMPLES"], env_kwargs["num_speakers"], env_kwargs["num_classes"])), operand=None)
 
             def wandb_callback(metrics):
-                ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step, p_logits, p_labels = metrics
+                ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step, p_logits = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 llogp = tb.listener_log_prob
@@ -704,30 +705,24 @@ def make_train(config):
                     metric_dict.update({"env/speaker_images": final_speaker_images})
                     metric_dict.update({"env/last_listener_obs": final_listener_images})
 
-                ##### Iconicity Probe
+                ##### Iconicity Probe Logging
 
-                aggregate_probe_entropy, aggregate_probe_per_class_entropy = icon_probe.calculate_entropy(p_logits, p_labels)
-                
-                metric_dict.update({f'probe/entropy/all speakers average': aggregate_probe_entropy})
-                metric_dict.update({f'probe/entropy/all speakers class {i}': aggregate_probe_per_class_entropy[i] for i in range(config["NUM_CLASSES"])})
-                
-                # for j in range(0, config["NUM_CLASSES"]):
-                #     metric_dict.update({f'probe/entropy/all speakers class {j}': probe_per_class_entropy[j]})
+                if (u_step + 1) % config["PROBE_LOGGING_ITER"] == 0:
+                    p_labels = tb.speaker_obs[:config["PROBE_NUM_EXAMPLES"]].reshape(config["PROBE_NUM_EXAMPLES"], -1)
 
-                for i in range(env_kwargs["num_speakers"]):
-                    probe_entropy, probe_per_class_entropy = icon_probe.calculate_entropy(p_logits[:, i, :], p_labels[:, i])
+                    aggregate_probe_entropy, aggregate_probe_per_class_entropy = icon_probe.calculate_entropy(p_logits, p_labels)
+                    
+                    metric_dict.update({f'probe/entropy/all speakers average': aggregate_probe_entropy})
+                    metric_dict.update({f'probe/entropy/all speakers class {i}': aggregate_probe_per_class_entropy[i] for i in range(env_kwargs["num_classes"])})
 
-                    metric_dict.update({f'probe/entropy/speaker {i} average': probe_entropy})
-                    metric_dict.update({f'probe/entropy/speaker {i} class {j}': probe_per_class_entropy[i] for j in range(config["NUM_CLASSES"])})
+                    for i in range(env_kwargs["num_speakers"]):
+                        probe_entropy, probe_per_class_entropy = icon_probe.calculate_entropy(p_logits[:, i, :], p_labels[:, i])
 
-                    # for j in range(config["NUM_CLASSES"]):
-                    #     metric_dict.update({f'probe/entropy/speaker {i} class {j}': probe_per_class_entropy[i]})
-
-
-                # TODO: Report probe accuracy!!! And entropy over accurate classes.
+                        metric_dict.update({f'probe/entropy/speaker {i} average': probe_entropy})
+                        metric_dict.update({f'probe/entropy/speaker {i} class {j}': probe_per_class_entropy[i] for j in range(env_kwargs["num_classes"])})
                 
                 wandb.log(metric_dict)
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits, probe_labels))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits))
             
             return runner_state, update_step + 1
 
