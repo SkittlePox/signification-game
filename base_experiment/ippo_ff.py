@@ -594,12 +594,15 @@ def make_train(config):
 
             ##### Evaluate iconicity probe
 
-            logits = probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images)
-            labels = jnp.arange(config["ENV_KWARGS"]["num_classes"])    # I think there needs to be multiples of this but how many depends on num speaker examples I think.
-            # TODO: More work to be done on sampling images from speakers and calculating the icon probe entropy. Also need to figure out how to report the icon accuracy as well.
+            speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action.reshape((len(speaker_train_state)*config["NUM_STEPS"], -1))).reshape((-1, 28, 28, 1))
 
-            icon_probe.calculate_entropy(logits, labels)
+            probe_logits = probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, len(speaker_train_state), env_kwargs["num_classes"]))
+            probe_labels = trimmed_transition_batch.speaker_obs.reshape(env_kwargs["num_steps"], -1)
 
+            # icon_probe.calculate_entropy(probe_logits, labels)
+
+            # TODO: Calculate probe accuracy on whole dataset
+            # TODO: Calculate probe accuracy per agent
 
 
             def wandb_callback(metrics):

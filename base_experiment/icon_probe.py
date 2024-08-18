@@ -272,7 +272,7 @@ def train_probe(config):
     
     if config["EVAL_MODEL"]:
         local_path = str(pathlib.Path().resolve())
-        raw_restored = load_model(local_path+'/models/'+config["MODEL_NAME_EVAL"], config)
+        raw_restored = load_model(local_path+'/base_experiment/models/'+config["MODEL_NAME_EVAL"], config)
         train_state = raw_restored['model']
 
         evaluate_model(train_state, config)
