@@ -12,7 +12,7 @@ import hydra
 from absl import logging
 import uuid
 import yaml
-
+import pathlib
 from utils import to_jax
 
 
@@ -241,8 +241,9 @@ def save_model(train_state, config, model_name):
     checkpoint = {'model': train_state}
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     save_args = orbax_utils.save_args_from_target(checkpoint)
-    orbax_checkpointer.save('/users/bspiegel/signification-game/base_experiment/models/'+model_name, checkpoint, save_args=save_args)
-    with open('/users/bspiegel/signification-game/base_experiment/models/'+model_name+'/config.yaml', 'w') as f:
+    local_path = str(pathlib.Path().resolve())
+    orbax_checkpointer.save(local_path+'/base_experiment/models/'+model_name, checkpoint, save_args=save_args)
+    with open(local_path+'/base_experiment/models/'+model_name+'/config.yaml', 'w') as f:
         yaml.dump(config, f)
 
 
@@ -270,7 +271,8 @@ def train_probe(config):
             save_model(train_state, config, model_name)
     
     if config["EVAL_MODEL"]:
-        raw_restored = load_model('/users/bspiegel/signification-game/base_experiment/models/'+config["MODEL_NAME_EVAL"], config)
+        local_path = str(pathlib.Path().resolve())
+        raw_restored = load_model(local_path+'/models/'+config["MODEL_NAME_EVAL"], config)
         train_state = raw_restored['model']
 
         evaluate_model(train_state, config)

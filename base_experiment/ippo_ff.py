@@ -18,6 +18,7 @@ from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
+import pathlib
 import icon_probe
 from utils import get_anneal_schedule, get_train_freezing
 
@@ -395,8 +396,8 @@ def make_train(config):
         _speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
 
         # LOAD ICON PROBE
-
-        raw_restored = icon_probe.load_model('/users/bspiegel/signification-game/base_experiment/models/'+config["PROBE_MODEL_NAME"], None, no_train=True)
+        local_path = str(pathlib.Path().resolve())
+        raw_restored = icon_probe.load_model(local_path+'/base_experiment/models/'+config["PROBE_MODEL_NAME"], None, no_train=True)
         probe_train_state = raw_restored['model']
 
         # INIT ENV
