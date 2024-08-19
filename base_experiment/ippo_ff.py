@@ -287,10 +287,15 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
         loss_actor = loss_actor.sum() / (alive.sum() + 1e-8)
         entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
+        # Calculate L2 regularization (sum of squares of parameters)
+        l2_penalty = sum(jnp.sum(jnp.square(param)) for param in jax.tree.leaves(params))
+        l2_reg = config["L2_REG_COEF_LISTENER"] * l2_penalty
+
         total_loss = (
                 loss_actor
                 + config["VF_COEF"] * value_loss
                 - config["ENT_COEF_LISTENER"] * entropy
+                + l2_reg
         )
         return total_loss, (value_loss, loss_actor, entropy)
  
@@ -347,10 +352,15 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
         loss_actor = loss_actor.sum() / (alive.sum() + 1e-8)
         entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
+        # Calculate L2 regularization (sum of squares of parameters)
+        l2_penalty = sum(jnp.sum(jnp.square(param)) for param in jax.tree.leaves(params))
+        l2_reg = config["L2_REG_COEF_SPEAKER"] * l2_penalty
+
         total_loss = (
                 loss_actor
                 + config["VF_COEF"] * value_loss
                 - config["ENT_COEF_SPEAKER"] * entropy
+                + l2_reg
         )
         return total_loss, (value_loss, loss_actor, entropy)
     

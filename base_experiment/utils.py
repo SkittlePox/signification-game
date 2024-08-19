@@ -96,6 +96,7 @@ def get_train_freezing(phrase):
     
 
 def get_anneal_schedule(description, num_minibatches=1):
+    description = str(description)
     segments = description.split()
     changes = []
     i = 0
