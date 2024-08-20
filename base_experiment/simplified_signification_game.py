@@ -159,6 +159,12 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             # Return reward based on whether the listener was correct. These are indexed by channel.
             speaker_channel_reward = jnp.where(listener_correct, self.speaker_reward_success, self.speaker_reward_failure)
             speaker_channel_reward *= (listener_confidence**2) ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
+
+            # TODO: Also factor in any environment penalties
+            # Do we want to multiply the reward by the penalty or subtract it? If we subtract it it could mess with exploration. We should multiply it so that it appears later. Only multiply the positive rewards.
+
+            # speaker_penalties = jnp.ones_like(speaker_channel_reward)
+
             listener_channel_reward = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
 
             return speaker_index, listener_index, speaker_channel_reward, listener_channel_reward
