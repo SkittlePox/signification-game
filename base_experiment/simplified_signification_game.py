@@ -8,7 +8,7 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-from utils import get_channel_ratio_fn, get_speaker_action_transform
+from utils import get_channel_ratio_fn, get_speaker_action_transform, get_speaker_action_penalty
 import math
 
 from utils import to_jax
@@ -43,7 +43,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_action_penalty: Union[Callable, str] = 'no penalty', gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -51,6 +51,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.num_classes = num_classes
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else lambda _: channel_ratio_fn if isinstance(channel_ratio_fn, int) else channel_ratio_fn
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
+        self.speaker_action_penalty = get_speaker_action_penalty(speaker_action_penalty, image_dim) if isinstance(speaker_action_penalty, str) else speaker_action_penalty
         self.stored_env_images = dataset[0]
         self.stored_env_labels = dataset[1]
         self.image_dim = image_dim
@@ -163,7 +164,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             # TODO: Also factor in any environment penalties
             # Do we want to multiply the reward by the penalty or subtract it? If we subtract it it could mess with exploration. We should multiply it so that it appears later. Only multiply the positive rewards.
 
-            # speaker_penalties = jnp.ones_like(speaker_channel_reward)
+            speaker_penalties = self.speaker_action_penalty(state.speaker_images)
+
+            # This will be an array of values between 0 and 1 that we will multiply to the speaker rewards, however, the channels are not indexed exactly right.
+            # TODO: Implement speaker_action_penalty in utils. It should take the array of speaker_images and return an array of values.
+            # TODO: Figure out how to route those speaker penalties to the proper speaker. Something to do with speaker_index I think. It may actually be best to do this calculation outside of this function, e.g. after line 177
 
             listener_channel_reward = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
 

@@ -173,6 +173,11 @@ def get_channel_ratio_fn(phrase, params):
         else:
             return lambda x: float(phrase)
         
+
+def get_speaker_action_penalty(fn_name, image_dim):
+    pass
+
+        
 def get_speaker_action_transform(fn_name, image_dim):
     @jax.vmap
     def identity(actions: jnp.array):
@@ -338,6 +343,7 @@ def get_speaker_action_transform(fn_name, image_dim):
         gaussian_array = paint_normalized_gaussians_on_array(array_shape, gaussians_params)
         return gaussian_array
 
+    # TODO: Make a new function, paint_multiple_splines_and_center
     @jax.vmap
     def paint_multiple_splines(all_spline_params: jnp.array):
         """Paint multiple splines on a single canvas. Requires speaker_action_dim be a multiple of 6."""
