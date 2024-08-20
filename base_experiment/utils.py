@@ -174,8 +174,15 @@ def get_channel_ratio_fn(phrase, params):
             return lambda x: float(phrase)
         
 
-def get_speaker_action_penalty(fn_name, image_dim):
-    pass
+@jax.vmap
+def speaker_penalty_whitesum_fn(images: jnp.array):
+    # More white in the image corresponds to a higher penalty. Bounded between 0 and 1.
+    return jnp.sum(images) / (images.shape[0] * images.shape[1])
+
+@jax.vmap
+def speaker_penalty_curve_fn(images: jnp.array):
+    # I'm not sure how to calculate this tbh, I think I need the speaker actions, not the speaker images!
+    return jnp.sum(images) / (images.shape[0] * images.shape[1])
 
         
 def get_speaker_action_transform(fn_name, image_dim):

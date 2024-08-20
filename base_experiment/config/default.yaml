@@ -55,8 +55,8 @@
   "speaker_action_transform": "splines"
   "speaker_action_dim": 12
   "log_prob_rewards": True
-  "whitesum_penalty_coef": 1e-3
-  "curve_penalty_coef": 1e-3
+  "speaker_whitesum_penalty_coef": 0.25
+  "speaker_curve_penalty_coef": 0.25
   "center_listener_obs": False
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"

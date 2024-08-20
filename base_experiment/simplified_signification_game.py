@@ -8,7 +8,7 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-from utils import get_channel_ratio_fn, get_speaker_action_transform, get_speaker_action_penalty
+from utils import get_channel_ratio_fn, get_speaker_action_transform, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
 import math
 
 from utils import to_jax
@@ -43,7 +43,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_action_penalty: Union[Callable, str] = 'no penalty', gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -51,7 +51,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.num_classes = num_classes
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else lambda _: channel_ratio_fn if isinstance(channel_ratio_fn, int) else channel_ratio_fn
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
-        self.speaker_action_penalty = get_speaker_action_penalty(speaker_action_penalty, image_dim) if isinstance(speaker_action_penalty, str) else speaker_action_penalty
+        self.speaker_whitesum_penalty_coef = speaker_whitesum_penalty_coef
+        self.speaker_curve_penalty_coef = speaker_curve_penalty_coef
         self.stored_env_images = dataset[0]
         self.stored_env_labels = dataset[1]
         self.image_dim = image_dim
@@ -161,15 +162,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_channel_reward = jnp.where(listener_correct, self.speaker_reward_success, self.speaker_reward_failure)
             speaker_channel_reward *= (listener_confidence**2) ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
 
-            # TODO: Also factor in any environment penalties
-            # Do we want to multiply the reward by the penalty or subtract it? If we subtract it it could mess with exploration. We should multiply it so that it appears later. Only multiply the positive rewards.
-
-            speaker_penalties = self.speaker_action_penalty(state.speaker_images)
-
-            # This will be an array of values between 0 and 1 that we will multiply to the speaker rewards, however, the channels are not indexed exactly right.
-            # TODO: Implement speaker_action_penalty in utils. It should take the array of speaker_images and return an array of values.
-            # TODO: Figure out how to route those speaker penalties to the proper speaker. Something to do with speaker_index I think. It may actually be best to do this calculation outside of this function, e.g. after line 177
-
             listener_channel_reward = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
 
             return speaker_index, listener_index, speaker_channel_reward, listener_channel_reward
@@ -190,22 +182,26 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             new_listener_rewards = listener_rewards.at[listener_indices[loop_idx]].add(listener_reward)
             return new_speaker_rewards, new_listener_rewards, speaker_indices, listener_indices, speaker_channel_rewards, listener_channel_rewards
 
-        speaker_rewards_final, listener_rewards_final, _, _, _, _ = jax.lax.fori_loop(0, self.num_channels, update_rewards, initial_rewards_tuple)
-        speaker_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_speakers + self.num_channels), speaker_rewards_final)
-        # listener_rewards_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_listeners), listener_rewards_final)
+        speaker_rewards_near_final, listener_rewards_final, _, _, _, _ = jax.lax.fori_loop(0, self.num_channels, update_rewards, initial_rewards_tuple)
+        speaker_rewards_near_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_speakers + self.num_channels), speaker_rewards_near_final)
 
-        # speaker_rewards_final = lax.stop_gradient(speaker_rewards_final)
-        # listener_rewards_final = lax.stop_gradient(listener_rewards_final)
+        # Calculate penalties for whitesum and curve and multiply them by their associated weights
+        speaker_whitesum_penalty = speaker_penalty_whitesum_fn(state.speaker_images)
+        speaker_curve_penalty = speaker_penalty_curve_fn(state.previous_speaker_actions) # TODO: This is not going to work. We need to track previous actions for sure.
+        # speaker_penalties = (1 - (1 - speaker_whitesum_penalty) * self.speaker_whitesum_penalty_coef) * (1 - (1 - speaker_curve_penalty) * self.speaker_curve_penalty_coef)
+        speaker_penalties = (speaker_whitesum_penalty * self.speaker_whitesum_penalty_coef + speaker_curve_penalty * self.speaker_curve_penalty_coef) / 2 + 1
+
+        # Apply the penalties
+        speaker_penalties = jnp.pad(speaker_penalties, (0, self.num_channels), constant_values=1.0)
+        speaker_rewards_final = jnp.where(speaker_rewards_near_final > 0,
+                                          speaker_rewards_near_final * speaker_penalties,
+                                          speaker_rewards_near_final)
 
         rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
         rewards["__all__"] = sum(rewards.values())
 
-
         speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.channel_map[:, 0]).astype(jnp.int32)
         listener_alives = jnp.isin(jnp.arange(self.num_listeners), state.channel_map[:, 1]).astype(jnp.int32)
-
-        # speaker_alives = lax.stop_gradient(speaker_alives)
-        # listener_alives = lax.stop_gradient(listener_alives)
 
         alives = {**{agent: speaker_alives[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_alives[i] for i, agent in enumerate(self.listener_agents)}}
         # alives = {**{agent: 1 if i in state.channel_map[:, 0] else 0 for i, agent in enumerate(self.speaker_agents)}, **{agent: 1 if i in state.channel_map[:, 1] else 0 for i, agent in enumerate(self.listener_agents)}}
@@ -453,7 +449,7 @@ def test_mnist_signification_game():
     key = jax.random.PRNGKey(7)
     key, key_reset, key_act, key_step = jax.random.split(key, 4)
     
-    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn=ret_0, dataset=(images, labels), image_dim=28, speaker_action_transform='image')
+    env = SimplifiedSignificationGame(num_speakers, num_listeners, num_channels, num_classes, channel_ratio_fn="all_speakers", dataset=(images, labels), image_dim=28, speaker_action_transform='image', speaker_action_penalty='whitesum')
     obs, state = env.reset(key_reset, epoch=10, as_dict=True)
     
     print(list(obs.keys()))
