@@ -20,7 +20,7 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
 import pathlib
 import icon_probe
-from utils import get_anneal_schedule, get_train_freezing
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
 
 api = KaggleApi()
 api.authenticate()
@@ -602,13 +602,14 @@ def make_train(config):
             speaker_optimizer_params = jnp.array([[get_optimizer_param_mean(sts.opt_state[1][0], "mu"), get_optimizer_param_mean(sts.opt_state[1][0], "nu")] for sts in new_speaker_train_state])
 
 
-            ##### Evaluate iconicity probe
+            ##### Evaluate iconicity probe and action penalties
 
             def get_probe_logits():
                 speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, 28, 28, 1))
+                # I need to calculate the whitesum penalty based on the speaker_images. I don't know what shape they are
                 return probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
             
-            probe_logits = jax.lax.cond((update_step + 1) % config["PROBE_LOGGING_ITER"] == 0, lambda _: get_probe_logits(), lambda _: jnp.zeros((config["PROBE_NUM_EXAMPLES"], env_kwargs["num_speakers"], env_kwargs["num_classes"])), operand=None)
+            probe_logits = jax.lax.cond((update_step + 1 - 1) % config["PROBE_LOGGING_ITER"] == 0, lambda _: get_probe_logits(), lambda _: jnp.zeros((config["PROBE_NUM_EXAMPLES"], env_kwargs["num_speakers"], env_kwargs["num_classes"])), operand=None)
 
             def wandb_callback(metrics):
                 ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step, p_logits = metrics
@@ -730,6 +731,11 @@ def make_train(config):
 
                         metric_dict.update({f'probe/entropy/speaker {i} average': probe_entropy})
                         metric_dict.update({f'probe/entropy/speaker {i} class {j}': probe_per_class_entropy[i] for j in range(env_kwargs["num_classes"])})
+
+                ##### Whitesum and Curvature Penalties
+                # speaker_actions
+
+                # metric_dict.update()
                 
                 wandb.log(metric_dict)
             jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits))

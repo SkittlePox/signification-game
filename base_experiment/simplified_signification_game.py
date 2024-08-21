@@ -36,6 +36,7 @@ class State:
     previous_speaker_labels: chex.Array  # [num_classes] * num_speakers
 
     previous_speaker_images: chex.Array  # [image_size] * num_speakers
+    previous_speaker_actions: chex.Array # [num_speakers] * speaker_action_dim
 
     iteration: int
     epoch: int
@@ -43,12 +44,13 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
         self.num_channels = num_channels    # We expect num_listeners to be equal to num_channels
         self.num_classes = num_classes
+        self.speaker_action_dim = speaker_action_dim
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else lambda _: channel_ratio_fn if isinstance(channel_ratio_fn, int) else channel_ratio_fn
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.speaker_whitesum_penalty_coef = speaker_whitesum_penalty_coef
@@ -187,14 +189,14 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         # Calculate penalties for whitesum and curve and multiply them by their associated weights
         speaker_whitesum_penalty = speaker_penalty_whitesum_fn(state.speaker_images)
-        speaker_curve_penalty = speaker_penalty_curve_fn(state.previous_speaker_actions) # TODO: This is not going to work. We need to track previous actions for sure.
+        speaker_curve_penalty = speaker_penalty_curve_fn(state.previous_speaker_actions)
         # speaker_penalties = (1 - (1 - speaker_whitesum_penalty) * self.speaker_whitesum_penalty_coef) * (1 - (1 - speaker_curve_penalty) * self.speaker_curve_penalty_coef)
-        speaker_penalties = (speaker_whitesum_penalty * self.speaker_whitesum_penalty_coef + speaker_curve_penalty * self.speaker_curve_penalty_coef) / 2 + 1
+        speaker_penalties = speaker_whitesum_penalty * self.speaker_whitesum_penalty_coef + speaker_curve_penalty * self.speaker_curve_penalty_coef
 
         # Apply the penalties
         speaker_penalties = jnp.pad(speaker_penalties, (0, self.num_channels), constant_values=1.0)
         speaker_rewards_final = jnp.where(speaker_rewards_near_final > 0,
-                                          speaker_rewards_near_final * speaker_penalties,
+                                          speaker_rewards_near_final + speaker_penalties,
                                           speaker_rewards_near_final)
 
         rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
@@ -259,6 +261,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             previous_speaker_labels=state.speaker_labels,
 
             previous_speaker_images=state.speaker_images,
+            previous_speaker_actions=speaker_actions,
 
             iteration=state.iteration + 1,
             epoch=state.epoch,
@@ -320,6 +323,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             previous_speaker_labels=jnp.zeros_like(next_speaker_labels),
 
             previous_speaker_images=jnp.zeros((max(self.num_speakers, 1), self.image_dim, self.image_dim), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function
+            previous_speaker_actions=jnp.zeros((self.num_speakers, self.speaker_action_dim)),
 
             iteration=0,
             epoch=epoch,

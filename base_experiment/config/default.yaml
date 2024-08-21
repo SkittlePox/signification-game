@@ -31,12 +31,12 @@
 
 "NUM_ENVS": 1
 "NUM_STEPS": 2048 # 2048
-"UPDATE_EPOCHS": 4000
+"UPDATE_EPOCHS": 3000
 "MINIBATCH_SIZE_LISTENER": 32 # 32 This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 
 "PROBE_MODEL_NAME": "probe-5k-20k-20e-sgd-bedc"
-"PROBE_NUM_EXAMPLES": 1000 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 500 # This must be less than or equal to "NUM_STEPS"
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
@@ -55,7 +55,7 @@
   "speaker_action_transform": "splines"
   "speaker_action_dim": 12
   "log_prob_rewards": True
-  "speaker_whitesum_penalty_coef": 0.25
+  "speaker_whitesum_penalty_coef": 2.0
   "speaker_curve_penalty_coef": 0.25
   "center_listener_obs": False
   "gaussian_noise_stddev": 0.05

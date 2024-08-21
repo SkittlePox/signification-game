@@ -180,9 +180,9 @@ def speaker_penalty_whitesum_fn(images: jnp.array):
     return jnp.sum(images) / (images.shape[0] * images.shape[1])
 
 @jax.vmap
-def speaker_penalty_curve_fn(images: jnp.array):
-    # I'm not sure how to calculate this tbh, I think I need the speaker actions, not the speaker images!
-    return jnp.sum(images) / (images.shape[0] * images.shape[1])
+def speaker_penalty_curve_fn(speaker_actions: jnp.array):
+    # Some measure of curvature, I'm not sure.
+    return 0.0
 
         
 def get_speaker_action_transform(fn_name, image_dim):
