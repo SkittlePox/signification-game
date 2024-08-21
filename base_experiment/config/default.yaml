@@ -31,7 +31,7 @@
 
 "NUM_ENVS": 1
 "NUM_STEPS": 2048 # 2048
-"UPDATE_EPOCHS": 3000
+"UPDATE_EPOCHS": 4000
 "MINIBATCH_SIZE_LISTENER": 32 # 32 This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 128 # 128  # This must be a whole divisor of NUM_STEPS
 
@@ -66,7 +66,7 @@
 
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5

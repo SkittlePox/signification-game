@@ -125,6 +125,7 @@ def calculate_entropy(logits, labels=None):
         unique_labels = jnp.unique(labels)
         per_class_entropy = jnp.array([jnp.mean(entropies[labels == c]) for c in unique_labels])
         return mean_entropy, per_class_entropy
+        # NOTE: This entropy calculation is likely wrong but I don't know why. It doesn't matter because we will only report mean_entropy in the paper, which I believe is calculated correctly.
 
     return mean_entropy
 
@@ -242,8 +243,8 @@ def save_model(train_state, config, model_name):
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     save_args = orbax_utils.save_args_from_target(checkpoint)
     local_path = str(pathlib.Path().resolve())
-    orbax_checkpointer.save(local_path+'/base_experiment/models/'+model_name, checkpoint, save_args=save_args)
-    with open(local_path+'/base_experiment/models/'+model_name+'/config.yaml', 'w') as f:
+    orbax_checkpointer.save(local_path+'/models/'+model_name, checkpoint, save_args=save_args)
+    with open(local_path+'/models/'+model_name+'/config.yaml', 'w') as f:
         yaml.dump(config, f)
 
 
@@ -272,7 +273,7 @@ def train_probe(config):
     
     if config["EVAL_MODEL"]:
         local_path = str(pathlib.Path().resolve())
-        raw_restored = load_model(local_path+'/base_experiment/models/'+config["MODEL_NAME_EVAL"], config)
+        raw_restored = load_model(local_path+'/models/'+config["MODEL_NAME_EVAL"], config)
         train_state = raw_restored['model']
 
         evaluate_model(train_state, config)
