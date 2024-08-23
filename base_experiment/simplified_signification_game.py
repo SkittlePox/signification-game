@@ -194,7 +194,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         speaker_penalties = speaker_whitesum_penalty * self.speaker_whitesum_penalty_coef + speaker_curve_penalty * self.speaker_curve_penalty_coef
 
         # Apply the penalties
-        speaker_penalties = jnp.pad(speaker_penalties, (0, self.num_channels), constant_values=1.0)
+        speaker_penalties = jnp.pad(speaker_penalties, (0, self.num_channels), constant_values=0.0)
         speaker_rewards_final = jnp.where(speaker_rewards_near_final > 0,
                                           speaker_rewards_near_final + speaker_penalties,
                                           speaker_rewards_near_final)
@@ -310,7 +310,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             next_env_labels=next_env_labels,
             next_speaker_labels=next_speaker_labels,
 
-            channel_map=next_channel_map,   # If we don't do this we get strange rewards
+            channel_map=next_channel_map,
             env_images=jnp.zeros_like(next_env_images),
             env_labels=jnp.zeros_like(next_env_labels),
             speaker_labels=jnp.zeros_like(next_speaker_labels),
