@@ -57,7 +57,7 @@
   "log_prob_rewards": True
   "speaker_whitesum_penalty_coef": 0.5
   "speaker_curve_penalty_coef": 0.25
-  "center_listener_obs": False
+  "center_listener_obs": True
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"
   "channel_ratio_fn": "sigmoid-custom"  # E.g. "1.0 at 300", "sigmoid-custom"

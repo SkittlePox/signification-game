@@ -20,7 +20,7 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
 import pathlib
 import icon_probe
-from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs
 
 api = KaggleApi()
 api.authenticate()
@@ -169,12 +169,16 @@ def get_speaker_examples(runner_state, env, config):
     _, speaker_train_states, log_env_state, obs, rng = runner_state
     env_rngs = jax.random.split(rng, len(speaker_train_states) * config["SPEAKER_EXAMPLE_NUM"])
     speaker_obs = jnp.arange(config["ENV_KWARGS"]["num_classes"])
+    center_listener_obs = config["ENV_KWARGS"]["center_listener_obs"]
     speaker_outputs = [[execute_individual_speaker(env_rngs[j*i+j], speaker_train_states[i], speaker_obs) for j in range(config["SPEAKER_EXAMPLE_NUM"])]
                        for i in range(config["ENV_KWARGS"]["num_speakers"])]
     speaker_outputs = [item for row in speaker_outputs for item in row]
     speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, config["ENV_KWARGS"]["speaker_action_dim"])
     speaker_action = speaker_action.reshape((config["ENV_KWARGS"]["num_speakers"] * len(speaker_obs) * config["SPEAKER_EXAMPLE_NUM"], -1))
-    speaker_images = env._env.speaker_action_transform(speaker_action).reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
+    speaker_images = env._env.speaker_action_transform(speaker_action)
+    if center_listener_obs:
+        speaker_images = center_obs(speaker_images)
+    speaker_images = speaker_images.reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
     return speaker_images
 
 def env_step(runner_state, env, config):
@@ -578,7 +582,9 @@ def make_train(config):
 
             runner_state = (new_listener_train_state, new_speaker_train_state, log_env_state, last_obs, next_rng)
 
-            ########## Below is just for logging
+            
+            ########################################################
+            ######################### Below is just for logging
 
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
             speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])   # I think this is the only use of the outputs
@@ -586,7 +592,11 @@ def make_train(config):
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
             speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
-            speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1))).reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # NOTE: This code is not robust to more than 1 env
+            speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1)))
+            if env_kwargs["center_listener_obs"]:
+                speaker_images = center_obs(speaker_images)
+            speaker_images = speaker_images.reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # NOTE: This code is not robust to more than 1 env
+            
 
             def get_optimizer_param_mean(opt_state, param_name):    # Assumes Adam optimizer!
                 # Extract the specified parameter pytree
@@ -600,6 +610,9 @@ def make_train(config):
 
             listener_optimizer_params = jnp.array([[get_optimizer_param_mean(lts.opt_state[1][0], "mu"), get_optimizer_param_mean(lts.opt_state[1][0], "nu")] for lts in new_listener_train_state])
             speaker_optimizer_params = jnp.array([[get_optimizer_param_mean(sts.opt_state[1][0], "mu"), get_optimizer_param_mean(sts.opt_state[1][0], "nu")] for sts in new_speaker_train_state])
+
+
+            # TODO: Calculate and log weight magnitude!
 
 
             ##### Evaluate iconicity probe and action penalties

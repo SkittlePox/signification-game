@@ -11,7 +11,7 @@ from gymnax.environments.spaces import Discrete, Box
 from utils import get_channel_ratio_fn, get_speaker_action_transform, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
 import math
 
-from utils import to_jax
+from utils import to_jax, center_obs
 
 
 @struct.dataclass
@@ -44,7 +44,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -65,6 +65,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.log_prob_rewards = log_prob_rewards
         self.gaussian_noise_stddev = gaussian_noise_stddev
         self.speaker_assignment_method = speaker_assignment_method
+        self.center_listener_obs = center_listener_obs
         self.kwargs = kwargs
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
@@ -242,6 +243,10 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         listeners = jax.lax.slice(jax.random.permutation(k1, self.num_listeners).reshape((-1, 1)), [0, 0], [self.num_channels, 1])
         next_channel_map = jnp.hstack((speakers, listeners))
 
+        speaker_images_for_new_state = self.speaker_action_transform(speaker_actions)
+        if self.center_listener_obs:
+            speaker_images_for_new_state = center_obs(speaker_images_for_new_state)
+
         state = State(
             next_channel_map=next_channel_map,
             next_env_images=next_env_images,
@@ -253,7 +258,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             env_labels=state.next_env_labels,
             speaker_labels=state.next_speaker_labels,
 
-            speaker_images=self.speaker_action_transform(speaker_actions),
+            speaker_images=speaker_images_for_new_state,
 
             previous_channel_map=state.channel_map,
             previous_env_images=state.env_images,

@@ -7,6 +7,7 @@ import numpy as np
 import math
 
 
+
 def to_jax(dataset, num_datapoints=100):
     images = []
     labels = []
@@ -183,6 +184,24 @@ def speaker_penalty_whitesum_fn(images: jnp.array):
 def speaker_penalty_curve_fn(speaker_actions: jnp.array):
     # Some measure of curvature, I'm not sure.
     return 0.0
+
+@jax.vmap
+def center_obs(image: jnp.array):
+    image_shape = image.shape 
+    center = jnp.array(image_shape) / 2  # Center of the image
+
+    # Compute the center of mass
+    coords = jnp.meshgrid(jnp.arange(image_shape[0]), jnp.arange(image_shape[1]), indexing='ij')
+    coords = jnp.array(coords)
+    center_of_mass = jnp.sum(coords * image[None, :, :], axis=(1, 2)) / jnp.sum(image)
+
+    # Compute the translation
+    translation = center - center_of_mass
+    
+    # Shift the image based on the computed translation
+    recentered_image = jax.image.scale_and_translate(image, image_shape, (0, 1), jnp.array([1.0, 1.0]), translation, method="linear")
+    
+    return recentered_image
 
         
 def get_speaker_action_transform(fn_name, image_dim):
@@ -466,8 +485,17 @@ def get_speaker_action_transform(fn_name, image_dim):
 
 if __name__ == "__main__":
     # Step 1: Download MNIST Dataset
-    mnist = datasets.MNIST(root='/tmp/mnist/', download=True)
+    # mnist = datasets.MNIST(root='/tmp/mnist/', download=True)
 
-    # Step 2: Convert to Jax arrays
-    images, labels = to_jax(mnist, num_datapoints=100)
-    print(images.shape)
+    # # Step 2: Convert to Jax arrays
+    # images, labels = to_jax(mnist, num_datapoints=100)
+    # print(images.shape)
+
+    image = np.zeros((1, 28, 28))
+
+    image[0][5][5] = 100
+
+    image = jnp.array(image)
+
+    new_image = center_obs(image)
+    print(new_image)
