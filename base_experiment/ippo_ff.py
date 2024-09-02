@@ -411,7 +411,8 @@ def make_train(config):
 
         # LOAD ICON PROBE
         local_path = str(pathlib.Path().resolve())
-        raw_restored = icon_probe.load_model(local_path+'/models/'+config["PROBE_MODEL_NAME"], None, no_train=True)
+        model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+        raw_restored = icon_probe.load_model(local_path+model_path_str+config["PROBE_MODEL_NAME"], None, no_train=True)
         probe_train_state = raw_restored['model']
 
         # INIT ENV

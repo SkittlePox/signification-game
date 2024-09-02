@@ -56,7 +56,7 @@
   "speaker_action_dim": 12
   "log_prob_rewards": True
   "speaker_whitesum_penalty_coef": 0.5
-  "speaker_curve_penalty_coef": 0.25
+  "speaker_curve_penalty_coef": 1.0
   "center_listener_obs": True
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"
@@ -66,7 +66,7 @@
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5
@@ -74,3 +74,5 @@
 "SPEAKER_EXAMPLE_DEBUG": False
 "PROBE_LOGGING_ITER": 1
 "WANDB_NOTES": "Trying an abbreviated speaker introduction timeline."
+
+"DEBUGGER": False

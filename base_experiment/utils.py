@@ -182,8 +182,42 @@ def speaker_penalty_whitesum_fn(images: jnp.array):
 
 @jax.vmap
 def speaker_penalty_curve_fn(speaker_actions: jnp.array):
-    # Some measure of curvature, I'm not sure.
-    return 0.0
+    @jax.vmap
+    def bezier_curvature(spline_params: jnp.array):
+        """
+        Calculate a scalar value representing the "curvedness" of the Bézier spline.
+        
+        Args:
+        P0, P1, P2 : numpy arrays of shape (2,)
+            Control points of the Bézier spline, normalized between 0 and 1.
+        
+        Returns:
+        curvature : float
+            A scalar value representing the curvedness of the spline.
+        """
+        P0, P1, P2 = spline_params[0:2], spline_params[2:4], spline_params[4:6]
+        # Vector from P0 to P2
+        P0_P2 = P2 - P0
+        
+        # Vector from P0 to P1
+        P0_P1 = P1 - P0
+        
+        # Project P0_P1 onto P0_P2 to find the closest point on the line P0P2 to P1
+        proj_length = jnp.dot(P0_P1, P0_P2) / jnp.dot(P0_P2, P0_P2)
+        closest_point = P0 + proj_length * P0_P2
+        
+        # Distance from P1 to the closest point on the line
+        distance_to_line = jnp.linalg.norm(P1 - closest_point)
+        
+        # Normalize the curvature by the length of the line segment P0P2
+        line_length = jnp.linalg.norm(P0_P2)
+        curvature = distance_to_line / line_length
+        
+        return jnp.nan_to_num(curvature)
+
+    curve_penalty_per_spline = bezier_curvature(speaker_actions.reshape(-1, 6))
+
+    return jnp.average(curve_penalty_per_spline, axis=0)
 
 @jax.vmap
 def center_obs(image: jnp.array):
