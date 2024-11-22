@@ -44,7 +44,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, symmetric_rewards: bool = True, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -66,6 +66,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.gaussian_noise_stddev = gaussian_noise_stddev
         self.speaker_assignment_method = speaker_assignment_method
         self.center_listener_obs = center_listener_obs
+        self.symmetric_rewards = symmetric_rewards
         self.kwargs = kwargs
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
@@ -165,7 +166,9 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_channel_reward = jnp.where(listener_correct, self.speaker_reward_success, self.speaker_reward_failure)
             speaker_channel_reward *= (listener_confidence**2) ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
 
-            listener_channel_reward = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
+            listener_channel_reward_symmetric = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
+            listener_channel_reward_asymmetric = jnp.ones_like(listener_correct) * self.listener_reward_failure
+            listener_channel_reward = jnp.where(self.symmetric_rewards, listener_channel_reward_symmetric, listener_channel_reward_asymmetric)
 
             return speaker_index, listener_index, speaker_channel_reward, listener_channel_reward
 
