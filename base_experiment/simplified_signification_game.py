@@ -167,7 +167,15 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_channel_reward *= (listener_confidence**2) ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
 
             listener_channel_reward_symmetric = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
-            listener_channel_reward_asymmetric = jnp.ones_like(listener_correct) * self.listener_reward_failure
+
+            # Calculating listener rewards is different in the asymmetric setting. The easiest way to do this is to re-calculate listener_correct
+            # The right way to do it would be to zero-out the listener rewards in the calculated listener_channel_reward, but that would require some special calculation of indices.
+            # Taking the quick are dirty route.
+
+            label2 = jnp.where(is_speaker, -1, label)   # Forcing a wrong label. labels are never negative.
+            listener_correct2 = (listener_actions[listener_index] == label2).astype(jnp.int32)
+            listener_channel_reward_asymmetric = jnp.where(listener_correct2, self.listener_reward_success, self.listener_reward_failure)
+
             listener_channel_reward = jnp.where(self.symmetric_rewards, listener_channel_reward_symmetric, listener_channel_reward_asymmetric)
 
             return speaker_index, listener_index, speaker_channel_reward, listener_channel_reward
