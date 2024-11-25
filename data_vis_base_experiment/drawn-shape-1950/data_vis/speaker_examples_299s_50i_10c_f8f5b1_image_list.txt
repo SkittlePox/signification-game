@@ -1,0 +1,13 @@
+start_epoch: 299
+interval_epoch: 50
+count: 10
+speaker_examples_299_b4fb7d76409125c0a54f.png
+speaker_examples_349_097a2650bdc93e3715f8.png
+speaker_examples_399_a56f0aa2b43e9101ae17.png
+speaker_examples_449_d5beebc8d7a5eaf92f59.png
+speaker_examples_499_2089d198701f928df5fb.png
+speaker_examples_549_66f86fe7816f89e0b8dd.png
+speaker_examples_599_c7dd5c42a038126170dd.png
+speaker_examples_649_ff1dd1e8063d06307909.png
+speaker_examples_699_7646ed8bc5b964222aa0.png
+speaker_examples_749_bf7d765b4ef9e44f04e5.png

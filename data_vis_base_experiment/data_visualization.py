@@ -59,4 +59,4 @@ def make_speaker_example_graphic(directory, start_epoch=299, interval_epoch=20, 
 
 if __name__=="__main__":
     # download_speaker_examples(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
-    make_speaker_example_graphic(directory="./drawn-shape-1950/", start_epoch=299, interval_epoch=25, count=20)
+    make_speaker_example_graphic(directory="./drawn-shape-1950/", start_epoch=299, interval_epoch=100, count=10)
