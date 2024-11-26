@@ -3,11 +3,14 @@ import os
 import numpy as np
 import uuid
 from PIL import Image
+from tqdm import tqdm
 
 def download_speaker_examples(run_id, directory):
+    os.makedirs(directory, exist_ok=True)
     api = wandb.Api()
     run = api.run(run_id)
-    for file in run.files():
+    files = run.files()
+    for file in tqdm(files, desc="Downloading speaker examples"):
         if "speaker_examples" in str(file):
             file.download(root=directory)
 
@@ -17,6 +20,7 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=3
     files = os.listdir(image_dir)
 
     output_dir = os.path.join(directory, "data_vis/")
+    os.makedirs(output_dir, exist_ok=True)
 
     fname_template = "speaker_examples_"
 
@@ -92,6 +96,33 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=3
 
 
 if __name__=="__main__":
+    # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
+
+    # Download data
     # download_speaker_examples(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
-    make_speaker_example_graphic(directory="./drawn-shape-1950/", start_epoch=299, count=10, interval_epoch=125)
+    # download_speaker_examples(run_id="signification-team/signification-game/ni0g5mz6", directory="./distinctive-mountain-1931/")
+    # download_speaker_examples(run_id="signification-team/signification-game/dlezjmad", directory="./true-forest-1934/")
+    # download_speaker_examples(run_id="signification-team/signification-game/51sgma7e", directory="./jolly-donkey-1940/")
+    # download_speaker_examples(run_id="signification-team/signification-game/d0gvcotl", directory="./playful-oath-1944/")
+    # download_speaker_examples(run_id="signification-team/signification-game/2vy8mbfi", directory="./treasured-sound-1945/")
+
+
+    # Make graphics for 1950 - manipulation
+    # make_speaker_example_graphic(directory="./drawn-shape-1950/", start_epoch=299, count=10, interval_epoch=125)
     # make_speaker_example_graphic(directory="./drawn-shape-1950/", start_epoch=299, count=10, epoch_span=1300, x_stretch=100.0, method="1/x")
+
+
+    # Make graphics for 1931 - whitesum
+    # make_speaker_example_graphic(directory="./distinctive-mountain-1931/", start_epoch=299, count=10, interval_epoch=300)
+    # make_speaker_example_graphic(directory="./distinctive-mountain-1931/", start_epoch=299, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")
+
+    # Make graphics for the remainder
+    directories = {"./true-forest-1934/", "./jolly-donkey-1940/", "./playful-oath-1944/", "./treasured-sound-1945/"}
+    for directory in directories:
+        make_speaker_example_graphic(directory, start_epoch=299, count=10, interval_epoch=300)
+        make_speaker_example_graphic(directory, start_epoch=299, count=20, interval_epoch=150)
+        make_speaker_example_graphic(directory, start_epoch=299, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")
+        make_speaker_example_graphic(directory, start_epoch=299, count=20, epoch_span=3000, x_stretch=100.0, method="1/x")
+        make_speaker_example_graphic(directory, start_epoch=299, count=10, epoch_span=3000, x_stretch=0.0, method="1/x")
+        make_speaker_example_graphic(directory, start_epoch=299, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
+    
