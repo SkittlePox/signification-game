@@ -5,8 +5,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import math
-
-
+import uuid
+import pathlib
+import cloudpickle
+from omegaconf import OmegaConf
 
 def to_jax(dataset, num_datapoints=100):
     images = []
@@ -516,6 +518,28 @@ def get_speaker_action_transform(fn_name, image_dim):
 
 
 ##################################################################
+
+
+def save_agents(listener_train_states, speaker_train_states, config):
+    local_path = str(pathlib.Path().resolve())
+    model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+    model_uuid = str(uuid.uuid4())[:4]
+
+    agent_logdir = local_path+model_path_str+'agents-'+model_uuid+'/'
+    os.makedirs(agent_logdir, exist_ok=True)
+
+    for i, lts in enumerate(listener_train_states):
+        with open(f'{agent_logdir}listener_{i}.pkl', 'wb') as f:
+            cloudpickle.dump(lts, f)
+
+    for i, lts in enumerate(speaker_train_states):
+        with open(f'{agent_logdir}speaker_{i}.pkl', 'wb') as f:
+            cloudpickle.dump(lts, f)
+    
+    with open(f'{agent_logdir}config.yaml', 'w') as f:
+        OmegaConf.save(config=config, f=f)
+
+
 
 if __name__ == "__main__":
     # Step 1: Download MNIST Dataset

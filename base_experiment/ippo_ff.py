@@ -13,6 +13,7 @@ from kaggle.api.kaggle_api_extended import KaggleApi
 import wandb
 import hydra
 import torch
+import cloudpickle
 from torchvision.utils import make_grid
 from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
@@ -20,7 +21,7 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
 import pathlib
 import icon_probe
-from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents
 
 api = KaggleApi()
 api.authenticate()
@@ -597,7 +598,6 @@ def make_train(config):
             if env_kwargs["center_listener_obs"]:
                 speaker_images = center_obs(speaker_images)
             speaker_images = speaker_images.reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # NOTE: This code is not robust to more than 1 env
-            
 
             def get_optimizer_param_mean(opt_state, param_name):    # Assumes Adam optimizer!
                 # Extract the specified parameter pytree
@@ -771,6 +771,7 @@ def make_train(config):
 
 @hydra.main(version_base=None, config_path="config", config_name="default")
 def main(config):
+
     config = OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
@@ -789,6 +790,14 @@ def main(config):
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)
     out = train(rng)
+
+    if config["PICKLE_FINAL_AGENTS"]:
+        listener_train_states = out["runner_state"][0]
+        speaker_train_states = out["runner_state"][1]
+
+        save_agents(listener_train_states, speaker_train_states, config)
+
+
     print("Done")
 
 
@@ -851,3 +860,5 @@ if __name__ == "__main__":
     main()
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     #     main()
+
+    # interact -t 6:00:00 -q gpu -f quadrortx
