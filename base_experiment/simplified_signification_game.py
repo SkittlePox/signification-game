@@ -41,6 +41,7 @@ class State:
     iteration: int
     epoch: int
     requested_num_speaker_images: int
+    requested_speaker_referent_span: int
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
@@ -227,7 +228,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         
         next_env_images, next_env_labels = self.load_images(k5)
 
-        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.speaker_referent_span_fn(epoch))
+        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.speaker_referent_span_fn(state.epoch))
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
         requested_num_speaker_images = jax.lax.min(jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(jnp.int32), self.num_channels)
@@ -282,7 +283,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             iteration=state.iteration + 1,
             epoch=state.epoch,
-            requested_num_speaker_images=requested_num_speaker_images   # For next state
+            requested_num_speaker_images=requested_num_speaker_images,   # For next state
+            requested_speaker_referent_span=self.speaker_referent_span_fn(state.epoch)
         )
         
         return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state), lax.stop_gradient(rewards), lax.stop_gradient(alives), {}
@@ -344,7 +346,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             iteration=0,
             epoch=epoch,
-            requested_num_speaker_images=requested_num_speaker_images   # For next state
+            requested_num_speaker_images=requested_num_speaker_images,   # For next state
+            requested_speaker_referent_span=self.speaker_referent_span_fn(epoch)
         )
 
         return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state)

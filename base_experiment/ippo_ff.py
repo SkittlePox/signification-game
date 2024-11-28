@@ -643,6 +643,7 @@ def make_train(config):
                 metric_dict = {}
 
                 metric_dict.update({"env/avg_channel_ratio": jnp.mean(les.env_state.requested_num_speaker_images) / env_kwargs["num_channels"]})
+                metric_dict.update({"env/speaker_referent_span": jnp.mean(les.env_state.requested_speaker_referent_span)})
 
                 # agent, total_loss, (value_loss, loss_actor, entropy)
                 metric_dict.update({f"loss/total loss/listener {i}": jnp.mean(ll[i][0]).item() for i in range(len(ll))})
