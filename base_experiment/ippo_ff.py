@@ -794,9 +794,7 @@ def main(config):
     if config["PICKLE_FINAL_AGENTS"]:
         listener_train_states = out["runner_state"][0]
         speaker_train_states = out["runner_state"][1]
-
         save_agents(listener_train_states, speaker_train_states, config)
-
 
     print("Done")
 
