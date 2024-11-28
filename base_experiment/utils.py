@@ -137,6 +137,25 @@ def get_anneal_schedule(description, num_minibatches=1):
 
     return schedule
 
+def save_agents(listener_train_states, speaker_train_states, config):
+    local_path = str(pathlib.Path().resolve())
+    model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+    model_uuid = str(uuid.uuid4())[:4]
+
+    agent_logdir = local_path+model_path_str+'agents-'+f'{config["UPDATE_EPOCHS"]}e-'+model_uuid+'/'
+    os.makedirs(agent_logdir, exist_ok=True)
+
+    for i, lts in enumerate(listener_train_states):
+        with open(f'{agent_logdir}listener_{i}.pkl', 'wb') as f:
+            cloudpickle.dump(lts, f)
+
+    for i, lts in enumerate(speaker_train_states):
+        with open(f'{agent_logdir}speaker_{i}.pkl', 'wb') as f:
+            cloudpickle.dump(lts, f)
+    
+    with open(f'{agent_logdir}config.yaml', 'w') as f:
+        OmegaConf.save(config=config, f=f)
+
 ##################################################################
 
 ############ Used in simplified_signification_game.py ############
@@ -175,6 +194,14 @@ def get_channel_ratio_fn(phrase, params):
             return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: eval(crf_params[0]), operand=None)
         else:
             return lambda x: float(phrase)
+        
+def get_speaker_referent_span_fn(phrase, params):
+    # This function returns a function over epochs that controls which referents we ask speakers to generate
+    # The function outputs an integer, and the environment will sample referents between 0 and that integer
+
+    # TODO: Flesh out this function
+
+    return lambda x: int(phrase)
         
 
 @jax.vmap
@@ -518,28 +545,6 @@ def get_speaker_action_transform(fn_name, image_dim):
 
 
 ##################################################################
-
-
-def save_agents(listener_train_states, speaker_train_states, config):
-    local_path = str(pathlib.Path().resolve())
-    model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
-    model_uuid = str(uuid.uuid4())[:4]
-
-    agent_logdir = local_path+model_path_str+'agents-'+model_uuid+'/'
-    os.makedirs(agent_logdir, exist_ok=True)
-
-    for i, lts in enumerate(listener_train_states):
-        with open(f'{agent_logdir}listener_{i}.pkl', 'wb') as f:
-            cloudpickle.dump(lts, f)
-
-    for i, lts in enumerate(speaker_train_states):
-        with open(f'{agent_logdir}speaker_{i}.pkl', 'wb') as f:
-            cloudpickle.dump(lts, f)
-    
-    with open(f'{agent_logdir}config.yaml', 'w') as f:
-        OmegaConf.save(config=config, f=f)
-
-
 
 if __name__ == "__main__":
     # Step 1: Download MNIST Dataset

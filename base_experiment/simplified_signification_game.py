@@ -8,7 +8,7 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-from utils import get_channel_ratio_fn, get_speaker_action_transform, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
+from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_speaker_action_transform, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
 import math
 
 from utils import to_jax, center_obs
@@ -44,7 +44,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, symmetric_rewards: bool = True, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_referent_span_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, symmetric_rewards: bool = True, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -52,6 +52,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.num_classes = num_classes
         self.speaker_action_dim = speaker_action_dim
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else lambda _: channel_ratio_fn if isinstance(channel_ratio_fn, int) else channel_ratio_fn
+        self.speaker_referent_span_fn = get_speaker_referent_span_fn(speaker_referent_span_fn, kwargs) if isinstance(speaker_referent_span_fn, str) else lambda _: speaker_referent_span_fn if isinstance(speaker_referent_span_fn, int) else speaker_referent_span_fn
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.speaker_whitesum_penalty_coef = speaker_whitesum_penalty_coef
         self.speaker_curve_penalty_coef = speaker_curve_penalty_coef
@@ -226,7 +227,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         
         next_env_images, next_env_labels = self.load_images(k5)
 
-        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
+        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.speaker_referent_span_fn(epoch))
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
         requested_num_speaker_images = jax.lax.min(jnp.floor(self.num_channels * self.channel_ratio_fn(state.epoch)).astype(jnp.int32), self.num_channels)
@@ -293,7 +294,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         
         next_env_images, next_env_labels = self.load_images(k5)
 
-        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.num_classes)
+        next_speaker_labels = jax.random.randint(key, (self.num_speakers,), 0, self.speaker_referent_span_fn(epoch))
         
         # We can take the first num_channels * channel_ratio_fn(iteration) elements from the speakers, and the rest from the environment, and then shuffle them.
         requested_num_speaker_images = jnp.floor(self.num_channels * self.channel_ratio_fn(epoch)).astype(jnp.int32)
