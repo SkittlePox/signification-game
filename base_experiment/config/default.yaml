@@ -60,7 +60,7 @@
   "center_listener_obs": True
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange"
-  "symmetric_rewards": True
+  "reward_parity_fn": "1.0 at 300"
   "channel_ratio_fn": "sigmoid-custom"  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "sigmoid_offset": 600

@@ -202,7 +202,16 @@ def get_speaker_referent_span_fn(phrase, params):
     # TODO: Flesh out this function
 
     return lambda x: int(phrase)
-        
+
+def get_reward_parity_fn(phrase, params):
+    if phrase in ("coop", "cooperative", "symmetric"):
+        return lambda _: 1.0
+    elif phrase in ("manip", "adversarial", "asymmetric"):
+        return lambda _: 0.0
+    elif " at " in phrase:
+        crf_params = phrase.split(" at ")
+        return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: eval(crf_params[0]), operand=None)  # Assumed starting with manipulation
+
 
 @jax.vmap
 def speaker_penalty_whitesum_fn(images: jnp.array):

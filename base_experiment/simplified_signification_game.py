@@ -8,7 +8,7 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_speaker_action_transform, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
+from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_reward_parity_fn, get_speaker_action_transform, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
 import math
 
 from utils import to_jax, center_obs
@@ -45,7 +45,7 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_referent_span_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, symmetric_rewards: bool = True, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_referent_span_fn: Union[Callable, str], reward_parity_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -54,6 +54,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.speaker_action_dim = speaker_action_dim
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else lambda _: channel_ratio_fn if isinstance(channel_ratio_fn, int) else channel_ratio_fn
         self.speaker_referent_span_fn = get_speaker_referent_span_fn(speaker_referent_span_fn, kwargs) if isinstance(speaker_referent_span_fn, str) else lambda _: speaker_referent_span_fn if isinstance(speaker_referent_span_fn, int) else speaker_referent_span_fn
+        self.reward_parity_fn = get_reward_parity_fn(reward_parity_fn, kwargs) if isinstance(reward_parity_fn, str) else reward_parity_fn
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.speaker_whitesum_penalty_coef = speaker_whitesum_penalty_coef
         self.speaker_curve_penalty_coef = speaker_curve_penalty_coef
@@ -68,7 +69,6 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.gaussian_noise_stddev = gaussian_noise_stddev
         self.speaker_assignment_method = speaker_assignment_method
         self.center_listener_obs = center_listener_obs
-        self.symmetric_rewards = symmetric_rewards
         self.kwargs = kwargs
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
@@ -150,8 +150,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         ######## First, evaluate the current state.
 
-        @partial(jax.vmap, in_axes=[0, None, None])
-        def _evaluate_channel_rewards(c: int, listener_actions: jnp.ndarray, listener_log_prob: jnp.ndarray) -> jnp.ndarray:
+        @partial(jax.vmap, in_axes=[0, None, None, None])
+        def _evaluate_channel_rewards(c: int, listener_actions: jnp.ndarray, listener_log_prob: jnp.ndarray, symmetric_rewards: jnp.ndarray) -> jnp.ndarray:
             channel = state.channel_map[c]
             speaker_index = channel[0]
             listener_index = channel[1]
@@ -178,11 +178,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             listener_correct2 = (listener_actions[listener_index] == label2).astype(jnp.int32)
             listener_channel_reward_asymmetric = jnp.where(listener_correct2, self.listener_reward_success, self.listener_reward_failure)
 
-            listener_channel_reward = jnp.where(self.symmetric_rewards, listener_channel_reward_symmetric, listener_channel_reward_asymmetric)
+            listener_channel_reward = jnp.where(symmetric_rewards, listener_channel_reward_symmetric, listener_channel_reward_asymmetric)
 
             return speaker_index, listener_index, speaker_channel_reward, listener_channel_reward
 
-        speaker_indices, listener_indices, speaker_channel_rewards, listener_channel_rewards = _evaluate_channel_rewards(jnp.arange(self.num_channels), listener_actions, listener_log_prob)
+        speaker_indices, listener_indices, speaker_channel_rewards, listener_channel_rewards = _evaluate_channel_rewards(jnp.arange(self.num_channels), listener_actions, listener_log_prob, self.reward_parity_fn(state.epoch))
 
         # Generate a reward vector containing all the rewards for each speaker and listener
         speaker_rewards = jnp.zeros(self.num_speakers + self.num_channels)
