@@ -98,27 +98,52 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=3
 if __name__=="__main__":
     # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
 
-    # Download data
+    # Download data for Part1 all V1
     # download_speaker_examples(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
     # download_speaker_examples(run_id="signification-team/signification-game/ni0g5mz6", directory="./distinctive-mountain-1931/")
     # download_speaker_examples(run_id="signification-team/signification-game/dlezjmad", directory="./true-forest-1934/")
     # download_speaker_examples(run_id="signification-team/signification-game/51sgma7e", directory="./jolly-donkey-1940/")
     # download_speaker_examples(run_id="signification-team/signification-game/d0gvcotl", directory="./playful-oath-1944/")
     # download_speaker_examples(run_id="signification-team/signification-game/2vy8mbfi", directory="./treasured-sound-1945/")
+    
+    # Download data for Part1b V2 (squeezed and unsqueezed manip-coop at epoch 1k)
+    # download_speaker_examples(run_id="signification-team/signification-game/4qlamhgk", directory="./warm-night-1962/")
+    # download_speaker_examples(run_id="signification-team/signification-game/pgyqk1o8", directory="./azure-leaf-1963/")
+    # download_speaker_examples(run_id="signification-team/signification-game/0i5kqgie", directory="./iconic-resonance-1964/")
+    # download_speaker_examples(run_id="signification-team/signification-game/6tune16z", directory="./vivid-water-1965/")
+    download_speaker_examples(run_id="signification-team/signification-game/xwens41t", directory="./cool-cosmos-1966/")
+    download_speaker_examples(run_id="signification-team/signification-game/kphyfba3", directory="./devout-shadow-1967/")
+    download_speaker_examples(run_id="signification-team/signification-game/fn48wc5z", directory="./ethereal-dust-1968/")
+    download_speaker_examples(run_id="signification-team/signification-game/14tntarn", directory="./absurd-feather-1969/")
 
 
     # Make graphics for 1950 - manipulation
     # make_speaker_example_graphic(directory="./drawn-shape-1950/", start_epoch=299, count=10, interval_epoch=125)
     # make_speaker_example_graphic(directory="./drawn-shape-1950/", start_epoch=299, count=10, epoch_span=1300, x_stretch=100.0, method="1/x")
 
+    # Make graphics for Part1b  (Completely cooperative)
+    # directories = {"./true-forest-1934/", "./jolly-donkey-1940/", "./playful-oath-1944/", "./treasured-sound-1945/"}
+    # for directory in directories:
+    #     make_speaker_example_graphic(directory, start_epoch=299, count=10, interval_epoch=300)
+    #     make_speaker_example_graphic(directory, start_epoch=299, count=20, interval_epoch=150)
+    #     make_speaker_example_graphic(directory, start_epoch=299, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=299, count=20, epoch_span=3000, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=299, count=10, epoch_span=3000, x_stretch=0.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=299, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
 
-    # Make graphics for 1931 - whitesum
-    # make_speaker_example_graphic(directory="./distinctive-mountain-1931/", start_epoch=299, count=10, interval_epoch=300)
-    # make_speaker_example_graphic(directory="./distinctive-mountain-1931/", start_epoch=299, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")
+    # Make graphics for Part1b  (Manip-Coop at epoch 1000) Squeezed (odd numbered)
+    directories = ["./azure-leaf-1963/", "./vivid-water-1965/", "./devout-shadow-1967/", "./absurd-feather-1969/"]
+    for directory in directories[2:]:
+        make_speaker_example_graphic(directory, start_epoch=199, count=10, interval_epoch=300)
+        make_speaker_example_graphic(directory, start_epoch=199, count=20, interval_epoch=150)
+        make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")
+        make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=100.0, method="1/x")
+        make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x")
+        make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
 
-    # Make graphics for the remainder
-    directories = {"./true-forest-1934/", "./jolly-donkey-1940/", "./playful-oath-1944/", "./treasured-sound-1945/"}
-    for directory in directories:
+    # Make graphics for Part1b  (Manip-Coop at epoch 1000) Un-Squeezed (even numbered)
+    directories = ["./warm-night-1962/", "./iconic-resonance-1964/", "./cool-cosmos-1966/", "./ethereal-dust-1968/"]
+    for directory in directories[2:]:
         make_speaker_example_graphic(directory, start_epoch=299, count=10, interval_epoch=300)
         make_speaker_example_graphic(directory, start_epoch=299, count=20, interval_epoch=150)
         make_speaker_example_graphic(directory, start_epoch=299, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")

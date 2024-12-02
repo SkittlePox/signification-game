@@ -21,10 +21,23 @@ class Superagent:
     def listen(self, obs): # This will return a categorical distribution which should be sampled to get action indices.
         return self.listener.apply_fn(self.listener.params, obs)
     
-    def interpret_pictogram(self, obs):
+    def interpret_pictogram(self, obs): # obs is an image
+        # P(r|s) = P(s|r)P(r)
+        # P(s|r) p= exp(U(s:r))
+        # U(s:r) = log(P_lit(r|s))
+        # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
+
+        #### Find the referent for which P(r|s) is the highest
+
+        # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit
+
+        # Iterate through possible referents
+        # Calculate P_lit denominator for each (this can probably be done once and reused across all referent calculations)
+
+        # Thats it?
         pass
 
-    def create_pictogram(self, obs):
+    def create_pictogram(self, obs): # obs is an integer between 0 and num_referents-1
         pass
     
 
