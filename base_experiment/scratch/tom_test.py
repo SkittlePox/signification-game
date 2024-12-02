@@ -3,6 +3,7 @@ import pathlib
 import sys
 import jax.numpy as jnp
 import distrax
+import matplotlib.pyplot as plt
 
 DEBUGGER = "DEBUGGER=True" in sys.argv
 
@@ -125,46 +126,50 @@ class Superagent:
         return pictogram_pi
     
 
+def test():
+    filename = "agents-300e-73c6"
+    agent_indices = (3, 4) # list(range(2))
+    listener_agents = []
+    speaker_agents = []
+    superagents = []
 
-filename = "agents-300e-73c6"
-agent_indices = (3, 4) # list(range(2))
-listener_agents = []
-speaker_agents = []
-superagents = []
-
-for i in agent_indices:
-    with open(local_path+f'/models/{filename}/listener_{i}.pkl', 'rb') as f:
-        a = cloudpickle.load(f)
-        listener_agents.append(a)
-    with open(local_path+f'/models/{filename}/speaker_{i}.pkl', 'rb') as f:
-        a = cloudpickle.load(f)
-        speaker_agents.append(a)
-    superagents.append(Superagent(speaker_agents[-1], listener_agents[-1]))
-
-
-# s0 = superagents[0]
-# o = s0.listen(jnp.ones((28, 28)))
-# print(o)
-# o = s0.speak(jnp.array([0]))
-# print(o)
+    for i in agent_indices:
+        with open(local_path+f'/models/{filename}/listener_{i}.pkl', 'rb') as f:
+            a = cloudpickle.load(f)
+            listener_agents.append(a)
+        with open(local_path+f'/models/{filename}/speaker_{i}.pkl', 'rb') as f:
+            a = cloudpickle.load(f)
+            speaker_agents.append(a)
+        superagents.append(Superagent(speaker_agents[-1], listener_agents[-1]))
 
 
-# key = jax.random.PRNGKey(0)
-# random_speak = get_speaker_action_transform("splines", 28)(o[0].sample(seed=key))
-# pi = s0.interpret_pictogram(key, random_speak, n_samples=500)
-# print(pi.sample(seed=key))
-# print("Done")
+    # key = jax.random.PRNGKey(0)
+    # random_speak = get_speaker_action_transform("splines", 28)(o[0].sample(seed=key))
+    # pi = s0.interpret_pictogram(key, random_speak, n_samples=500)
+    # print(pi.sample(seed=key))
+    # print("Done")
 
-key = jax.random.PRNGKey(0)
-sp_key, ls_key = jax.random.split(key, 2)
+    key = jax.random.PRNGKey(0)
+    
+    agent0 = superagents[0]
+    agent1 = superagents[1]
+    num_iters = 20
+    image_paths = []
+    pictograms = []
 
-agent0 = superagents[0]
-agent1 = superagents[1]
-pictogram = agent0.create_pictogram(sp_key, jnp.array([5]), n_samples=1000, n_search=1000)
-pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=1000)
-print(pi.sample(seed=key))
-print("Done")
+    for i in range(num_iters):
+        key, key_i = jax.random.split(key)
+        sp_key, ls_key = jax.random.split(key_i, 2)
+        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_samples=5000, n_search=5000)
+        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=5000)
+        reading = pi.sample(seed=key_i)
 
-import matplotlib.pyplot as plt
-plt.imsave(local_path+'/scratch/pictogram.png', pictogram, cmap='gray')
+        image_paths.append(local_path+f'/scratch/tom_scratch_images/pic_{i}_sign_{i % 10}_read_{reading}.png')
+        pictograms.append(pictogram)
+
+    for path, pic in zip(image_paths, pictograms):
+        plt.imsave(path, pic, cmap='gray')
+
+if __name__ == "__main__":
+    test()
 
