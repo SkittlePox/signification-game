@@ -506,7 +506,7 @@ class ActorCriticSpeakerSplines(nn.Module):
         critic = nn.sigmoid(critic)
         critic = nn.Dense(1)(critic)
 
-        return pi, jnp.squeeze(critic, axis=-1)
+        return pi, jnp.squeeze(critic, axis=-1) # Return policy function and value
 
 
 
