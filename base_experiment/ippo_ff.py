@@ -787,7 +787,7 @@ def main(config):
         save_code=True,
         notes=config["WANDB_NOTES"]
     )
-    rng = jax.random.PRNGKey(50)
+    rng = jax.random.PRNGKey(config["JAX_RANDOM_SEED"])
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)
     out = train(rng)
