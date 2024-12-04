@@ -166,6 +166,14 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 
+# TODO: Implement these!!
+def execute_tom_listener(__rng, _speaker_train_state_i, _listener_train_state_i, _listener_obs_i):
+    pass
+
+def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, _speaker_obs_i):
+    pass
+
+
 def get_speaker_examples(runner_state, env, config):
     _, speaker_train_states, log_env_state, obs, rng = runner_state
     env_rngs = jax.random.split(rng, len(speaker_train_states) * config["SPEAKER_EXAMPLE_NUM"])
@@ -182,7 +190,8 @@ def get_speaker_examples(runner_state, env, config):
     speaker_images = speaker_images.reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
     return speaker_images
 
-def env_step(runner_state, env, config):
+
+def env_step(runner_state, env, config):    # This function is passed to jax.lax.scan, which means it cannot have any pythonic control flow (e.g., no "if" statements, "while" loops, etc.)
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, speaker_train_states, log_env_state, obs, rng = runner_state
     speaker_obs, listener_obs = obs
@@ -196,15 +205,30 @@ def env_step(runner_state, env, config):
     rng, l_rng, r_rng = jax.random.split(rng, 3)
     listener_rngs = jax.random.split(l_rng, len(listener_train_states))
     speaker_rngs = jax.random.split(r_rng, len(speaker_train_states))
-
+        
+    
     # COLLECT LISTENER ACTIONS
-    listener_outputs = [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)]
+    gut_listener_outputs = [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)]
+    tom_listener_outputs = [execute_tom_listener(*args) for args in zip(listener_rngs, speaker_train_states, listener_train_states, listener_obs)]
+    listener_outputs = jax.lax.cond(
+        log_env_state.env_state.agent_inferential_mode == 0,
+        lambda _: gut_listener_outputs,
+        lambda _: tom_listener_outputs,
+        None
+    )
     listener_action = jnp.array([o[0] for o in listener_outputs], dtype=jnp.int32).reshape(config["NUM_ENVS"], -1)
     listener_log_prob = jnp.array([o[1] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
     listener_value = jnp.array([o[2] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
 
     # COLLECT SPEAKER ACTIONS
-    speaker_outputs = [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)]
+    gut_speaker_outputs = [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)]
+    tom_speaker_outputs = [execute_tom_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, listener_train_states, speaker_obs)]
+    speaker_outputs = jax.lax.cond(
+        log_env_state.env_state.agent_inferential_mode == 0,
+        lambda _: gut_speaker_outputs,
+        lambda _: tom_speaker_outputs,
+        None
+    )
     speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, env_kwargs["speaker_action_dim"])
     speaker_log_prob = jnp.array([o[1] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)

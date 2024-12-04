@@ -1,4 +1,5 @@
 import os
+import random
 from PIL import Image
 from torchvision import datasets
 import jax
@@ -211,7 +212,62 @@ def get_reward_parity_fn(phrase, params):
     elif " at " in phrase:
         crf_params = phrase.split(" at ")
         return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: eval(crf_params[0]), operand=None)  # Assumed starting with manipulation
+    
+def get_agent_inferential_mode_fn(phrase, params):
+    # This function returns a function over epochs that determines whether agents will use ToM or not (gut)
+    # The function outputs a boolean, 0 for gut and 1 for ToM
+    if phrase in ("gut", "reflexive"):
+        return lambda _: 0
+    elif phrase in ("tom", "ToM", "theory-of-mind"):
+        return lambda _: 1
+    elif " at " in phrase:
+        crf_params = phrase.split(" at ")
+        return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0, lambda _: 1, operand=None)  # Assumed starting with gut
 
+@jax.jit
+def create_unitary_channel_map(list1, list2, key):  # NOTE: This simply doesn't work. It's not easy to do this in a jittable fashion.
+    """
+    Creates a 2D array of channels where:
+    - The first column is from list1.
+    - The second column is from list2, shuffled to ensure no row has duplicates.
+
+    Args:
+        list1: JAX array of indices for the first column.
+        list2: JAX array of indices for the second column.
+        key: JAX random key for randomness.
+
+    Returns:
+        A JAX array with shape (n, 2) meeting the conditions.
+    """
+    # assert list1.shape == list2.shape, "Input lists must have the same size."
+    n = list1.shape[0]
+
+    # Shuffle list2 randomly
+    shuffled_list2 = jax.random.permutation(key, list2)
+
+    def resolve_conflicts(i, current):
+        """
+        Swap conflicting elements in shuffled_list2 with the next available index.
+        """
+        current_list2 = current["list2"]
+        conflict = list1[i] == current_list2[i]
+
+        def swap_indices(c):
+            # Find the first valid index to swap
+            available_indices = jnp.where(current_list2 != list1[i], size=n)[0]
+            swap_idx = available_indices[0]  # Take the first valid swap
+            swapped = current_list2.at[i].set(current_list2[swap_idx])
+            swapped = swapped.at[swap_idx].set(current_list2[i])
+            return {"list2": swapped}
+
+        # Swap if conflict exists
+        return jax.lax.cond(conflict, swap_indices, lambda x: x, current)
+
+    # Iteratively resolve conflicts using lax.fori_loop
+    result = jax.lax.fori_loop(0, n, resolve_conflicts, {"list2": shuffled_list2})
+
+    # Stack the columns
+    return jnp.stack([list1, result["list2"]], axis=1)
 
 @jax.vmap
 def speaker_penalty_whitesum_fn(images: jnp.array):

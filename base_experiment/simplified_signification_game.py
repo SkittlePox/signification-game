@@ -8,7 +8,7 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_reward_parity_fn, get_speaker_action_transform, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn
+from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_reward_parity_fn, get_speaker_action_transform, get_agent_inferential_mode_fn, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, create_unitary_channel_map, create_channel_array
 import math
 
 from utils import to_jax, center_obs
@@ -42,10 +42,11 @@ class State:
     epoch: int
     requested_num_speaker_images: int
     requested_speaker_referent_span: int
+    agent_inferential_mode: int
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_referent_span_fn: Union[Callable, str], reward_parity_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', center_listener_obs: bool = False, **kwargs: dict) -> None:
+    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_referent_span_fn: Union[Callable, str], reward_parity_fn: Union[Callable, str], agent_inferential_mode_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', mandate_unitary_channel_map: bool = False, center_listener_obs: bool = False, **kwargs: dict) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -55,6 +56,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else lambda _: channel_ratio_fn if isinstance(channel_ratio_fn, int) else channel_ratio_fn
         self.speaker_referent_span_fn = get_speaker_referent_span_fn(speaker_referent_span_fn, kwargs) if isinstance(speaker_referent_span_fn, str) else lambda _: speaker_referent_span_fn if isinstance(speaker_referent_span_fn, int) else speaker_referent_span_fn
         self.reward_parity_fn = get_reward_parity_fn(reward_parity_fn, kwargs) if isinstance(reward_parity_fn, str) else reward_parity_fn
+        self.agent_inferential_mode_fn = get_agent_inferential_mode_fn(agent_inferential_mode_fn, kwargs) if isinstance(agent_inferential_mode_fn, str) else agent_inferential_mode_fn
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.speaker_whitesum_penalty_coef = speaker_whitesum_penalty_coef
         self.speaker_curve_penalty_coef = speaker_curve_penalty_coef
@@ -69,6 +71,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.gaussian_noise_stddev = gaussian_noise_stddev
         self.speaker_assignment_method = speaker_assignment_method
         self.center_listener_obs = center_listener_obs
+        self.mandate_unitary_channel_map = mandate_unitary_channel_map
         self.kwargs = kwargs
 
         self.speaker_agents = ["speaker_{}".format(i) for i in range(num_speakers)]
@@ -224,7 +227,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         alives["__all__"] = 0 # It's important that this is False at all times. Because the MARL library thinks this variable is actually "dones", and __all__==True would signify end of episode
 
         ######## Then, update the state.
-        key, k1, k2, k3, k4, k5, obs_key = jax.random.split(key, 7)
+        key, k1, k2, k3, k4, k5, k6, obs_key = jax.random.split(key, 8)
         
         next_env_images, next_env_labels = self.load_images(k5)
 
@@ -284,7 +287,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             iteration=state.iteration + 1,
             epoch=state.epoch,
             requested_num_speaker_images=requested_num_speaker_images,   # For next state
-            requested_speaker_referent_span=self.speaker_referent_span_fn(state.epoch)
+            requested_speaker_referent_span=self.speaker_referent_span_fn(state.epoch),
+            agent_inferential_mode=self.agent_inferential_mode_fn(state.epoch)
         )
         
         return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state), lax.stop_gradient(rewards), lax.stop_gradient(alives), {}
@@ -292,7 +296,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     @partial(jax.jit, static_argnums=[0, 3])
     def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
         """Reset the environment"""
-        key, k1, k2, k3, k4, k5, obs_key = jax.random.split(key, 7)
+        key, k1, k2, k3, k4, k5, k6, obs_key = jax.random.split(key, 8)
         
         next_env_images, next_env_labels = self.load_images(k5)
 
@@ -347,7 +351,8 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             iteration=0,
             epoch=epoch,
             requested_num_speaker_images=requested_num_speaker_images,   # For next state
-            requested_speaker_referent_span=self.speaker_referent_span_fn(epoch)
+            requested_speaker_referent_span=self.speaker_referent_span_fn(epoch),
+            agent_inferential_mode=self.agent_inferential_mode_fn(epoch)
         )
 
         return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state)
