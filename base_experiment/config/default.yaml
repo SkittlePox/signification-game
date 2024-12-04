@@ -30,13 +30,13 @@
 "SPEAKER_NOISE_LATENT_STDDEV": 0.05
 
 "NUM_ENVS": 1
-"NUM_STEPS": 2048 # 2048
+"NUM_STEPS": 10 # 2048
 "UPDATE_EPOCHS": 4000
-"MINIBATCH_SIZE_LISTENER": 32 # 32 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 10 # 32 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 10 # 128 # This must be a whole divisor of NUM_STEPS
 
 "PROBE_MODEL_NAME": "probe-5k-20k-20e-sgd-bedc"
-"PROBE_NUM_EXAMPLES": 500 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 10 # 500 # This must be less than or equal to "NUM_STEPS"
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
@@ -53,16 +53,16 @@
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
   "speaker_action_transform": "splines"
-  "speaker_action_dim": 12  # This must be a multiple of 6
+  "speaker_action_dim": 12  # This must be a multiple of 6 for "splines"
   "log_prob_rewards": True
   "speaker_whitesum_penalty_coef": 0.0
   "speaker_curve_penalty_coef": 0.0
   "center_listener_obs": True
   "gaussian_noise_stddev": 0.05
-  "speaker_assignment_method": "arange"
+  "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "1.0 at 300"
-  "agent_inferential_mode_fn": "tom at 300" # Default is "gut"
-  "channel_ratio_fn": "1.0"  # E.g. "1.0 at 300", "sigmoid-custom"
+  "agent_inferential_mode_fn": "tom" # Default is "gut", "tom at 300"
+  "channel_ratio_fn": "0.4"  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "mandate_unitary_channel_map": False
   "sigmoid_offset": 600

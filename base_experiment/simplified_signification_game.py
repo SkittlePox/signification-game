@@ -8,10 +8,13 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_reward_parity_fn, get_speaker_action_transform, get_agent_inferential_mode_fn, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, create_unitary_channel_map, create_channel_array
+from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_reward_parity_fn, get_speaker_action_transform, get_agent_inferential_mode_fn, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, create_unitary_channel_map
 import math
 
 from utils import to_jax, center_obs
+
+
+# The first num_speakers channel indices refer to speaker generated images, while the remaining num_channel channel indices refer to env generated images
 
 
 @struct.dataclass
@@ -27,6 +30,7 @@ class State:
     env_images: chex.Array  # [image_size] * num_channels
     env_labels: chex.Array  # [num_classes] * num_channels
     speaker_labels: chex.Array  # [num_classes] * num_speakers
+    listener_obs_source: chex.Array # [1, 0] * num_listeners (1 if from a speaker, 0 if from environment)
 
     speaker_images: chex.Array  # [image_size] * num_speakers
 
@@ -263,6 +267,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         if self.center_listener_obs:
             speaker_images_for_new_state = center_obs(speaker_images_for_new_state)
 
+        # Calculate listener_obs_source based on state.next_channel_map. It should be the size of the number of speakers and be 0 if from env, 1 if from speaker. Based on channel ratio fn.
+        listener_obs_values = jnp.where(state.next_channel_map[:, 0] > self.num_speakers, 0, 1)
+        listener_obs_indices = state.next_channel_map[:, 1]
+        listener_obs_source = jnp.zeros((self.num_listeners)).at[listener_obs_indices].set(listener_obs_values).squeeze()
+
         state = State(
             next_channel_map=next_channel_map,
             next_env_images=next_env_images,
@@ -273,6 +282,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             env_images=state.next_env_images,
             env_labels=state.next_env_labels,
             speaker_labels=state.next_speaker_labels,
+            listener_obs_source=listener_obs_source,
 
             speaker_images=speaker_images_for_new_state,
 
@@ -327,6 +337,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         listeners = jax.lax.slice(jax.random.permutation(k1, self.num_listeners).reshape((-1, 1)), [0, 0], [self.num_channels, 1])
         next_channel_map = jnp.hstack((speakers, listeners))
 
+        # Calculate listener_obs_source based on next_channel_map. It should be the size of the number of speakers and be 0 if from env, 1 if from speaker. Based on channel ratio fn.
+        listener_obs_values = jnp.where(next_channel_map[:, 0] > self.num_speakers, 0, 1)
+        listener_obs_indices = next_channel_map[:, 1]
+        listener_obs_source = jnp.zeros((self.num_listeners)).at[listener_obs_indices].set(listener_obs_values).squeeze()
+        
         state = State(
             next_channel_map=next_channel_map,
             next_env_images=next_env_images,
@@ -337,6 +352,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             env_images=jnp.zeros_like(next_env_images),
             env_labels=jnp.zeros_like(next_env_labels),
             speaker_labels=jnp.zeros_like(next_speaker_labels),
+            listener_obs_source=listener_obs_source,
 
             speaker_images=jnp.zeros((max(self.num_speakers, 1), self.image_dim, self.image_dim), dtype=jnp.float32),  # This max is to avoid an error when num_speakers is 0 from the get_obs function
 

@@ -112,20 +112,21 @@ def initialize_listener(env, rng, config, i):
     return listener_network, train_state, lr_func
 
 def initialize_speaker(env, rng, config, i):
+    # Passing num_classes = env_kwargs.num_classes + 1 so we can use the additional channel to sample from the general space of signals
     if config["SPEAKER_ARCH"] == 'full_image':
-        speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'full_image_setvariance':
-        speaker_network = ActorCriticSpeakerFullImageSetVariance(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        speaker_network = ActorCriticSpeakerFullImageSetVariance(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'gauss_splat':
-        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'gauss_splatcovar':
-        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'gauss_splatchol':
-        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'splines':
-        speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'splinesnoise':
-        speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"], action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
+        speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
 
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
@@ -167,8 +168,46 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
 
 
 # TODO: Implement these!!
-def execute_tom_listener(__rng, _speaker_train_state_i, _listener_train_state_i, _listener_obs_i):
-    pass
+def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speaker_train_state_i, speaker_action_transform, n_samples=4, num_classes=10, speaker_action_size=12, image_dim=28):  # obs is an image
+    # P(r|s) = P(s|r)P(r)
+    # P(s|r) p= exp(U(s:r))
+    # U(s:r) = log(P_lit(r|s))
+    # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
+
+    __rng, listener_dropout_key, listener_noise_key = jax.random.split(__rng, 3)
+    __rng, speaker_dropout_key, speaker_noise_key = jax.random.split(__rng, 3)
+    __rng, pi_sample_key = jax.random.split(__rng)
+
+    #### Find the referent for which P(r|s) is the highest
+    # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
+    signal_distribution = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array([num_classes], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
+    signal_param_samples = signal_distribution.sample(seed=__rng, sample_shape=(speaker_action_size, n_samples))[0]    # This is shaped (n_samples, 1, speaker_action_size)
+    
+    # Generate actual images
+    signal_samples = speaker_action_transform(signal_param_samples)    # This is shaped (n_samples, image_dim, image_dim)
+
+    # Assess them using the listener
+    listener_assessments = _listener_train_state_i.apply_fn(_listener_train_state_i.params, signal_samples, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})[0] # This is a categorical distribution. Index 1 is values
+    # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
+    
+    # Calculate denominators. Sum of probs
+    listener_probs = listener_assessments.probs # This is shaped (n_samples, num_classes)
+    # listener_logprobs = listener_assessments.log_prob(jnp.arange(num_classes).reshape(num_classes, 1))
+    # listener_logits = listener_assessments.logits
+    denominators = jnp.sum(listener_probs, axis=0)  # This is shaped (num_classes,)
+    gut_policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})
+    numerators = gut_policy.probs[0] # This is shaped (num_classes,)
+    
+    # p_lits = numerators / denominators    # Instead of dividing directly, for numerical stability I will use the log quotient rule
+    p_lits = jnp.exp(jnp.log(numerators) - jnp.log(denominators))
+
+    # Assuming uniform probability, so no need to multiply by P(r)
+    pictogram_pi = distrax.Categorical(probs=p_lits)
+    pictogram_action = pictogram_pi.sample(seed=pi_sample_key)
+    log_prob = pictogram_pi.log_prob(pictogram_action)
+
+    # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
+    return pictogram_action, log_prob, value
 
 def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, _speaker_obs_i):
     pass
@@ -205,30 +244,30 @@ def env_step(runner_state, env, config):    # This function is passed to jax.lax
     rng, l_rng, r_rng = jax.random.split(rng, 3)
     listener_rngs = jax.random.split(l_rng, len(listener_train_states))
     speaker_rngs = jax.random.split(r_rng, len(speaker_train_states))
-        
     
-    # COLLECT LISTENER ACTIONS
-    gut_listener_outputs = [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)]
-    tom_listener_outputs = [execute_tom_listener(*args) for args in zip(listener_rngs, speaker_train_states, listener_train_states, listener_obs)]
+    ## COLLECT LISTENER ACTIONS
+    def execute_listener(*args):
+        return jax.lax.cond(args[0][0] == 1, lambda _: execute_tom_listener(*args[1:]), lambda _: execute_individual_listener(*args[1:4]), None)    # If it's from another speaker, execute tom listener
+    
     listener_outputs = jax.lax.cond(
-        log_env_state.env_state.agent_inferential_mode == 0,
-        lambda _: gut_listener_outputs,
-        lambda _: tom_listener_outputs,
+        log_env_state.env_state.agent_inferential_mode[0] == 0,
+        lambda _: [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)],
+        lambda _: [execute_listener(*args, env._env.speaker_action_transform) for args in zip(log_env_state.env_state.listener_obs_source.reshape(-1, 1), listener_rngs, listener_train_states, listener_obs, speaker_train_states)],
         None
     )
+    # listener_outputs = [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)]   # This is the old code, might be faster
     listener_action = jnp.array([o[0] for o in listener_outputs], dtype=jnp.int32).reshape(config["NUM_ENVS"], -1)
     listener_log_prob = jnp.array([o[1] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
     listener_value = jnp.array([o[2] for o in listener_outputs]).reshape(config["NUM_ENVS"], -1)
 
-    # COLLECT SPEAKER ACTIONS
-    gut_speaker_outputs = [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)]
-    tom_speaker_outputs = [execute_tom_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, listener_train_states, speaker_obs)]
+    ## COLLECT SPEAKER ACTIONS    
     speaker_outputs = jax.lax.cond(
-        log_env_state.env_state.agent_inferential_mode == 0,
-        lambda _: gut_speaker_outputs,
-        lambda _: tom_speaker_outputs,
+        log_env_state.env_state.agent_inferential_mode[0] == 0,
+        lambda _: [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)],
+        lambda _: [execute_tom_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, listener_train_states, speaker_obs)],
         None
     )
+    # speaker_outputs = [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)]   # This is the old code, might be faster
     speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, env_kwargs["speaker_action_dim"])
     speaker_log_prob = jnp.array([o[1] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
     speaker_value = jnp.array([o[2] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1)
