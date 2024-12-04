@@ -30,13 +30,13 @@
 "SPEAKER_NOISE_LATENT_STDDEV": 0.05
 
 "NUM_ENVS": 1
-"NUM_STEPS": 10 # 2048
+"NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 4000
-"MINIBATCH_SIZE_LISTENER": 10 # 32 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 10 # 128 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 32 # 32 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
 
 "PROBE_MODEL_NAME": "probe-5k-20k-20e-sgd-bedc"
-"PROBE_NUM_EXAMPLES": 10 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 500 # 500 # This must be less than or equal to "NUM_STEPS"
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'mnist'
@@ -61,13 +61,16 @@
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "1.0 at 300"
-  "agent_inferential_mode_fn": "tom" # Default is "gut", "tom at 300"
-  "channel_ratio_fn": "0.4"  # E.g. "1.0 at 300", "sigmoid-custom"
+  "agent_inferential_mode_fn": "gut" # Default is "gut", "tom at 300"
+  "channel_ratio_fn": "sigmoid-custom"  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "mandate_unitary_channel_map": False
   "sigmoid_offset": 600
   "sigmoid_stretch": 5e-3
   "sigmoid_height": 1.0
+  "listener_n_samples": 50
+  "speaker_n_samples": 50
+  "speaker_n_search": 50
 
 
 # WandB Params
@@ -78,7 +81,7 @@
 "SPEAKER_EXAMPLE_NUM": 2
 "SPEAKER_EXAMPLE_DEBUG": False
 "PROBE_LOGGING_ITER": 1
-"WANDB_NOTES": "Trying an abbreviated speaker introduction timeline."
+"WANDB_NOTES": ""
 
 "DEBUGGER": False
 "PICKLE_FINAL_AGENTS": False

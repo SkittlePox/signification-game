@@ -167,8 +167,7 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 
-# TODO: Implement these!!
-def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speaker_train_state_i, speaker_action_transform, n_samples=4, num_classes=10, speaker_action_size=12, image_dim=28):  # obs is an image
+def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speaker_train_state_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, **kwargs):  # obs is an image
     # P(r|s) = P(s|r)P(r)
     # P(s|r) p= exp(U(s:r))
     # U(s:r) = log(P_lit(r|s))
@@ -181,10 +180,10 @@ def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speak
     #### Find the referent for which P(r|s) is the highest
     # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
     signal_distribution = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array([num_classes], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
-    signal_param_samples = signal_distribution.sample(seed=__rng, sample_shape=(speaker_action_size, n_samples))[0]    # This is shaped (n_samples, 1, speaker_action_size)
+    signal_param_samples = signal_distribution.sample(seed=__rng, sample_shape=(speaker_action_dim, listener_n_samples))[0]    # This is shaped (n_samples, 1, speaker_action_size)
     
     # Generate actual images
-    signal_samples = speaker_action_transform(signal_param_samples)    # This is shaped (n_samples, image_dim, image_dim)
+    signal_samples = speaker_action_transform_fn(signal_param_samples)    # This is shaped (n_samples, image_dim, image_dim)
 
     # Assess them using the listener
     listener_assessments = _listener_train_state_i.apply_fn(_listener_train_state_i.params, signal_samples, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})[0] # This is a categorical distribution. Index 1 is values
@@ -207,11 +206,60 @@ def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speak
     log_prob = pictogram_pi.log_prob(pictogram_action)
 
     # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
-    return pictogram_action, log_prob, value
+    return pictogram_action.reshape(-1,), log_prob.reshape(-1,), value
 
-def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, _speaker_obs_i):
-    pass
+def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_samples=50, speaker_n_search=50, num_classes=10, speaker_action_dim=12, **kwargs):
+    # P(s|r) p= exp(U(s:r))
+    # U(s:r) = log(P_lit(r|s))
+    # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
 
+    __rng, listener_dropout_key, listener_noise_key = jax.random.split(__rng, 3)
+    __rng, speaker_dropout_key, speaker_noise_key = jax.random.split(__rng, 3)
+    __rng, numer_key, denom_key = jax.random.split(__rng, 3)
+    __rng, pi_sample_key = jax.random.split(__rng)
+
+    ######### Search for the signal with the highest P(r|s)
+
+    ###### Calculate denominator (This isn't actually used... That's not good though... It should be...)
+
+    # # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
+    # comparison_signal_distribution = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array([num_classes], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
+    # comparison_signal_param_samples = comparison_signal_distribution.sample(seed=__rng, sample_shape=(speaker_action_dim, speaker_n_samples))[0]    # This is shaped (n_samples, 1, speaker_action_size)
+    
+    # # Generate actual images
+    # comparison_signal_samples = speaker_action_transform_fn(comparison_signal_param_samples)    # This is shaped (n_samples, image_dim, image_dim)
+
+    # # Assess them using the listener
+    # listener_assessments = _listener_train_state_i.apply_fn(_listener_train_state_i.params, comparison_signal_samples, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})[0] # This is a categorical distribution. Index 1 is values
+    # # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
+    
+    # # Calculate denominators. Sum of probs
+    # listener_probs = listener_assessments.probs # This is shaped (n_samples, num_classes)
+    # denominators = jnp.sum(listener_probs, axis=0)  # This is shaped (num_classes,)
+
+    ###### Search for signal and calculate numerator
+
+    # Sample lots of possible signals.
+    search_signal_gut_policy, values = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array([_speaker_obs_i], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})    # This is a distrax distribution. Index 1 is values. Using speaker index _speaker_obs_i, for generating pictograms of that class
+    search_signal_param_samples = search_signal_gut_policy.sample(seed=numer_key, sample_shape=(speaker_action_dim, speaker_n_search))[0]    # This is shaped (n_search, 1, speaker_action_size)
+    search_signal_param_samples = jnp.clip(search_signal_param_samples, a_min=0.0, a_max=1.0)
+    
+    # Generate actual images
+    search_signal_samples = speaker_action_transform_fn(search_signal_param_samples)
+    
+    # Need to iterate over search space and find the highest numerator/denominator??
+    numerators_all = _listener_train_state_i.apply_fn(_listener_train_state_i.params, search_signal_samples, rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0].probs # This is shaped (n_search, num_classes)
+
+    # Isolate obs referent index
+    numerators = numerators_all[:, ] # This is shape [n_search, 1]
+    # Find the thing with the highest numerator for r? find the one with the highest r.
+
+    maxindex = jnp.argmax(numerators)
+    maxaction = search_signal_param_samples[maxindex]
+    
+    log_prob = search_signal_gut_policy.log_prob(maxaction)
+
+    return maxaction, log_prob.reshape(-1,), values[maxindex].reshape(-1,)
 
 def get_speaker_examples(runner_state, env, config):
     _, speaker_train_states, log_env_state, obs, rng = runner_state
@@ -219,6 +267,22 @@ def get_speaker_examples(runner_state, env, config):
     speaker_obs = jnp.arange(config["ENV_KWARGS"]["num_classes"])
     center_listener_obs = config["ENV_KWARGS"]["center_listener_obs"]
     speaker_outputs = [[execute_individual_speaker(env_rngs[j*i+j], speaker_train_states[i], speaker_obs) for j in range(config["SPEAKER_EXAMPLE_NUM"])]
+                       for i in range(config["ENV_KWARGS"]["num_speakers"])]
+    speaker_outputs = [item for row in speaker_outputs for item in row]
+    speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, config["ENV_KWARGS"]["speaker_action_dim"])
+    speaker_action = speaker_action.reshape((config["ENV_KWARGS"]["num_speakers"] * len(speaker_obs) * config["SPEAKER_EXAMPLE_NUM"], -1))
+    speaker_images = env._env.speaker_action_transform(speaker_action)
+    if center_listener_obs:
+        speaker_images = center_obs(speaker_images)
+    speaker_images = speaker_images.reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
+    return speaker_images
+
+def get_tom_speaker_examples(runner_state, env, config):
+    listener_train_states, speaker_train_states, log_env_state, obs, rng = runner_state
+    env_rngs = jax.random.split(rng, len(speaker_train_states) * config["SPEAKER_EXAMPLE_NUM"])
+    speaker_obs = jnp.arange(config["ENV_KWARGS"]["num_classes"])
+    center_listener_obs = config["ENV_KWARGS"]["center_listener_obs"]
+    speaker_outputs = [[execute_tom_speaker(env_rngs[j*i+j], speaker_train_states[i], listener_train_states[i], speaker_obs, env._env.speaker_action_transform, **config["ENV_KWARGS"]) for j in range(config["SPEAKER_EXAMPLE_NUM"])]
                        for i in range(config["ENV_KWARGS"]["num_speakers"])]
     speaker_outputs = [item for row in speaker_outputs for item in row]
     speaker_action = jnp.array([o[0] for o in speaker_outputs]).reshape(config["NUM_ENVS"], -1, config["ENV_KWARGS"]["speaker_action_dim"])
@@ -246,13 +310,13 @@ def env_step(runner_state, env, config):    # This function is passed to jax.lax
     speaker_rngs = jax.random.split(r_rng, len(speaker_train_states))
     
     ## COLLECT LISTENER ACTIONS
-    def execute_listener(*args):
-        return jax.lax.cond(args[0][0] == 1, lambda _: execute_tom_listener(*args[1:]), lambda _: execute_individual_listener(*args[1:4]), None)    # If it's from another speaker, execute tom listener
+    def execute_listener(*args, **kwargs):
+        return jax.lax.cond(args[0][0] == 1, lambda _: execute_tom_listener(*args[1:], **kwargs), lambda _: execute_individual_listener(*args[1:4]), None)    # If it's from another speaker, execute tom listener
     
     listener_outputs = jax.lax.cond(
         log_env_state.env_state.agent_inferential_mode[0] == 0,
         lambda _: [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)],
-        lambda _: [execute_listener(*args, env._env.speaker_action_transform) for args in zip(log_env_state.env_state.listener_obs_source.reshape(-1, 1), listener_rngs, listener_train_states, listener_obs, speaker_train_states)],
+        lambda _: [execute_listener(*args, env._env.speaker_action_transform, **env_kwargs) for args in zip(log_env_state.env_state.listener_obs_source.reshape(-1, 1), listener_rngs, listener_train_states, listener_obs, speaker_train_states)],
         None
     )
     # listener_outputs = [execute_individual_listener(*args) for args in zip(listener_rngs, listener_train_states, listener_obs)]   # This is the old code, might be faster
@@ -264,7 +328,7 @@ def env_step(runner_state, env, config):    # This function is passed to jax.lax
     speaker_outputs = jax.lax.cond(
         log_env_state.env_state.agent_inferential_mode[0] == 0,
         lambda _: [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)],
-        lambda _: [execute_tom_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, listener_train_states, speaker_obs)],
+        lambda _: [execute_tom_speaker(*args, env._env.speaker_action_transform, **env_kwargs) for args in zip(speaker_rngs, speaker_train_states, listener_train_states, speaker_obs)],
         None
     )
     # speaker_outputs = [execute_individual_speaker(*args) for args in zip(speaker_rngs, speaker_train_states, speaker_obs)]   # This is the old code, might be faster
