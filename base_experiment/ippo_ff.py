@@ -721,6 +721,8 @@ def make_train(config):
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
             speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            tom_speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0 and log_env_state.env_state.agent_inferential_mode[0] == 1, lambda _: get_tom_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            
             speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1)))
             if env_kwargs["center_listener_obs"]:
                 speaker_images = center_obs(speaker_images)
@@ -753,7 +755,7 @@ def make_train(config):
             probe_logits = jax.lax.cond((update_step + 1) % config["PROBE_LOGGING_ITER"] == 0, lambda _: get_probe_logits(), lambda _: jnp.zeros((config["PROBE_NUM_EXAMPLES"], env_kwargs["num_speakers"], env_kwargs["num_classes"])), operand=None)
 
             def wandb_callback(metrics):
-                ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step, p_logits = metrics
+                ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, tom_speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step, p_logits = metrics
                 lr = tb.listener_reward
                 sr = tb.speaker_reward
                 llogp = tb.listener_log_prob
@@ -847,6 +849,10 @@ def make_train(config):
                     final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
                     metric_dict.update({"env/speaker_examples": final_speaker_example_images})
 
+                    tom_speaker_example_images = make_grid(torch.tensor(tom_speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))), nrow=env_kwargs["num_classes"], pad_value=0.25)
+                    final_tom_speaker_example_images = wandb.Image(tom_speaker_example_images, caption="tom_speaker_examples")
+                    metric_dict.update({"env/tom_speaker_examples": final_tom_speaker_example_images})
+
                     listener_images = listener_obs[-1, 0, :, :, :].reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"]))
                 
                     listener_images = make_grid(torch.tensor(listener_images), nrow=env_kwargs["num_listeners"])
@@ -880,7 +886,7 @@ def make_train(config):
                 # metric_dict.update()
                 
                 wandb.log(metric_dict)
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits))
+            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, tom_speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits))
             
             return runner_state, update_step + 1
 
