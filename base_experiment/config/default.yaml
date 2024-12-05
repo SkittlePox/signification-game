@@ -57,7 +57,7 @@
   "log_prob_rewards": True
   "speaker_whitesum_penalty_coef": 0.0
   "speaker_curve_penalty_coef": 0.0
-  "center_listener_obs": True
+  "center_listener_obs": False
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "1.0 at 300"
