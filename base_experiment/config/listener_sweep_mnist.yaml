@@ -15,11 +15,7 @@ parameters:
     value: 250
   NUM_STEPS:
     value: 2048
-  ANNEAL_LR_LISTENER:
-    value: False
-  ANNEAL_LR_LISTENER_MULTIPLIER:
-    value: 1.0
-  ANNEAL_LR_SPEAKER:
+  LISTENER_LR_SCHEDULE:
     value: False
   ENT_COEF_LISTENER:
     max: 1.0

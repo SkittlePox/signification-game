@@ -1,0 +1,40 @@
+program: ippo_ff.py
+method: bayes
+name: listener-sweep-conv-cifar
+metric:
+  goal: maximize
+  name: reward/mean reward/all listeners
+parameters:
+  WANDB_MODE:
+    value: online
+  UPDATE_EPOCHS:
+    value: 250
+  NUM_STEPS:
+    value: 2048
+  LISTENER_LR_SCHEDULE:
+    values: [1e-5, 1e-4, 1e-3]
+  ENT_COEF_LISTENER:
+    max: 1.0
+    min: 1e-3
+    distribution: log_uniform_values
+  L2_REG_COEF_LISTENER:
+    max: 1e-3
+    min: 1e-6
+    distribution: log_uniform_values
+  SPEAKER_TRAIN_SCHEDULE:
+    value: "off"
+  LISTENER_TRAIN_SCHEDULE:
+    value: "on"
+  MINIBATCH_SIZE_LISTENER:
+    values: [32, 64, 128]
+  LISTENER_ARCH:
+    value: "conv"
+  SPEAKER_EXAMPLE_LOGGING_ITER:
+    value: 300
+
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}

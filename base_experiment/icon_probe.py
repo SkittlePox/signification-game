@@ -1,3 +1,4 @@
+import os
 from torchvision.datasets import MNIST
 from flax import linen as nn
 from flax.training import train_state, orbax_utils
@@ -13,6 +14,7 @@ from absl import logging
 import uuid
 import yaml
 import pathlib
+import pickle
 from utils import to_jax
 
 
@@ -83,32 +85,103 @@ def train_epoch(state, train_ds, batch_size, rng):
 
 
 def get_dataset(config):
-    mnist_dataset = MNIST('/tmp/mnist/', download=True)
-    n_env_imgs = config["ENV_NUM_DATAPOINTS"]
-    n_probe_val_imgs = config["PROBE_NUM_DATAPOINTS_VALIDATION"]
+    if config["ENV_DATASET"] == "mnist":
+        mnist_dataset = MNIST('/tmp/mnist/', download=True)
+        n_env_imgs = config["ENV_NUM_DATAPOINTS"]
+        n_probe_val_imgs = config["PROBE_NUM_DATAPOINTS_VALIDATION"]
 
-    images, labels = to_jax(
-        mnist_dataset, num_datapoints=n_env_imgs + n_probe_val_imgs)
-    images = images.astype('float32') / 255.0
+        images, labels = to_jax(
+            mnist_dataset, num_datapoints=n_env_imgs + n_probe_val_imgs)
+        images = images.astype('float32') / 255.0
 
-    images = np.expand_dims(images, -1)
+        images = np.expand_dims(images, -1)
 
-    env_images = images[:n_env_imgs]
-    env_labels = labels[:n_env_imgs]
+        env_images = images[:n_env_imgs]
+        env_labels = labels[:n_env_imgs]
 
-    probe_val_images = images[n_env_imgs:]
-    probe_val_labels = labels[n_env_imgs:]
+        probe_val_images = images[n_env_imgs:]
+        probe_val_labels = labels[n_env_imgs:]
 
-    train_ds = {"image": env_images, "label": env_labels}
-    test_ds = {"image": probe_val_images, "label": probe_val_labels}
+        train_ds = {"image": env_images, "label": env_labels}
+        test_ds = {"image": probe_val_images, "label": probe_val_labels}
 
-    return train_ds, test_ds
+        return train_ds, test_ds
+    
+    elif config["ENV_DATASET"] == "cifar10":
+        download_path = '/tmp/cifar10/'
+        os.makedirs(download_path, exist_ok=True)
+        
+        # Check if dataset already exists
+        dataset_files = os.listdir(download_path)
+        if len(dataset_files) > 0:
+            print(f"Dataset already exists in {download_path}.")
+        else:
+            dataset_link = 'https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
+            
+            import requests
+            from tqdm import tqdm
+
+            response = requests.get(dataset_link, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 1024
+            progress_bar = tqdm(total=total_size, unit='iB', unit_scale=True)
+            with open(os.path.join(download_path, 'cifar-10.tar.gz'), 'wb') as f:
+                for data in response.iter_content(block_size):
+                    f.write(data)
+                    progress_bar.update(len(data))
+            progress_bar.close()
+            if total_size != 0 and progress_bar.n != total_size:
+                print("Failed to download the dataset.")
+            else:
+                print("Dataset downloaded successfully.")
+                import tarfile
+                tar = tarfile.open(os.path.join(download_path, 'cifar-10.tar.gz'), 'r:gz')
+                tar.extractall(download_path)
+                tar.close()
+
+        with open(download_path+'cifar-10-batches-py/data_batch_1', 'rb') as f:   # Each batch is 10,000 images. Probably don't need that many
+            data_batch_1 = pickle.load(f, encoding='bytes')
+        
+        with open(download_path+'cifar-10-batches-py/data_batch_2', 'rb') as f:
+            data_batch_2 = pickle.load(f, encoding='bytes')
+
+        with open(download_path+'cifar-10-batches-py/data_batch_3', 'rb') as f:
+            data_batch_3 = pickle.load(f, encoding='bytes')
+
+        raw_images_1 = data_batch_1[b'data'].astype('float32') / 255.0
+        raw_images_2 = data_batch_2[b'data'].astype('float32') / 255.0
+        raw_images_3 = data_batch_3[b'data'].astype('float32') / 255.0
+
+        raw_images = np.vstack((raw_images_1, raw_images_2, raw_images_3))
+
+        red_channel = raw_images[:, :1024].reshape(-1, 32, 32)
+        green_channel = raw_images[:, 1024:2048].reshape(-1, 32, 32)
+        blue_channel = raw_images[:, 2048:].reshape(-1, 32, 32)
+
+        # Convert to grayscale using the weighted formula: 0.299*R + 0.587*G + 0.114*B
+        all_images = jnp.array((0.299 * red_channel + 0.587 * green_channel + 0.114 * blue_channel), dtype=jnp.float32).reshape(-1, 32, 32, 1)
+        
+        raw_labels_1 = jnp.array(data_batch_1[b'labels'], dtype=jnp.int32)
+        raw_labels_2 = jnp.array(data_batch_2[b'labels'], dtype=jnp.int32)
+        raw_labels_3 = jnp.array(data_batch_3[b'labels'], dtype=jnp.int32)
+        all_labels = jnp.hstack((raw_labels_1, raw_labels_2, raw_labels_3))
+
+        env_images = all_images[:config["ENV_NUM_DATAPOINTS"]]
+        env_labels = all_labels[:config["ENV_NUM_DATAPOINTS"]]
+
+        probe_val_images = all_images[config["ENV_NUM_DATAPOINTS"]:config["ENV_NUM_DATAPOINTS"]+config["PROBE_NUM_DATAPOINTS_VALIDATION"]]
+        probe_val_labels = all_labels[config["ENV_NUM_DATAPOINTS"]:config["ENV_NUM_DATAPOINTS"]+config["PROBE_NUM_DATAPOINTS_VALIDATION"]]
+
+        train_ds = {"image": env_images, "label": env_labels}
+        test_ds = {"image": probe_val_images, "label": probe_val_labels}
+
+        return train_ds, test_ds
 
 
 def create_train_state(rng, config):
     """Creates initial `TrainState`."""
     cnn = CNN()
-    params = cnn.init(rng, jnp.ones([1, 28, 28, 1]))['params']
+    params = cnn.init(rng, jnp.ones([1, config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"], 1]))['params']
     if config["OPTIMIZER"] == "sgd":
         tx = optax.sgd(config["LEARNING_RATE"], config["MOMENTUM"])
     elif config["OPTIMIZER"] == "adam":
@@ -186,7 +259,7 @@ def train_and_evaluate(config) -> train_state.TrainState:
         metric_dict.update({'entropy/test_avg': test_entropy})
 
         
-        for i in range(0, config["NUM_CLASSES"]):
+        for i in range(0, config["ENV_KWARGS"]["num_classes"]):
             metric_dict.update({f'entropy/train_{i}': train_per_class_entropy[i]})
             metric_dict.update({f'entropy/test_{i}': test_per_class_entropy[i]})
 
@@ -277,8 +350,6 @@ def train_probe(config):
         train_state = raw_restored['model']
 
         evaluate_model(train_state, config)
-
-
 
 
 if __name__ == "__main__":

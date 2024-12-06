@@ -1,0 +1,13 @@
+# @package _global_
+"PROBE_MODEL_NAME": "probe-5k-20k-20e-sgd-bedc"
+"ENV_DATASET": "mnist"
+
+"NUM_STEPS": 2048 # 2048
+"UPDATE_EPOCHS": 4000
+"MINIBATCH_SIZE_LISTENER": 32 # 32 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
+"ENV_NUM_DATAPOINTS": 5000
+
+"ENV_KWARGS":
+  ${ENV_KWARGS}:
+  "image_dim": 28 # 28 for MNIST, 32 for CIFAR-10

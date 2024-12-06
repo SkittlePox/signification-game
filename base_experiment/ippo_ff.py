@@ -9,11 +9,11 @@ import optax
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
 from flax.training import train_state
 from jax.tree_util import tree_flatten, tree_map
-from kaggle.api.kaggle_api_extended import KaggleApi
 import wandb
 import hydra
 import torch
 import cloudpickle
+import pickle
 from torchvision.utils import make_grid
 from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
@@ -22,9 +22,6 @@ from agents import *
 import pathlib
 import icon_probe
 from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents
-
-api = KaggleApi()
-api.authenticate()
 
 
 class TrainState(train_state.TrainState):
@@ -47,21 +44,79 @@ class Transition(NamedTuple):
 
 
 def define_env(config):
-    if config["ENV_DATASET"] == 'mnist':        
+    dataset_name = config["ENV_DATASET"]
+    if dataset_name == 'mnist':        
         from utils import to_jax
 
         mnist_dataset = MNIST('/tmp/mnist/', download=True)
         images, labels = to_jax(mnist_dataset, num_datapoints=config["ENV_NUM_DATAPOINTS"])  # This should also be in ENV_KWARGS
         images = images.astype('float32') / 255.0
+
+        # images are shape (5000, 28, 28)  dtype('float32') (pixels are between 0.0 and 1.0)
+        # labels are shape (5000,)  dtype('int32') (labels are from 0 to 9)
         
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
         return env
-    elif config["ENV_DATASET"] == "veg":
+
+    elif dataset_name == 'cifar10':
+        download_path = '/tmp/cifar10/'
+        os.makedirs(download_path, exist_ok=True)
+        
+        # Check if dataset already exists
+        dataset_files = os.listdir(download_path)
+        if len(dataset_files) > 0:
+            print(f"Dataset already exists in {download_path}.")
+        else:
+            dataset_link = 'https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
+            
+            import requests
+            from tqdm import tqdm
+
+            response = requests.get(dataset_link, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 1024
+            progress_bar = tqdm(total=total_size, unit='iB', unit_scale=True)
+            with open(os.path.join(download_path, 'cifar-10.tar.gz'), 'wb') as f:
+                for data in response.iter_content(block_size):
+                    f.write(data)
+                    progress_bar.update(len(data))
+            progress_bar.close()
+            if total_size != 0 and progress_bar.n != total_size:
+                print("Failed to download the dataset.")
+            else:
+                print("Dataset downloaded successfully.")
+                import tarfile
+                tar = tarfile.open(os.path.join(download_path, 'cifar-10.tar.gz'), 'r:gz')
+                tar.extractall(download_path)
+                tar.close()
+
+        with open(download_path+'cifar-10-batches-py/data_batch_1', 'rb') as f:   # Each batch is 10,000 images. Probably don't need that many
+            data_batch_1 = pickle.load(f, encoding='bytes')
+
+        raw_images = data_batch_1[b'data'].astype('float32') / 255.0
+
+        red_channel = raw_images[:, :1024].reshape(10000, 32, 32)
+        green_channel = raw_images[:, 1024:2048].reshape(10000, 32, 32)
+        blue_channel = raw_images[:, 2048:].reshape(10000, 32, 32)
+
+        # Convert to grayscale using the weighted formula: 0.299*R + 0.587*G + 0.114*B
+        images = jnp.array((0.299 * red_channel + 0.587 * green_channel + 0.114 * blue_channel), dtype=jnp.float32)[:config["ENV_NUM_DATAPOINTS"]]
+        labels = jnp.array(data_batch_1[b'labels'], dtype=jnp.int32)[:config["ENV_NUM_DATAPOINTS"]]
+            
+        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
+        return env
+        
+    elif dataset_name == 'cifar-100':
+        pass
+
+    elif dataset_name == "veg":
         from utils import load_images_to_array
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        api = KaggleApi()
+        api.authenticate()
 
         download_path = '/tmp/veggies/'
-        if not os.path.exists(download_path):
-            os.makedirs(download_path)
+        os.makedirs(download_path, exist_ok=True)
 
         # Check if dataset already exists
         dataset_files = os.listdir(download_path)
@@ -747,7 +802,7 @@ def make_train(config):
             ##### Evaluate iconicity probe and action penalties
 
             def get_probe_logits():
-                speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, 28, 28, 1))
+                speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, env_kwargs["image_dim"], env_kwargs["image_dim"], 1))
                 # I need to calculate the whitesum penalty based on the speaker_images. I don't know what shape they are
                 return probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
             
@@ -919,6 +974,10 @@ def main(config):
         save_code=True,
         notes=config["WANDB_NOTES"]
     )
+
+    print(OmegaConf.to_yaml(config))
+    return
+
     rng = jax.random.PRNGKey(config["JAX_RANDOM_SEED"])
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)

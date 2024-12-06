@@ -1,22 +1,26 @@
 "ENV_NUM_DATAPOINTS": 5000
 "PROBE_NUM_DATAPOINTS_VALIDATION": 20000
 "BATCH_SIZE": 128
-"NUM_EPOCHS": 20
+"NUM_EPOCHS": 35
 "LEARNING_RATE": 0.05
 "MOMENTUM": 0.9
 "OPTIMIZER": "sgd"
 
-"NUM_CLASSES": 10
+"ENV_DATASET": "cifar10"
+"ENV_KWARGS"
+  "num_classes": 10
+  "image_dim": 32
 
-"TRAIN_MODEL": False
+"TRAIN_MODEL": True
 "SAVE_MODEL": True
-"EVAL_MODEL": True
-"MODEL_NAME_PREFIX": "probe-5k-20k-20e-sgd-"
-"MODEL_NAME_EVAL": "probe-5k-20k-20e-sgd-bedc"
+"EVAL_MODEL": False
+"MODEL_NAME_PREFIX": "probe-cifar10-5k-20k-35e-sgd-"
+"MODEL_NAME_EVAL": "probe-cifar10-5k-20k-20e-sgd-bedc"
 
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "icon-probe"
-"WANDB_NOTES": "Initial testing of icon probe training."
+"WANDB_NOTES": "Training probe for cifar-10"
+"DEBUGGER": False
