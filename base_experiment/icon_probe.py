@@ -181,7 +181,7 @@ def get_dataset(config):
 def create_train_state(rng, config):
     """Creates initial `TrainState`."""
     cnn = CNN()
-    params = cnn.init(rng, jnp.ones([1, config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"], 1]))['params']
+    params = cnn.init(rng, jnp.ones([1, 32, 32, 1]))['params']
     if config["OPTIMIZER"] == "sgd":
         tx = optax.sgd(config["LEARNING_RATE"], config["MOMENTUM"])
     elif config["OPTIMIZER"] == "adam":

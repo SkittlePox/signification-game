@@ -975,9 +975,6 @@ def main(config):
         notes=config["WANDB_NOTES"]
     )
 
-    print(OmegaConf.to_yaml(config))
-    return
-
     rng = jax.random.PRNGKey(config["JAX_RANDOM_SEED"])
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)

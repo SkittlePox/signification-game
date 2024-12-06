@@ -6,6 +6,7 @@
 "ENT_COEF_SPEAKER": 0.01
 "L2_REG_COEF_LISTENER": 1.5e-6
 "L2_REG_COEF_SPEAKER": 1e-5
+"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-6 at 300"
 
 "NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 2000
@@ -14,5 +15,5 @@
 "ENV_NUM_DATAPOINTS": 5000
 
 "ENV_KWARGS":
-  ${ENV_KWARGS}:
+  ${ENV_KWARGS}:  # This doesn't look right
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10

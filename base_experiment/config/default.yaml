@@ -52,16 +52,16 @@
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
   "speaker_action_transform": "splines"
-  "speaker_action_dim": 12  # This must be a multiple of 6 for "splines"
+  "speaker_action_dim": 18  # This must be a multiple of 6 for "splines"
   "log_prob_rewards": True
   "speaker_whitesum_penalty_coef": 0.0
   "speaker_curve_penalty_coef": 0.0
   "center_listener_obs": False
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
-  "reward_parity_fn": "coop"  # "1.0 at 300"
+  "reward_parity_fn": "manip"  # "1.0 at 300", "coop", "manip"
   "agent_inferential_mode_fn": "gut" # Default is "gut", "tom at 300"
-  "channel_ratio_fn": "0.0"  # E.g. "1.0 at 300", "sigmoid-custom"
+  "channel_ratio_fn": "0.2 at 300"  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "mandate_unitary_channel_map": False
   "sigmoid_offset": 600
