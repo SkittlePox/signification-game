@@ -143,7 +143,7 @@ def save_agents(listener_train_states, speaker_train_states, config):
     model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
     model_uuid = str(uuid.uuid4())[:4]
 
-    agent_logdir = local_path+model_path_str+'agents-'+f'{config["UPDATE_EPOCHS"]}e-'+model_uuid+'/'
+    agent_logdir = local_path+model_path_str+'agents-'+f'{config["ENV_DATASET"]}-{config["UPDATE_EPOCHS"]}e-{config["ENV_NUM_DATAPOINTS"]}dp-'+model_uuid+'/'
     os.makedirs(agent_logdir, exist_ok=True)
 
     for i, lts in enumerate(listener_train_states):
@@ -309,7 +309,7 @@ def speaker_penalty_curve_fn(speaker_actions: jnp.array):
         
         return jnp.nan_to_num(curvature)
 
-    curve_penalty_per_spline = bezier_curvature(speaker_actions.reshape(-1, 6))
+    curve_penalty_per_spline = bezier_curvature(speaker_actions.reshape(-1, speaker_actions.shape[-1]))
 
     return jnp.average(curve_penalty_per_spline, axis=0)
 
@@ -565,7 +565,7 @@ def get_speaker_action_transform(fn_name, image_dim):
             
             # P0, P1, P2 = spline_params.reshape((3, 2)) 
             P0, P1, P2, W = spline_params[0:2], spline_params[2:4], spline_params[4:6], spline_params[6]
-            W *= -0.005
+            W *= -0.002  # This is the weight param. -0.005 is too dark
             t_values = jnp.linspace(0, 1, num=50)
             spline_points = bezier_spline(t_values, P0, P1, P2)
             x_points, y_points = jnp.round(spline_points).astype(int).T

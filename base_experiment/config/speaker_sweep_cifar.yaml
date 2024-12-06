@@ -8,7 +8,7 @@ parameters:
   WANDB_MODE:
     value: online
   UPDATE_EPOCHS:
-    value: 1500
+    value: 800
   NUM_STEPS:
     value: 2048
   SPEAKER_LR_SCHEDULE:

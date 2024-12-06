@@ -6,6 +6,6 @@
 **/artifact/
 **/media/
 **/models/
-**/tom_scratch_images/
+**/scratch_images/
 *.e
 *.o

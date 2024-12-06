@@ -22,10 +22,10 @@ from utils import get_speaker_action_transform
 
 
 class Superagent:
-    def __init__(self, speaker_agent, listener_agent) -> None:
+    def __init__(self, speaker_agent, listener_agent, speaker_action_transform_name="splines", image_dim=28) -> None:
         self.speaker = speaker_agent
         self.listener = listener_agent
-        self.speaker_action_transform = get_speaker_action_transform("splines", 28)
+        self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform_name, image_dim)
     
     def speak(self, obs): # This will return a distrax distribution which should be sampled to get spline parameters.
         return self.speaker.apply_fn(self.speaker.params, obs)
@@ -33,7 +33,7 @@ class Superagent:
     def listen(self, obs): # This will return a categorical distribution which should be sampled to get action indices.
         return self.listener.apply_fn(self.listener.params, obs)
     
-    def interpret_pictogram(self, key, obs, n_samples=3): # obs is an image
+    def interpret_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3): # obs is an image
         # P(r|s) = P(s|r)P(r)
         # P(s|r) p= exp(U(s:r))
         # U(s:r) = log(P_lit(r|s))
@@ -43,7 +43,7 @@ class Superagent:
 
         # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
         signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 (should be unused!)
-        signal_param_samples = signal_distribution.sample(seed=key, sample_shape=(12, n_samples))[0]    # This is shaped (n_samples, 1, 12)
+        signal_param_samples = signal_distribution.sample(seed=key, sample_shape=(speaker_action_dim, n_samples))[0]    # This is shaped (n_samples, 1, 12)
         
         # Generate actual images
         signal_samples = self.speaker_action_transform(signal_param_samples)    # This is shaped (n_samples, 28, 28)
@@ -67,7 +67,7 @@ class Superagent:
 
         return pictogram_pi
 
-    def create_pictogram(self, key, obs, n_samples=3, n_search=4): # obs is an integer between 0 and num_referents-1
+    def create_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3, n_search=4): # obs is an integer between 0 and num_referents-1
         # P(s|r) p= exp(U(s:r))
         # U(s:r) = log(P_lit(r|s))
         # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
@@ -80,7 +80,7 @@ class Superagent:
 
         # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
         signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 (should be unused!)
-        signal_param_samples = signal_distribution.sample(seed=denom_key, sample_shape=(12, n_samples))[0]    # This is shaped (n_samples, 1, 12)
+        signal_param_samples = signal_distribution.sample(seed=denom_key, sample_shape=(speaker_action_dim, n_samples))[0]    # This is shaped (n_samples, 1, 12)
         
         # Generate actual images
         signal_samples = self.speaker_action_transform(signal_param_samples)    # This is shaped (n_samples, 28, 28)
@@ -100,7 +100,7 @@ class Superagent:
 
         # Sample lots of possible signals.
         signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 (should be unused!)
-        signal_param_samples = signal_distribution.sample(seed=numer_key, sample_shape=(12, n_search))[0]    # This is shaped (n_search, 1, 12)
+        signal_param_samples = signal_distribution.sample(seed=numer_key, sample_shape=(speaker_action_dim, n_search))[0]    # This is shaped (n_search, 1, 12)
         
         # Generate actual images
         signal_samples = self.speaker_action_transform(signal_param_samples)
@@ -127,7 +127,8 @@ class Superagent:
     
 
 def test():
-    filename = "agents-300e-73c6"
+    # filename = "agents-300e-73c6"   # For MNIST
+    filename = "agents-300e-8e97"   # For cifar10
     agent_indices = (3, 4) # list(range(2))
     listener_agents = []
     speaker_agents = []
@@ -140,7 +141,7 @@ def test():
         with open(local_path+f'/models/{filename}/speaker_{i}.pkl', 'rb') as f:
             a = cloudpickle.load(f)
             speaker_agents.append(a)
-        superagents.append(Superagent(speaker_agents[-1], listener_agents[-1]))
+        superagents.append(Superagent(speaker_agents[-1], listener_agents[-1], "splines_weight", 32))
 
 
     # key = jax.random.PRNGKey(0)
@@ -160,11 +161,11 @@ def test():
     for i in range(num_iters):
         key, key_i = jax.random.split(key)
         sp_key, ls_key = jax.random.split(key_i, 2)
-        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_samples=5000, n_search=5000)
-        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=5000)
+        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_samples=500, n_search=50)
+        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=500)
         reading = pi.sample(seed=key_i)
 
-        image_paths.append(local_path+f'/scratch/tom_scratch_images/pic_{i}_sign_{i % 10}_read_{reading}.png')
+        image_paths.append(local_path+f'/scratch/scratch_images/pic_{i}_sign_{i % 10}_read_{reading}.png')
         pictograms.append(pictogram)
 
     for path, pic in zip(image_paths, pictograms):

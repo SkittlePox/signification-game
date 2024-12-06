@@ -7,19 +7,19 @@
 "OPTIMIZER": "sgd"
 
 "ENV_DATASET": "cifar10"
-"ENV_KWARGS"
+"ENV_KWARGS":
   "num_classes": 10
   "image_dim": 32
 
 "TRAIN_MODEL": True
-"SAVE_MODEL": True
+"SAVE_MODEL": False
 "EVAL_MODEL": False
 "MODEL_NAME_PREFIX": "probe-cifar10-5k-20k-35e-sgd-"
 "MODEL_NAME_EVAL": "probe-cifar10-5k-20k-20e-sgd-bedc"
 
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "icon-probe"
 "WANDB_NOTES": "Training probe for cifar-10"
