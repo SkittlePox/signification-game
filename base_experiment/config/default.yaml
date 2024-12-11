@@ -17,6 +17,9 @@
 "SPEAKER_TRAIN_SCHEDULE": "off then on at 300"
 "LISTENER_TRAIN_SCHEDULE": "on"
 
+"PRETRAINED_LISTENERS": "" #"agents-cifar10-600e-3000dp-84e5"
+"PRETRAINED_SPEAKERS": "" #"agents-cifar10-600e-3000dp-84e5"
+
 "LISTENER_ARCH": 'conv'
 "SPEAKER_ARCH": 'splines'
 "SPEAKER_LATENT_DIM": 128
@@ -39,14 +42,14 @@
 "PROBE_NUM_EXAMPLES": 500 # 500 # This must be less than or equal to "NUM_STEPS"
 
 "ENV_NAME": "simple-sig-game"
-"ENV_DATASET": 'mnist'
+"ENV_DATASET": 'cifar10'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 5
   "num_listeners": 5
   "num_channels": 5
   "num_classes": 10
-  "image_dim": 28 # 28 for MNIST, 32 for CIFAR-10
+  "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0

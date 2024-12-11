@@ -157,6 +157,28 @@ def save_agents(listener_train_states, speaker_train_states, config):
     with open(f'{agent_logdir}config.yaml', 'w') as f:
         OmegaConf.save(config=config, f=f)
 
+def load_agents(config):
+    local_path = str(pathlib.Path().resolve())
+    model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+
+    listener_train_states = []
+    speaker_train_states = []
+
+    if config["PRETRAINED_LISTENERS"] != "":
+        for i in range(config["ENV_KWARGS"]["num_listeners"]):
+            with open(local_path+model_path_str+f'{config["PRETRAINED_LISTENERS"]}/listener_{i}.pkl', 'rb') as f:
+                a = cloudpickle.load(f)
+                listener_train_states.append(a)
+    
+    if config["PRETRAINED_SPEAKERS"] != "":
+        for i in range(config["ENV_KWARGS"]["num_speakers"]):
+            with open(local_path+model_path_str+f'{config["PRETRAINED_SPEAKERS"]}/speaker_{i}.pkl', 'rb') as f:
+                a = cloudpickle.load(f)
+                speaker_train_states.append(a)
+
+    return listener_train_states, speaker_train_states
+
+
 ##################################################################
 
 ############ Used in simplified_signification_game.py ############

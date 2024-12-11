@@ -21,7 +21,7 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
 import pathlib
 import icon_probe
-from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents, load_agents
 
 
 class TrainState(train_state.TrainState):
@@ -133,75 +133,103 @@ def define_env(config):
         return env
 
 
-def initialize_listener(env, rng, config, i):
-    if config["LISTENER_ARCH"] == 'conv':
-        listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["LISTENER_ARCH"] == 'conv-sigmoid':
-        listener_network = ActorCriticListenerConvSigmoid(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["LISTENER_ARCH"] == 'conv-small':
-        listener_network = ActorCriticListenerConvSmall(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["LISTENER_ARCH"] == 'dense':
-        listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["LISTENER_ARCH"] == 'dense-batchnorm':
-        listener_network = ActorCriticListenerDenseBatchnorm(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    
-    rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
-    init_x = jnp.zeros(
-            (config["ENV_KWARGS"]["image_dim"]**2,)
+def initialize_listener(env, rng, config, pre_trained_listener_train_states, i):
+    if i >= len(pre_trained_listener_train_states):
+        if config["LISTENER_ARCH"] == 'conv':
+            listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        elif config["LISTENER_ARCH"] == 'conv-sigmoid':
+            listener_network = ActorCriticListenerConvSigmoid(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        elif config["LISTENER_ARCH"] == 'conv-small':
+            listener_network = ActorCriticListenerConvSmall(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        elif config["LISTENER_ARCH"] == 'dense':
+            listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        elif config["LISTENER_ARCH"] == 'dense-batchnorm':
+            listener_network = ActorCriticListenerDenseBatchnorm(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        
+        rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
+        init_x = jnp.zeros(
+                (config["ENV_KWARGS"]["image_dim"]**2,)
+            )
+        network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
+        
+        lr_func = get_anneal_schedule(config["LISTENER_LR_SCHEDULE"], config["NUM_MINIBATCHES_LISTENER"])
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
         )
-    network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
-    
-    lr_func = get_anneal_schedule(config["LISTENER_LR_SCHEDULE"], config["NUM_MINIBATCHES_LISTENER"])
-    tx = optax.chain(
-        optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-        optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
-    )
-    
-    train_state = TrainState.create(
-        apply_fn=listener_network.apply,
-        params=network_params,
-        key=rng,
-        tx=tx,
-    )
+        
+        train_state = TrainState.create(
+            apply_fn=listener_network.apply,
+            params=network_params,
+            key=rng,
+            tx=tx,
+        )
+    else:
+        pre_trained_listener_ts = pre_trained_listener_train_states[i]
+        
+        lr_func = get_anneal_schedule(config["LISTENER_LR_SCHEDULE"], config["NUM_MINIBATCHES_LISTENER"])
+        new_tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
+        )
+
+        train_state = pre_trained_listener_ts# .replace(tx=new_tx, key=rng)
+        # This is failing but I don't know why. Probably something with cloudpickle but I'm not sure. Maybe need to reconstruct the trainstate by hand.
+
+        listener_network = None
 
     return listener_network, train_state, lr_func
 
-def initialize_speaker(env, rng, config, i):
-    # Passing num_classes = env_kwargs.num_classes + 1 so we can use the additional channel to sample from the general space of signals
-    if config["SPEAKER_ARCH"] == 'full_image':
-        speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'full_image_setvariance':
-        speaker_network = ActorCriticSpeakerFullImageSetVariance(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'gauss_splat':
-        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'gauss_splatcovar':
-        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'gauss_splatchol':
-        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'splines':
-        speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'splinesnoise':
-        speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
+def initialize_speaker(env, rng, config, pre_trained_speaker_train_states, i):
+    if i >= len(pre_trained_speaker_train_states):
+        # Passing num_classes = env_kwargs.num_classes + 1 so we can use the additional channel to sample from the general space of signals
+        if config["SPEAKER_ARCH"] == 'full_image':
+            speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        elif config["SPEAKER_ARCH"] == 'full_image_setvariance':
+            speaker_network = ActorCriticSpeakerFullImageSetVariance(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        elif config["SPEAKER_ARCH"] == 'gauss_splat':
+            speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        elif config["SPEAKER_ARCH"] == 'gauss_splatcovar':
+            speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        elif config["SPEAKER_ARCH"] == 'gauss_splatchol':
+            speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        elif config["SPEAKER_ARCH"] == 'splines':
+            speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+        elif config["SPEAKER_ARCH"] == 'splinesnoise':
+            speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
 
-    rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
-    init_x = jnp.zeros(
-            (1,),
-            dtype=jnp.int32
+        rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
+        init_x = jnp.zeros(
+                (1,),
+                dtype=jnp.int32
+            )
+        network_params = speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
+
+        lr_func = get_anneal_schedule(config["SPEAKER_LR_SCHEDULE"], config["NUM_MINIBATCHES_SPEAKER"])
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5),
         )
-    network_params = speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
+        
+        train_state = TrainState.create(
+            apply_fn=speaker_network.apply,
+            params=network_params,
+            key=rng,
+            tx=tx,
+        )
+    else:
+        pre_trained_speaker_ts = pre_trained_speaker_train_states[i]
+        
+        lr_func = get_anneal_schedule(config["SPEAKER_LR_SCHEDULE"], config["NUM_MINIBATCHES_SPEAKER"])
+        new_tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5),
+        )
 
-    lr_func = get_anneal_schedule(config["SPEAKER_LR_SCHEDULE"], config["NUM_MINIBATCHES_SPEAKER"])
-    tx = optax.chain(
-        optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-        optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_SPEAKER_B1"], b2=config["OPTIMIZER_SPEAKER_B2"], eps=1e-5),
-    )
+        train_state = pre_trained_speaker_ts.replace(tx=new_tx, key=rng)
+
+        speaker_network = None
     
-    train_state = TrainState.create(
-        apply_fn=speaker_network.apply,
-        params=network_params,
-        key=rng,
-        tx=tx,
-    )
 
     return speaker_network, train_state, lr_func
 
@@ -579,6 +607,8 @@ def make_train(config):
     config["NUM_ACTORS"] = (env_kwargs["num_speakers"] + env_kwargs["num_listeners"]) * config["NUM_ENVS"]
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
+
+    pre_trained_listener_train_states, pre_trained_speaker_train_states = load_agents(config)
     
     def train(rng):
         # MAKE AGENTS
@@ -586,10 +616,10 @@ def make_train(config):
         listener_rngs = jax.random.split(rng_l, env_kwargs["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
         speaker_rngs = jax.random.split(rng_s, env_kwargs["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
         
-        listeners_stuff = [initialize_listener(env, x_rng, config, i) for i, x_rng in enumerate(listener_rngs)]
+        listeners_stuff = [initialize_listener(env, x_rng, config, pre_trained_listener_train_states, i) for i, x_rng in enumerate(listener_rngs)]
         _listener_networks, listener_train_states, listener_lr_funcs = zip(*listeners_stuff) # listener_lr_funcs is for logging only, it's not actually used directly by the optimizer
         
-        speakers_stuff = [initialize_speaker(env, x_rng, config, i) for i, x_rng in enumerate(speaker_rngs)]
+        speakers_stuff = [initialize_speaker(env, x_rng, config, pre_trained_speaker_train_states, i) for i, x_rng in enumerate(speaker_rngs)]
         _speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
 
         # LOAD ICON PROBE

@@ -10,8 +10,8 @@
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
-#SBATCH -o siggame_job_%j.o
-#SBATCH -e siggame_job_%j.e
+#SBATCH -o job_outputs/siggame_job_%j.o
+#SBATCH -e job_outputs/siggame_job_%j.e
 #SBATCH --mail-type=END
 #SBATCH --mail-user=benjamin_spiegel@brown.edu
 
@@ -54,4 +54,5 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 
 #### For collecting listeners to run ToM experiments on
-python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R7b - cifar10 listeners epoch 600" +dataset=cifar10 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.0" ENV_KWARGS.listener_n_samples=50 ENV_KWARGS.speaker_n_samples=50 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=600 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R7d - cifar10 listeners epoch 350 with 10000 datapoints" +dataset=cifar10 ENV_NUM_DATAPOINTS=10000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.0" ENV_KWARGS.listener_n_samples=50 ENV_KWARGS.speaker_n_samples=50 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=350 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8 - Test with pretrained cifar10 listeners" +dataset=cifar10 PRETRAINED_LISTENERS="agents-cifar10-600e-3000dp-84e5" ENV_NUM_DATAPOINTS=3000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.2" ENV_KWARGS.reward_parity_fn=manip SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=100 WANDB_MODE=online
