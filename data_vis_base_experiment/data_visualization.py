@@ -7,6 +7,7 @@ from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import json
 
 def download_speaker_examples(run_id, directory):
     os.makedirs(directory, exist_ok=True)
@@ -174,25 +175,64 @@ def make_graphics():
         make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
 
 
-def make_probe_plot(directory, sp_num=0):
-    # Load the data
-    data = pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv"))
+def make_probe_plot(directories, labels, sp_num=0, num_epochs=None):
+    datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv")) for directory in directories]
     sns.set_theme(style="darkgrid")
 
-    # Plot the data
-    plt.figure(figsize=(10, 6))
-    plt.plot(data, label='Actual Data')
-    plt.plot(data.rolling(window=25).mean(), label='SMA')
-    plt.title(f'Probe Entropy for Speaker {sp_num}')
-    plt.xlabel('Epoch')
-    plt.ylabel('Entropy')
-    # plt.legend()
-    plt.savefig(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.png"))
+    # Plot the data with larger font
+    fig, ax = plt.subplots(figsize=(6, 7))
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
+
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
+
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, data in enumerate(datas):
+        if num_epochs is not None:
+            data = data.head(num_epochs)
+        ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.15)
+        ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    ax.set_xlabel('Epoch', fontsize=16)
+    ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    plt.legend(fontsize=14)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:4]
+    plt.savefig(os.path.join("./joint-plots/", f"probe_entropy_speaker_{sp_num}_{uuidstr}.png"))
+
+    config = {
+        "directories": directories,
+        "labels": labels,
+        "num_epochs": num_epochs,
+        "sp_num": sp_num
+    }
+
+    with open(f'./joint-plots/config_{uuidstr}.json', 'w') as f:
+        json.dump(config, f)
 
 def make_plots():
-    # download_probe_data(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
+    # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
 
-    make_probe_plot(directory="./drawn-shape-1950/")
+    # Manip-coop negative curvature: 1973, manip-coop size penalty: 1975
+
+    # download_probe_data(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
+    # download_probe_data(run_id="signification-team/signification-game/wjtjyd8u", directory="./whole-firefly-1973/")
+    # download_probe_data(run_id="signification-team/signification-game/0in3o71n", directory="./cool-armadillo-1975/")
+
+    # download_probe_data(run_id="signification-team/signification-game/2vy8mbfi", directory="./treasured-sound-1945/") # Coop - Curve penalty
+    # download_probe_data(run_id="signification-team/signification-game/dlezjmad", directory="./true-forest-1934/") # Coop - Size penalty
+
+    make_probe_plot(directories=["./drawn-shape-1950/", "./cool-armadillo-1975/", "./whole-firefly-1973/", "./true-forest-1934/", "./treasured-sound-1945/"],
+                    labels=["Manipulation", "Manip-coop - Size Penalty", "Manip-coop - Curve Penalty", "Coop - Size Penalty", "Coop - Curve Penalty"],
+                    num_epochs=3300)
 
 if __name__=="__main__":
     make_plots()
