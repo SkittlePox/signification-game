@@ -4,6 +4,9 @@ import numpy as np
 import uuid
 from PIL import Image
 from tqdm import tqdm
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def download_speaker_examples(run_id, directory):
     os.makedirs(directory, exist_ok=True)
@@ -13,6 +16,16 @@ def download_speaker_examples(run_id, directory):
     for file in tqdm(files, desc="Downloading speaker examples"):
         if "speaker_examples" in str(file):
             file.download(root=directory)
+
+def download_probe_data(run_id, directory, which_speakers=[0]):
+    os.makedirs(directory, exist_ok=True)
+    api = wandb.Api()
+    run = api.run(run_id)
+    history = run.scan_history()
+    for sp_num in which_speakers:
+        probe_entropy = [row[f"probe/entropy/speaker {sp_num} average"] for row in tqdm(history, desc="Downloading probe data")]
+        probe_entropy_df = pd.DataFrame(probe_entropy)
+        probe_entropy_df.to_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv"), index=False)
 
 
 def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=30, method="uniform", **kwargs):
@@ -95,7 +108,7 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=3
             f.write(f"{img_file}\n")
 
 
-if __name__=="__main__":
+def make_graphics():
     # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
 
     # Download data for Part1 all V1
@@ -159,4 +172,28 @@ if __name__=="__main__":
         make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=100.0, method="1/x")
         make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x")
         make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
+
+
+def make_probe_plot(directory, sp_num=0):
+    # Load the data
+    data = pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv"))
+    sns.set_theme(style="darkgrid")
+
+    # Plot the data
+    plt.figure(figsize=(10, 6))
+    plt.plot(data, label='Actual Data')
+    plt.plot(data.rolling(window=25).mean(), label='SMA')
+    plt.title(f'Probe Entropy for Speaker {sp_num}')
+    plt.xlabel('Epoch')
+    plt.ylabel('Entropy')
+    # plt.legend()
+    plt.savefig(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.png"))
+
+def make_plots():
+    # download_probe_data(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
+
+    make_probe_plot(directory="./drawn-shape-1950/")
+
+if __name__=="__main__":
+    make_plots()
     
