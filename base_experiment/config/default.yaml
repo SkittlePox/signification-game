@@ -42,7 +42,7 @@
 "PROBE_NUM_EXAMPLES": 500 # 500 # This must be less than or equal to "NUM_STEPS"
 
 "ENV_NAME": "simple-sig-game"
-"ENV_DATASET": 'cifar10'
+"ENV_DATASET": 'cifar100'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 5

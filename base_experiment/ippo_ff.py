@@ -108,8 +108,57 @@ def define_env(config):
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
         return env
         
-    elif dataset_name == 'cifar-100':
-        pass
+    elif dataset_name == 'cifar100':
+        download_path = '/tmp/cifar100/'
+        os.makedirs(download_path, exist_ok=True)
+        
+        # Check if dataset already exists
+        dataset_files = os.listdir(download_path)
+        if len(dataset_files) > 0:
+            print(f"Dataset already exists in {download_path}.")
+        else:
+            dataset_link = 'https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz'
+            
+            import requests
+            from tqdm import tqdm
+
+            response = requests.get(dataset_link, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            block_size = 1024
+            progress_bar = tqdm(total=total_size, unit='iB', unit_scale=True)
+            with open(os.path.join(download_path, 'cifar-100.tar.gz'), 'wb') as f:
+                for data in response.iter_content(block_size):
+                    f.write(data)
+                    progress_bar.update(len(data))
+            progress_bar.close()
+            if total_size != 0 and progress_bar.n != total_size:
+                print("Failed to download the dataset.")
+            else:
+                print("Dataset downloaded successfully.")
+                import tarfile
+                tar = tarfile.open(os.path.join(download_path, 'cifar-100.tar.gz'), 'r:gz')
+                tar.extractall(download_path)
+                tar.close()
+
+        with open(download_path+'cifar-100-python/train', 'rb') as f:   # 50,000 images
+            train_data = pickle.load(f, encoding='bytes')
+        
+        # with open(download_path+'cifar-100-python/test', 'rb') as f:
+        #     test_data = pickle.load(f, encoding='bytes')
+
+        raw_images = train_data[b'data'].astype('float32') / 255.0
+
+        red_channel = raw_images[:, :1024].reshape(50000, 32, 32)
+        green_channel = raw_images[:, 1024:2048].reshape(50000, 32, 32)
+        blue_channel = raw_images[:, 2048:].reshape(50000, 32, 32)
+
+        # Convert to grayscale using the weighted formula: 0.299*R + 0.587*G + 0.114*B
+        images = jnp.array((0.299 * red_channel + 0.587 * green_channel + 0.114 * blue_channel), dtype=jnp.float32)[:config["ENV_NUM_DATAPOINTS"]]
+        labels = jnp.array(train_data[b'labels'], dtype=jnp.int32)[:config["ENV_NUM_DATAPOINTS"]]
+        # There are b'fine_labels' and b'coarse_labels', Likely want to select a subset of fine labels, well over 10
+            
+        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
+        return env
 
     elif dataset_name == "veg":
         from utils import load_images_to_array
