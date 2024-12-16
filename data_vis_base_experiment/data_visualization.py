@@ -180,7 +180,7 @@ def make_probe_plot(directories, labels, sp_num=0, num_epochs=None):
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(6, 7))
+    fig, ax = plt.subplots(figsize=(6, 6))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -199,10 +199,10 @@ def make_probe_plot(directories, labels, sp_num=0, num_epochs=None):
         ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7)
 
     # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
-    ax.set_xlabel('Epoch', fontsize=16)
-    ax.set_ylabel('Entropy', fontsize=16)
-    ax.tick_params(axis='both', which='major', labelsize=14)
-    plt.legend(fontsize=14)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    plt.legend(fontsize=16)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:4]
@@ -217,6 +217,8 @@ def make_probe_plot(directories, labels, sp_num=0, num_epochs=None):
 
     with open(f'./joint-plots/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
+
+    print(f'./joint-plots/config_{uuidstr}.json')
 
 def make_plots():
     # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
