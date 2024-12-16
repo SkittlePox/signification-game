@@ -301,7 +301,7 @@ def evaluate_model(state, config):
         )
     
 
-def load_model(checkpoint_name, config, no_train=False):
+def load_probe_model(checkpoint_name, config, no_train=False):
     if no_train:
         config = dict({"OPTIMIZER": "sgd", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001})
     empty_state = create_train_state(jax.random.key(0), config)
@@ -311,7 +311,7 @@ def load_model(checkpoint_name, config, no_train=False):
     return raw_restored
 
 
-def save_model(train_state, config, model_name):
+def save_probe_model(train_state, config, model_name):
     checkpoint = {'model': train_state}
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     save_args = orbax_utils.save_args_from_target(checkpoint)
@@ -342,11 +342,11 @@ def train_probe(config):
             random_uuid = uuid.uuid4()
             model_name = config["MODEL_NAME_PREFIX"]
             model_name += str(random_uuid)[-4:]
-            save_model(train_state, config, model_name)
+            save_probe_model(train_state, config, model_name)
     
     if config["EVAL_MODEL"]:
         local_path = str(pathlib.Path().resolve())
-        raw_restored = load_model(local_path+'/models/'+config["MODEL_NAME_EVAL"], config)
+        raw_restored = load_probe_model(local_path+'/models/'+config["MODEL_NAME_EVAL"], config)
         train_state = raw_restored['model']
 
         evaluate_model(train_state, config)

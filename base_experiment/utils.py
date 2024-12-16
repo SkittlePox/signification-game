@@ -6,9 +6,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import math
+import yaml
 import uuid
 import pathlib
 import cloudpickle
+from flax.training import train_state, orbax_utils
+import orbax.checkpoint
 from omegaconf import OmegaConf
 
 def to_jax(dataset, num_datapoints=100):
@@ -138,6 +141,17 @@ def get_anneal_schedule(description, num_minibatches=1):
 
     return schedule
 
+
+####### Saving agents
+
+def save_model(train_state, model_name):
+    checkpoint = {'model': train_state}
+    orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+    save_args = orbax_utils.save_args_from_target(checkpoint)
+    # local_path = str(pathlib.Path().resolve())
+    orbax_checkpointer.save(model_name, checkpoint, save_args=save_args)
+
+
 def save_agents(listener_train_states, speaker_train_states, config):
     local_path = str(pathlib.Path().resolve())
     model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
@@ -147,36 +161,17 @@ def save_agents(listener_train_states, speaker_train_states, config):
     os.makedirs(agent_logdir, exist_ok=True)
 
     for i, lts in enumerate(listener_train_states):
-        with open(f'{agent_logdir}listener_{i}.pkl', 'wb') as f:
-            cloudpickle.dump(lts, f)
+        save_model(lts, f'{agent_logdir}listener_{i}.agent')
+        # with open(f'{agent_logdir}listener_{i}.pkl', 'wb') as f:
+        #     cloudpickle.dump(lts, f)
 
-    for i, lts in enumerate(speaker_train_states):
-        with open(f'{agent_logdir}speaker_{i}.pkl', 'wb') as f:
-            cloudpickle.dump(lts, f)
+    for i, sts in enumerate(speaker_train_states):
+        save_model(sts, f'{agent_logdir}speaker_{i}.agent')
+        # with open(f'{agent_logdir}speaker_{i}.pkl', 'wb') as f:
+        #     cloudpickle.dump(sts, f)
     
     with open(f'{agent_logdir}config.yaml', 'w') as f:
         OmegaConf.save(config=config, f=f)
-
-def load_agents(config):
-    local_path = str(pathlib.Path().resolve())
-    model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
-
-    listener_train_states = []
-    speaker_train_states = []
-
-    if config["PRETRAINED_LISTENERS"] != "":
-        for i in range(config["ENV_KWARGS"]["num_listeners"]):
-            with open(local_path+model_path_str+f'{config["PRETRAINED_LISTENERS"]}/listener_{i}.pkl', 'rb') as f:
-                a = cloudpickle.load(f)
-                listener_train_states.append(a)
-    
-    if config["PRETRAINED_SPEAKERS"] != "":
-        for i in range(config["ENV_KWARGS"]["num_speakers"]):
-            with open(local_path+model_path_str+f'{config["PRETRAINED_SPEAKERS"]}/speaker_{i}.pkl', 'rb') as f:
-                a = cloudpickle.load(f)
-                speaker_train_states.append(a)
-
-    return listener_train_states, speaker_train_states
 
 
 ##################################################################
