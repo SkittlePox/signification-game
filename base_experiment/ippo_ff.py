@@ -12,6 +12,7 @@ from jax.tree_util import tree_flatten, tree_map
 import wandb
 import hydra
 import torch
+import json
 import cloudpickle
 from flax.training import train_state, orbax_utils
 import orbax.checkpoint
@@ -140,6 +141,13 @@ def define_env(config):
                 tar.extractall(download_path)
                 tar.close()
 
+        # with open(download_path+'cifar-100-python/meta', 'rb') as f:   # metadata with keys [b'fine_label_names', b'coarse_label_names']
+        #     meta_data = pickle.load(f, encoding='bytes')
+        # fine_labels = {l: i for i, l in enumerate(meta_data[b'fine_label_names'])}
+
+        acceptable_label_names = config["ENV_DATASET_CATEGORIES"]
+        acceptable_labels = jnp.array(list(acceptable_label_names.values()))
+
         with open(download_path+'cifar-100-python/train', 'rb') as f:   # 50,000 images
             train_data = pickle.load(f, encoding='bytes')
         
@@ -153,11 +161,20 @@ def define_env(config):
         blue_channel = raw_images[:, 2048:].reshape(50000, 32, 32)
 
         # Convert to grayscale using the weighted formula: 0.299*R + 0.587*G + 0.114*B
-        images = jnp.array((0.299 * red_channel + 0.587 * green_channel + 0.114 * blue_channel), dtype=jnp.float32)[:config["ENV_NUM_DATAPOINTS"]]
-        labels = jnp.array(train_data[b'labels'], dtype=jnp.int32)[:config["ENV_NUM_DATAPOINTS"]]
-        # There are b'fine_labels' and b'coarse_labels', Likely want to select a subset of fine labels, well over 10
+        all_images = jnp.array((0.299 * red_channel + 0.587 * green_channel + 0.114 * blue_channel), dtype=jnp.float32)
+        all_labels = jnp.array(train_data[b'fine_labels'], dtype=jnp.int32)
+
+        mask = jnp.isin(all_labels, acceptable_labels)
+        
+        filtered_images = all_images[mask]
+        filtered_labels = all_labels[mask]
+
+        new_labels = jnp.arange(len(acceptable_labels))
+        mapped_indices = jnp.searchsorted(acceptable_labels, filtered_labels)
+        # Remap using new_labels
+        converted_labels = new_labels[mapped_indices]
             
-        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
+        env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(filtered_images[:config["ENV_NUM_DATAPOINTS"]], converted_labels[:config["ENV_NUM_DATAPOINTS"]]))
         return env
 
     elif dataset_name == "veg":
