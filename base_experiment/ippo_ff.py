@@ -204,6 +204,10 @@ def define_env(config):
 def initialize_listener(env, rng, config, i):
     if config["LISTENER_ARCH"] == 'conv':
         listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-boost':
+        listener_network = ActorCriticListenerBoost(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-reduced':
+        listener_network = ActorCriticListenerConvReduced(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-sigmoid':
         listener_network = ActorCriticListenerConvSigmoid(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-small':
@@ -220,10 +224,27 @@ def initialize_listener(env, rng, config, i):
     network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
     
     lr_func = get_anneal_schedule(config["LISTENER_LR_SCHEDULE"], config["NUM_MINIBATCHES_LISTENER"])
-    tx = optax.chain(
-        optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
-        optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
-    )
+    
+    if config["LISTENER_OPTIMIZER"] == 'adam':
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
+        )
+    elif config["LISTENER_OPTIMIZER"] == 'adamw':
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adamw(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
+        )
+    elif config["LISTENER_OPTIMIZER"] == 'adamaxw':
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adamaxw(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
+        )
+    elif config["LISTENER_OPTIMIZER"] == 'adamax':
+        tx = optax.chain(
+            optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
+            optax.adamax(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
+        )
 
     train_state = TrainState.create(
         apply_fn=listener_network.apply,
@@ -556,11 +577,16 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
         new_key = jax.random.fold_in(key=train_state.key, data=j)
         dropout_key, noise_key = jax.random.split(new_key)
         _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
-        _i_log_prob = _i_policy.log_prob(_actions)
+        # _i_log_prob = _i_policy.log_prob(_actions) 
         # _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * -1e8)
+        _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -1e8, 1e8)
+        log_probs = jnp.clip(log_probs, -1e8, 1e8)
         
 
         # CALCULATE VALUE LOSS
+        values = jnp.clip(values, -1e3, 1e3)
+        _i_value = jnp.clip(_i_value, -1e3, 1e3)
+        targets = jnp.clip(targets, -1e3, 1e3)
         value_pred_clipped = values + (
                 _i_value - values
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
@@ -571,7 +597,7 @@ def update_minibatch_listener(j, trans_batch_i, advantages_i, targets_i, train_s
 
         # CALCULATE ACTOR LOSS
         ratio = jnp.exp(_i_log_prob - log_probs)
-        gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        gae_for_i = jnp.clip((advantages - advantages.mean()) / (advantages.std() + 1e-8), -10, 10)
         loss_actor1 = ratio * gae_for_i * alive
         loss_actor2 = (
                 jnp.clip(
@@ -624,8 +650,12 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
         _i_policy, _i_value = train_state.apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
         _i_log_prob = _i_policy.log_prob(_actions)
+        _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * -1e8)
 
         # CALCULATE VALUE LOSS
+        values = jnp.clip(values, -1e3, 1e3)
+        _i_value = jnp.clip(_i_value, -1e3, 1e3)
+        targets = jnp.clip(targets, -1e3, 1e3)
         value_pred_clipped = values + (
                 _i_value - values
         ).clip(-config["CLIP_EPS"], config["CLIP_EPS"])
@@ -635,8 +665,9 @@ def update_minibatch_speaker(j, trans_batch_i, advantages_i, targets_i, train_st
         value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).sum() / (alive.sum() + 1e-8))
 
         # CALCULATE ACTOR LOSS
+        log_probs = jnp.maximum(log_probs, jnp.ones_like(log_probs) * -1e8)
         ratio = jnp.exp(_i_log_prob - log_probs)
-        gae_for_i = (advantages - advantages.mean()) / (advantages.std() + 1e-8)    # NOTE: Probably need to change this for dead grads!
+        gae_for_i = jnp.clip((advantages - advantages.mean()) / (advantages.std() + 1e-8), -10, 10)
         loss_actor1 = ratio * gae_for_i * alive
         loss_actor2 = (
                 jnp.clip(

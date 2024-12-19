@@ -19,6 +19,8 @@ echo $LD_LIBRARY_PATH
 unset LD_LIBRARY_PATH
 echo $LD_LIBRARY_PATH
 
+# export JAX_DEBUG_NANS=True
+
 source /oscar/home/bspiegel/envs/jax.venv/bin/activate
 cd /oscar/home/bspiegel/signification-game/base_experiment/
 
@@ -54,10 +56,11 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 
 #### For collecting listeners to run ToM experiments on
-# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R7f - cifar10 listeners epoch 350 with 3000 datapoints" +dataset=cifar10 ENV_NUM_DATAPOINTS=3000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.0" ENV_KWARGS.listener_n_samples=50 ENV_KWARGS.speaker_n_samples=50 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=350 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R9b - cifar20 conv listeners epoch 1000 with 3000 datapoints" +dataset=cifar100-20 ENV_KWARGS.channel_ratio_fn="0.0" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=1000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LISTENER_ARCH='conv-boost'
 
+# python3 -u ippo_ff.py +dataset=cifar100-20 ENT_COEF_LISTENER=0.009779425719107856 L2_REG_COEF_LISTENER=3.4983479692210945e-06 LISTENER_ARCH=conv LISTENER_LR_SCHEDULE=0.001 LISTENER_TRAIN_SCHEDULE=on MINIBATCH_SIZE_LISTENER=64 NUM_STEPS=2048 SPEAKER_EXAMPLE_LOGGING_ITER=400 SPEAKER_TRAIN_SCHEDULE=off UPDATE_EPOCHS=5 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
 
 #### For testing listener train state loading. Doing this with MNIST
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8b - mnist - listeners epoch 100 with 5000 datapoints" +dataset=mnist ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.0" ENV_KWARGS.listener_n_samples=50 ENV_KWARGS.speaker_n_samples=50 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=100 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
 # Load listeners, manip setting. Train speakers and listeners. Should see perfect icons.
-python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8c - Test with pretrained mnist listeners" +dataset=mnist PRETRAINED_LISTENERS="agents-mnist-100e-5000dp-13fd" ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.2" ENV_KWARGS.reward_parity_fn=manip SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=500 WANDB_MODE=online
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8c - Test with pretrained mnist listeners" +dataset=mnist PRETRAINED_LISTENERS="agents-mnist-100e-5000dp-13fd" ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.2" ENV_KWARGS.reward_parity_fn=manip SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=500 WANDB_MODE=online

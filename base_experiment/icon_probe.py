@@ -25,16 +25,16 @@ class CNN(nn.Module):
     def __call__(self, x):
         x = nn.Conv(features=16, kernel_size=(3, 3))(x)
         x = nn.relu(x)
-        # x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
+        x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
         x = nn.Conv(features=16, kernel_size=(3, 3))(x)
         x = nn.relu(x)
-        # x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
+        x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
         x = x.reshape((x.shape[0], -1))  # flatten
         x = nn.Dense(features=256)(x)
         x = nn.relu(x)
         x = nn.Dense(features=128)(x)
         x = nn.relu(x)
-        x = nn.Dense(features=40)(x)    # This needs to be the number of output classes!!!
+        x = nn.Dense(features=20)(x)    # This needs to be the number of output classes!!!
         return x
 
 
@@ -73,7 +73,7 @@ def apply_model(state, images, labels):
 
     def loss_fn(params):
         logits = state.apply_fn({'params': params}, images)
-        one_hot = jax.nn.one_hot(labels, 40)    # This must be the number of classes!!
+        one_hot = jax.nn.one_hot(labels, 20)    # This must be the number of classes!!
         loss = jnp.mean(optax.softmax_cross_entropy(
             logits=logits, labels=one_hot))
         return loss, logits
@@ -290,7 +290,7 @@ def create_train_state(rng, config):
     elif config["PROBE_MODEL"] == "big-cnn":
         cnn = BigCNN()
     
-    params = cnn.init(rng, jnp.ones([1, 32, 32, 1]))['params']
+    params = cnn.init(rng, jnp.ones([1, 32, 32, 1]))['params']  # This must be image dim
     if config["OPTIMIZER"] == "sgd":
         tx = optax.sgd(config["LEARNING_RATE"], config["MOMENTUM"])
     elif config["OPTIMIZER"] == "adam":
@@ -412,7 +412,8 @@ def evaluate_model(state, config):
 
 def load_probe_model(checkpoint_name, config, no_train=False):
     if no_train:
-        config = dict({"OPTIMIZER": "sgd", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001})
+        # config = dict({"OPTIMIZER": "sgd", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001, "PROBE_MODEL": "cnn"})
+        config = dict({"OPTIMIZER": "adam", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001, "PROBE_MODEL": "cnn"})
     empty_state = create_train_state(jax.random.key(0), config)
     empty_checkpoint = {'model': empty_state}
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()

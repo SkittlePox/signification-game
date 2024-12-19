@@ -314,7 +314,7 @@ def speaker_penalty_curve_fn(speaker_actions: jnp.array):
         P0_P1 = P1 - P0
         
         # Project P0_P1 onto P0_P2 to find the closest point on the line P0P2 to P1
-        proj_length = jnp.dot(P0_P1, P0_P2) / jnp.dot(P0_P2, P0_P2)
+        proj_length = jnp.dot(P0_P1, P0_P2) / jnp.maximum(jnp.dot(P0_P2, P0_P2), 1e-4)
         closest_point = P0 + proj_length * P0_P2
         
         # Distance from P1 to the closest point on the line
@@ -322,7 +322,7 @@ def speaker_penalty_curve_fn(speaker_actions: jnp.array):
         
         # Normalize the curvature by the length of the line segment P0P2
         line_length = jnp.linalg.norm(P0_P2)
-        curvature = distance_to_line / line_length
+        curvature = distance_to_line / jnp.maximum(line_length, 1e-4)
         
         return jnp.nan_to_num(curvature)
 

@@ -17,7 +17,9 @@
 "SPEAKER_TRAIN_SCHEDULE": "off then on at 300"
 "LISTENER_TRAIN_SCHEDULE": "on"
 
-"PRETRAINED_LISTENERS": "" #"agents-cifar10-600e-3000dp-84e5"
+"LISTENER_OPTIMIZER": "adam"
+
+"PRETRAINED_LISTENERS": "" #"agents-cifar100-53e-5000dp-fd4e" #"agents-cifar10-600e-3000dp-84e5"
 "PRETRAINED_SPEAKERS": "" #"agents-cifar10-600e-3000dp-84e5"
 
 "LISTENER_ARCH": 'conv'
@@ -38,24 +40,25 @@
 "MINIBATCH_SIZE_LISTENER": 32 # 32 # This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
 
-"PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8" # for cifar10 # "probe-5k-20k-20e-sgd-bedc" # for mnist
-"PROBE_NUM_EXAMPLES": 500 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_MODEL_NAME": "agents-cifar100-3e-5000dp-8966" #"probe-cifar10-5k-20k-40e-sgd-75f8" # for cifar10 # "probe-5k-20k-20e-sgd-bedc" # for mnist
+"PROBE_NUM_EXAMPLES": 32 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_MODEL": "cnn"
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'cifar100'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
-  "num_speakers": 5
-  "num_listeners": 5
-  "num_channels": 5
-  "num_classes": 10
+  "num_speakers": 2  # best to have num_speakers = num_listeners
+  "num_listeners": 2
+  "num_channels": 2
+  "num_classes": 20
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
   "listener_reward_success": 1.0
   "listener_reward_failure": -0.1
-  "speaker_action_transform": "splines"
-  "speaker_action_dim": 18  # This must be a multiple of 6 for "splines"
+  "speaker_action_transform": "splines_weight"
+  "speaker_action_dim": 21  # This must be a multiple of 6 for "splines"
   "log_prob_rewards": True
   "speaker_whitesum_penalty_coef": 0.0
   "speaker_curve_penalty_coef": 0.0
@@ -64,8 +67,8 @@
   "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "manip"  # "1.0 at 300", "coop", "manip"
   "agent_inferential_mode_fn": "gut" # Default is "gut", "tom at 300"
-  "channel_ratio_fn": "0.2 at 300"  # E.g. "1.0 at 300", "sigmoid-custom"
-  "speaker_referent_span_fn": 10 # default should be the same as num_classes above
+  "channel_ratio_fn": "0.0"  # E.g. "1.0 at 300", "sigmoid-custom"
+  "speaker_referent_span_fn": 20 # default should be the same as num_classes above
   "mandate_unitary_channel_map": False
   "sigmoid_offset": 600
   "sigmoid_stretch": 5e-3
