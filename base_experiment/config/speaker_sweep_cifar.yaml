@@ -1,6 +1,6 @@
 program: ippo_ff.py
 method: bayes
-name: speaker-sweep-cifar-3spline
+name: speaker-sweep-cifar-3spline-cifar10
 metric:
   goal: maximize
   name: reward/mean reward/speaker 0
@@ -8,11 +8,13 @@ parameters:
   WANDB_MODE:
     value: online
   UPDATE_EPOCHS:
-    value: 800
+    value: 1000
   NUM_STEPS:
     value: 2048
   SPEAKER_LR_SCHEDULE:
-    values: [1e-5, 1e-4, 1e-3]
+    max: 1e-3
+    min: 1e-5
+    distribution: log_uniform_values
   ENT_COEF_SPEAKER:
     max: 0.1
     min: 1e-3
@@ -22,15 +24,15 @@ parameters:
     min: 1e-6
     distribution: log_uniform_values
   SPEAKER_TRAIN_SCHEDULE:
-    value: "off then on at 300"
+    value: "on"
   LISTENER_TRAIN_SCHEDULE:
-    value: "1e-4 jump to 1e-6 at 300"
+    value: "1e-6 anneal to 1e-5 at 1000"
   MINIBATCH_SIZE_SPEAKER:
     values: [32, 64, 128]
-  LISTENER_ARCH:
-    value: "conv"
   SPEAKER_EXAMPLE_LOGGING_ITER:
-    value: 100
+    value: 50
+  PRETRAINED_LISTENERS:
+    value: "agents-cifar10-2000e-5000dp-2d21"
 
 
 command:

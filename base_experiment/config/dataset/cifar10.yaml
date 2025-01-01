@@ -1,22 +1,26 @@
 # @package _global_
 "PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8"
+"PROBE_OPTIMIZER": "sgd"
 "ENV_DATASET": "cifar10"
 
 "ENT_COEF_LISTENER": 0.07
 "ENT_COEF_SPEAKER": 0.006
 "L2_REG_COEF_LISTENER": 1.5e-6
 "L2_REG_COEF_SPEAKER": 7e-4
-"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-6 at 300"
+"LISTENER_LR_SCHEDULE": "1e-4" #"1e-4 jump to 1e-6 at 300"
 "SPEAKER_LR_SCHEDULE": 1e-4
+
 
 "NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 2000
 "MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 64 # 64 # This must be a whole divisor of NUM_STEPS
-"ENV_NUM_DATAPOINTS": 10000
+"ENV_NUM_DATAPOINTS": 5000
 
 "ENV_KWARGS":
   ${ENV_KWARGS}:  # This doesn't look right
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10
   "speaker_action_transform": "splines_weight"
   "speaker_action_dim": 21  # This must be a multiple of 6 for "splines", 7 for "splines_weight"
+  "num_classes": 10
+  "speaker_referent_span_fn": 10

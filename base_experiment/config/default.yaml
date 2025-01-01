@@ -13,8 +13,8 @@
 "OPTIMIZER_LISTENER_B2": 0.999
 
 "SPEAKER_LR_SCHEDULE": "1e-4"
-"LISTENER_LR_SCHEDULE": "1e-4 jump to 1e-6 at 300" # 2e-4 is good for conv, 1e-3 is good for dense
-"SPEAKER_TRAIN_SCHEDULE": "off then on at 300"
+"LISTENER_LR_SCHEDULE": "1e-4" #"1e-4 jump to 1e-6 at 300"# 2e-4 is good for conv, 1e-3 is good for dense
+"SPEAKER_TRAIN_SCHEDULE": "off" # "off then on at 300"
 "LISTENER_TRAIN_SCHEDULE": "on"
 
 "LISTENER_OPTIMIZER": "adam"
@@ -40,17 +40,18 @@
 "MINIBATCH_SIZE_LISTENER": 32 # 32 # This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
 
-"PROBE_MODEL_NAME": "agents-cifar100-3e-5000dp-8966" #"probe-cifar10-5k-20k-40e-sgd-75f8" # for cifar10 # "probe-5k-20k-20e-sgd-bedc" # for mnist
-"PROBE_NUM_EXAMPLES": 32 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8" # for cifar10 # "probe-5k-20k-20e-sgd-bedc" # for mnist
+"PROBE_NUM_EXAMPLES": 64 # 500 # This must be less than or equal to "NUM_STEPS"
 "PROBE_MODEL": "cnn"
+"PROBE_OPTIMIZER": "adam"
 
 "ENV_NAME": "simple-sig-game"
 "ENV_DATASET": 'cifar100'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
-  "num_speakers": 2  # best to have num_speakers = num_listeners
-  "num_listeners": 2
-  "num_channels": 2
+  "num_speakers": 5  # best to have num_speakers = num_listeners
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 20
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10
   "speaker_reward_success": 1.0
@@ -65,9 +66,9 @@
   "center_listener_obs": False
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
-  "reward_parity_fn": "manip"  # "1.0 at 300", "coop", "manip"
+  "reward_parity_fn": "coop"  # "1.0 at 300", "coop", "manip"
   "agent_inferential_mode_fn": "gut" # Default is "gut", "tom at 300"
-  "channel_ratio_fn": "0.0"  # E.g. "1.0 at 300", "sigmoid-custom"
+  "channel_ratio_fn": 0.2  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 20 # default should be the same as num_classes above
   "mandate_unitary_channel_map": False
   "sigmoid_offset": 600

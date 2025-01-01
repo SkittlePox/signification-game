@@ -3,6 +3,7 @@ from torchvision.datasets import MNIST
 from flax import linen as nn
 from flax.training import train_state, orbax_utils
 import orbax.checkpoint
+from typing import Sequence
 import wandb
 import jax
 import jax.numpy as jnp
@@ -20,6 +21,7 @@ from utils import to_jax
 
 class CNN(nn.Module):
     """A simple CNN model."""
+    action_dim: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
@@ -34,12 +36,13 @@ class CNN(nn.Module):
         x = nn.relu(x)
         x = nn.Dense(features=128)(x)
         x = nn.relu(x)
-        x = nn.Dense(features=20)(x)    # This needs to be the number of output classes!!!
+        x = nn.Dense(features=self.action_dim)(x)    # This needs to be the number of output classes!!!
         return x
 
 
 class BigCNN(nn.Module):
     """A simple CNN model."""
+    action_dim: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
@@ -63,7 +66,7 @@ class BigCNN(nn.Module):
         x = nn.relu(x)
         x = nn.Dense(features=128)(x)
         x = nn.relu(x)
-        x = nn.Dense(features=40)(x)    # This needs to be the number of output classes!!!
+        x = nn.Dense(features=self.action_dim)(x)    # This needs to be the number of output classes!!!
         return x
 
 
@@ -283,12 +286,12 @@ def get_dataset(config):
         return train_ds, test_ds
 
 
-def create_train_state(rng, config):
+def create_train_state(rng, config, action_dim):
     """Creates initial `TrainState`."""
     if config["PROBE_MODEL"] == "cnn":
-        cnn = CNN()
+        cnn = CNN(action_dim=action_dim)
     elif config["PROBE_MODEL"] == "big-cnn":
-        cnn = BigCNN()
+        cnn = BigCNN(action_dim=action_dim)
     
     params = cnn.init(rng, jnp.ones([1, 32, 32, 1]))['params']  # This must be image dim
     if config["OPTIMIZER"] == "sgd":
@@ -410,11 +413,13 @@ def evaluate_model(state, config):
         )
     
 
-def load_probe_model(checkpoint_name, config, no_train=False):
+def load_probe_model(checkpoint_name, config, action_dim, opt, no_train=False):
     if no_train:
-        # config = dict({"OPTIMIZER": "sgd", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001, "PROBE_MODEL": "cnn"})
-        config = dict({"OPTIMIZER": "adam", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001, "PROBE_MODEL": "cnn"})
-    empty_state = create_train_state(jax.random.key(0), config)
+        if opt == "sgd":
+            config = dict({"OPTIMIZER": "sgd", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001, "PROBE_MODEL": "cnn"})
+        elif opt == "adam":
+            config = dict({"OPTIMIZER": "adam", "MOMENTUM": 0.9, "LEARNING_RATE": 0.0001, "PROBE_MODEL": "cnn"})
+    empty_state = create_train_state(jax.random.key(0), config, action_dim)
     empty_checkpoint = {'model': empty_state}
     orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
     raw_restored = orbax_checkpointer.restore(checkpoint_name, item=empty_checkpoint)

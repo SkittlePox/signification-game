@@ -737,7 +737,7 @@ def make_train(config):
         # LOAD ICON PROBE
         local_path = str(pathlib.Path().resolve())
         model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
-        raw_restored = icon_probe.load_probe_model(local_path+model_path_str+config["PROBE_MODEL_NAME"], None, no_train=True)
+        raw_restored = icon_probe.load_probe_model(local_path+model_path_str+config["PROBE_MODEL_NAME"], None, action_dim=env_kwargs['num_classes'], opt=config["PROBE_OPTIMIZER"], no_train=True)
         probe_train_state = raw_restored['model']
 
         # INIT ENV

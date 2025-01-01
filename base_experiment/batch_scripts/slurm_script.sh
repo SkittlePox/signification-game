@@ -5,8 +5,8 @@
 #SBATCH -c 4
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=6:00:00
-#SBATCH --mem=4GB
+#SBATCH --time=12:00:00
+#SBATCH --mem=12GB
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
@@ -56,7 +56,10 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 
 #### For collecting listeners to run ToM experiments on
-python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R9b - cifar20 conv listeners epoch 1000 with 3000 datapoints" +dataset=cifar100-20 ENV_KWARGS.channel_ratio_fn="0.0" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=1000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LISTENER_ARCH='conv-boost'
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R10a - cifar10 just listeners 5000" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.0" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R10b - cifar10 just listeners 10000" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.0" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=10000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R11a - cifar10 1 gut speaker and listeners" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.2" LISTENER_LR_SCHEDULE="1e-6 anneal to 1e-5 at 1000" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10-2000e-5000dp-2d21" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
+
 
 # python3 -u ippo_ff.py +dataset=cifar100-20 ENT_COEF_LISTENER=0.009779425719107856 L2_REG_COEF_LISTENER=3.4983479692210945e-06 LISTENER_ARCH=conv LISTENER_LR_SCHEDULE=0.001 LISTENER_TRAIN_SCHEDULE=on MINIBATCH_SIZE_LISTENER=64 NUM_STEPS=2048 SPEAKER_EXAMPLE_LOGGING_ITER=400 SPEAKER_TRAIN_SCHEDULE=off UPDATE_EPOCHS=5 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
 
