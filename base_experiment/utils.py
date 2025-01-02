@@ -576,7 +576,7 @@ def get_speaker_action_transform(fn_name, image_dim):
                 P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
                 return P  # Returns shape (N, 2), a list of points on the spline
 
-            brush_size = 2
+            brush_size = 1
 
             spline_params *= image_dim
             

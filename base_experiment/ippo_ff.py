@@ -913,6 +913,7 @@ def make_train(config):
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
             speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])   # I think this is the only use of the outputs
 
+            # The learning rate calculations are not correct because the speaker_lr_funcs and listener_lr_funcs are not the true lr schedules. If I just stick to the original lr schedule I'll get the right values
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
             speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)

@@ -137,7 +137,7 @@ class Superagent:
 def test():
     # filename = "agents-300e-73c6"   # For MNIST
     # filename = "agents-300e-8e97"   # For cifar10
-    filename = "agents-cifar10-50e-3000dp-a165"
+    filename = "agents-cifar10-2000e-5000dp-b770"
     agent_indices = (0, 1) # list(range(2))
     listener_agents = []
     speaker_agents = []
