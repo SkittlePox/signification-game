@@ -25,7 +25,7 @@ parameters:
     distribution: log_uniform_values
   SPEAKER_TRAIN_SCHEDULE:
     value: "on"
-  LISTENER_TRAIN_SCHEDULE:
+  LISTENER_LR_SCHEDULE:
     value: "1e-6 anneal to 1e-5 at 1000"
   MINIBATCH_SIZE_SPEAKER:
     values: [32, 64, 128]

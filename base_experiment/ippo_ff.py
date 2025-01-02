@@ -269,9 +269,8 @@ def initialize_listener(env, rng, config, i):
         #     optax.adam(learning_rate=lr_func, b1=config["OPTIMIZER_LISTENER_B1"], b2=config["OPTIMIZER_LISTENER_B2"], eps=1e-5),
         # )
 
-        # This LR function is for logging purposes only, and it's wrong! need to change the train state below
+        # This LR function is for logging purposes only, and it could be wrong! need to change the train state below
         train_state = raw_restored['model']# .replace(tx=new_tx, key=rng)
-        # This is failing but I don't know why. Probably something with cloudpickle but I'm not sure. Maybe need to reconstruct the trainstate by hand.
 
         listener_network = None
 
