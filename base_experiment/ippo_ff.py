@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 import optax
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
-from flax.training import train_state
 from jax.tree_util import tree_flatten, tree_map
 import wandb
 import hydra

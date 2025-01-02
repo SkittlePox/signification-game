@@ -4,6 +4,14 @@ import sys
 import jax.numpy as jnp
 import distrax
 import matplotlib.pyplot as plt
+import optax
+from flax.training import train_state
+import orbax.checkpoint
+import jax
+import jax.numpy as jnp
+
+class TrainState(train_state.TrainState):
+    key: jax.Array
 
 DEBUGGER = "DEBUGGER=True" in sys.argv
 
@@ -128,19 +136,65 @@ class Superagent:
 
 def test():
     # filename = "agents-300e-73c6"   # For MNIST
-    filename = "agents-300e-8e97"   # For cifar10
-    agent_indices = (3, 4) # list(range(2))
+    # filename = "agents-300e-8e97"   # For cifar10
+    filename = "agents-cifar10-50e-3000dp-a165"
+    agent_indices = (0, 1) # list(range(2))
     listener_agents = []
     speaker_agents = []
     superagents = []
 
+    key = jax.random.PRNGKey(0)
+
     for i in agent_indices:
-        with open(local_path+f'/models/{filename}/listener_{i}.pkl', 'rb') as f:
-            a = cloudpickle.load(f)
-            listener_agents.append(a)
-        with open(local_path+f'/models/{filename}/speaker_{i}.pkl', 'rb') as f:
-            a = cloudpickle.load(f)
-            speaker_agents.append(a)
+        ### Load listener agent
+        listener_network = ActorCriticListenerConv(action_dim=10, image_dim=32, config={"LISTENER_DROPOUT": 0.0})
+        init_x = jnp.zeros(
+            (32**2,)
+        )
+        network_params = listener_network.init({'params': key, 'dropout': key, 'noise': key}, init_x)
+        tx = optax.chain(
+            optax.clip_by_global_norm(0.5),
+            optax.adam(learning_rate=1e-4, b1=0.9, b2=0.99, eps=1e-5),
+        )
+        train_state = TrainState.create(
+            apply_fn=listener_network.apply,
+            params=network_params,
+            key=key,
+            tx=tx,
+        )
+
+        empty_checkpoint = {'model': train_state}
+        orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+        raw_restored = orbax_checkpointer.restore(local_path+f'/models/{filename}/listener_{i}.agent', item=empty_checkpoint)
+        train_state = raw_restored['model']
+        listener_agents.append(train_state)
+
+        ### Load speaker agent
+        speaker_network = ActorCriticSpeakerSplines(latent_dim=128, num_classes=10+1, action_dim=21, config={"SPEAKER_STDDEV": 0.7, "SPEAKER_STDDEV2": 0.4, "SPEAKER_SQUISH": 0.4})
+        init_x = jnp.zeros(
+            (1,),
+            dtype=jnp.int32
+        )
+        network_params = speaker_network.init({'params': key, 'dropout': key, 'noise': key}, init_x)
+        tx = optax.chain(
+            optax.clip_by_global_norm(0.5),
+            optax.adam(learning_rate=1e-4, b1=0.9, b2=0.99, eps=1e-5),
+        )
+        train_state = TrainState.create(
+            apply_fn=speaker_network.apply,
+            params=network_params,
+            key=key,
+            tx=tx,
+        )
+
+        empty_checkpoint = {'model': train_state}
+        orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
+        raw_restored = orbax_checkpointer.restore(local_path+f'/models/{filename}/speaker_{i}.agent', item=empty_checkpoint)
+        train_state = raw_restored['model']
+
+        speaker_agents.append(train_state)
+        
+        ### Make superagent
         superagents.append(Superagent(speaker_agents[-1], listener_agents[-1], "splines_weight", 32))
 
 
@@ -149,12 +203,10 @@ def test():
     # pi = s0.interpret_pictogram(key, random_speak, n_samples=500)
     # print(pi.sample(seed=key))
     # print("Done")
-
-    key = jax.random.PRNGKey(0)
     
     agent0 = superagents[0]
     agent1 = superagents[1]
-    num_iters = 20
+    num_iters = 5
     image_paths = []
     pictograms = []
 
