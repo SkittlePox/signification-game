@@ -41,7 +41,7 @@ class Superagent:
     def listen(self, obs): # This will return a categorical distribution which should be sampled to get action indices.
         return self.listener.apply_fn(self.listener.params, obs)
     
-    def interpret_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3, num_classes=10): # obs is an image
+    def interpret_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3, num_classes=10, pr_weight=1.5): # obs is an image
         # P(r_i|s) p= P(s|r_i)P(r_i)P_R(r_i)
         # P_R(r_i) = 1 / int_S f_i(s)p(s) ds + epsilon
         #   or in logits l_i terms: 1 / int_S exp(l_i(s)) p(s) ds + epsilon
@@ -77,14 +77,18 @@ class Superagent:
         # This has nearly everything we need. At this point I could take the logits and do the calculation
 
         # Sum exponentiated logits using exp(logsumexp) vertically?
-        log_pRs = jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(n_samples)    # These should technically be multiplied by p(s) before summing, but assuming random uniform dist I'm just dividing by n_samples
-        # pRs = 1 / (pRs + 1e-4)
+        log_pRs = -(jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(n_samples))    # These should technically be multiplied by p(s) before summing, but assuming random uniform dist I'm just dividing by n_samples
+        print(jnp.exp(log_pRs))
+        log_pRs *= pr_weight        # NOTE: This will definitely need to be tuned. Between 0.1 and 1.0 I'm guessing. Maybe need a sweep later.
+        print(jnp.exp(log_pRs))
 
         #### Calculate P(r_i|s)
 
         log_prss = log_psrs + log_pRs - jnp.log(num_classes) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
-        log_prss -= jnp.sum(jnp.exp(log_prss))
+        log_prss -= jax.nn.logsumexp(log_prss)
         prss = jnp.exp(log_prss)
+        print(prss)
+        print("================")
 
         pictogram_pi = distrax.Categorical(probs=prss)
 
@@ -236,7 +240,7 @@ def test():
     speaker_agents = []
     superagents = []
 
-    key = jax.random.PRNGKey(0)
+    key = jax.random.PRNGKey(1)
 
     for i in agent_indices:
         ### Load listener agent
@@ -299,15 +303,15 @@ def test():
     
     agent0 = superagents[0]
     agent1 = superagents[1]
-    num_iters = 10
+    num_iters = 20
     image_paths = []
     pictograms = []
 
     for i in range(num_iters):
         key, key_i = jax.random.split(key)
         sp_key, ls_key = jax.random.split(key_i, 2)
-        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_samples=500, n_search=100)
-        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=50)
+        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_search=100)
+        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=10)
         reading = pi.sample(seed=key_i)
 
         image_paths.append(local_path+f'/scratch/scratch_images/pic_{i}_sign_{i % 10}_read_{reading}.png')
@@ -318,4 +322,3 @@ def test():
 
 if __name__ == "__main__":
     test()
-

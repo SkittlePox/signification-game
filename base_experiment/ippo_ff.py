@@ -352,21 +352,37 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 
-def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speaker_train_state_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, **kwargs):  # obs is an image
-    # P(r|s) = P(s|r)P(r)
-    # P(s|r) p= exp(U(s:r))
-    # U(s:r) = log(P_lit(r|s))
-    # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
+def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speaker_train_state_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, listener_pr_weight=1.5, **kwargs):  # obs is an image
+    # P(r_i|s) p= P(s|r_i)P(r_i)P_R(r_i)
+    # P_R(r_i) = 1 / int_S f_i(s)p(s) ds + epsilon
+    #   or in logits l_i terms: 1 / int_S exp(l_i(s)) p(s) ds + epsilon
+    # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i
 
     __rng, listener_dropout_key, listener_noise_key = jax.random.split(__rng, 3)
     __rng, speaker_dropout_key, speaker_noise_key = jax.random.split(__rng, 3)
     __rng, pi_sample_key = jax.random.split(__rng)
 
-    #### Find the referent for which P(r|s) is the highest
-    # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
-    signal_distribution = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array([num_classes], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
-    signal_param_samples = signal_distribution.sample(seed=__rng, sample_shape=(speaker_action_dim, listener_n_samples))[0]    # This is shaped (n_samples, 1, speaker_action_size)
+    ###### Find the referent for which P(r|s) is the highest
+
+    #### Calculate P(s|r_i) for each possible referent
+
+    listener_assessments, values = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key}) # This is a categorical distribution.
     
+    def calc_psr(logits, index):
+        numerator = logits[index]
+        denominator = jax.nn.logsumexp(logits.at[index].set(-jnp.inf), axis=0)  # Set index to neg inf to remove it from denominator sum
+        return numerator - denominator
+
+    vmap_calc_psr = jax.vmap(calc_psr, in_axes=(None, 0))
+    log_psrs = vmap_calc_psr(listener_assessments.logits[0], jnp.arange(num_classes))
+
+    #### Calculate P_R(r_i) for each referent
+
+    # Sample signal space n times    
+    signal_distribution = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array(jnp.arange(num_classes), dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
+    signal_param_samples = signal_distribution.sample(seed=__rng, sample_shape=(listener_n_samples)).reshape((-1, speaker_action_dim))    # This is shaped (n_samples*num_classes, speaker_action_dim). The reshape is to merge samples from all generators together
+    signal_param_samples = jnp.clip(signal_param_samples, a_min=0.0, a_max=1.0)
+
     # Generate actual images
     signal_samples = speaker_action_transform_fn(signal_param_samples)    # This is shaped (n_samples, image_dim, image_dim)
 
@@ -374,29 +390,27 @@ def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speak
     listener_assessments = _listener_train_state_i.apply_fn(_listener_train_state_i.params, signal_samples, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})[0] # This is a categorical distribution. Index 1 is values
     # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
     
-    # Calculate denominators. Sum of probs
-    listener_probs = listener_assessments.probs # This is shaped (n_samples, num_classes)
-    # listener_logprobs = listener_assessments.log_prob(jnp.arange(num_classes).reshape(num_classes, 1))
-    # listener_logits = listener_assessments.logits
-    denominators = jnp.sum(listener_probs, axis=0)  # This is shaped (num_classes,)
-    gut_policy, value = _listener_train_state_i.apply_fn(_listener_train_state_i.params, _listener_obs_i, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})
-    numerators = gut_policy.probs[0] # This is shaped (num_classes,)
-    
-    # p_lits = numerators / denominators    # Instead of dividing directly, for numerical stability I will use the log quotient rule
-    p_lits = jnp.exp(jnp.log(numerators) - jnp.log(denominators))
+    # Sum exponentiated logits using exp(logsumexp) vertically?
+    log_pRs = -(jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(listener_n_samples))    # These should technically be multiplied by p(s) before summing, but assuming random uniform dist I'm just dividing by n_samples
+    log_pRs *= listener_pr_weight        # NOTE: This will definitely need to be tuned. Between 0.1 and 2.0 I'm guessing. Maybe need a sweep later.
 
-    # Assuming uniform probability, so no need to multiply by P(r)
-    pictogram_pi = distrax.Categorical(probs=p_lits)
+    #### Calculate P(r_i|s)
+    log_prss = log_psrs + log_pRs - jnp.log(num_classes) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
+    log_prss -= jax.nn.logsumexp(log_prss)
+    prss = jnp.exp(log_prss)
+
+    pictogram_pi = distrax.Categorical(probs=prss)
+    
     pictogram_action = pictogram_pi.sample(seed=pi_sample_key)
     log_prob = pictogram_pi.log_prob(pictogram_action)
 
     # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
-    return pictogram_action.reshape(-1,), log_prob.reshape(-1,), value
+    return pictogram_action.reshape(-1,), log_prob.reshape(-1,), values.reshape(-1,)
 
 def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_samples=50, speaker_n_search=50, num_classes=10, speaker_action_dim=12, **kwargs):
-    # P(s|r) p= exp(U(s:r))
-    # U(s:r) = log(P_lit(r|s))
-    # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
+    # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
+    # In terms of logits exp(l_i(s)) = f_i(s)
+    # P(s|r_i) p= exp( l_i(s) - log sum exp(l_j(s)) for j != i )
 
     __rng, listener_dropout_key, listener_noise_key = jax.random.split(__rng, 3)
     __rng, speaker_dropout_key, speaker_noise_key = jax.random.split(__rng, 3)
@@ -405,24 +419,7 @@ def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, 
 
     ######### Search for the signal with the highest P(r|s)
 
-    ###### Calculate denominator (This isn't actually used... That's not good though... It should be...)
-
-    # # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
-    # comparison_signal_distribution = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array([num_classes], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
-    # comparison_signal_param_samples = comparison_signal_distribution.sample(seed=__rng, sample_shape=(speaker_action_dim, speaker_n_samples))[0]    # This is shaped (n_samples, 1, speaker_action_size)
-    
-    # # Generate actual images
-    # comparison_signal_samples = speaker_action_transform_fn(comparison_signal_param_samples)    # This is shaped (n_samples, image_dim, image_dim)
-
-    # # Assess them using the listener
-    # listener_assessments = _listener_train_state_i.apply_fn(_listener_train_state_i.params, comparison_signal_samples, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})[0] # This is a categorical distribution. Index 1 is values
-    # # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
-    
-    # # Calculate denominators. Sum of probs
-    # listener_probs = listener_assessments.probs # This is shaped (n_samples, num_classes)
-    # denominators = jnp.sum(listener_probs, axis=0)  # This is shaped (num_classes,)
-
-    ###### Search for signal and calculate numerator
+    ###### Generate candidate stimuli
 
     # Sample lots of possible signals.
     search_signal_gut_policy, values = _speaker_train_state_i.apply_fn(_speaker_train_state_i.params, jnp.array([_speaker_obs_i], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})    # This is a distrax distribution. Index 1 is values. Using speaker index _speaker_obs_i, for generating pictograms of that class
@@ -433,13 +430,19 @@ def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, 
     search_signal_samples = speaker_action_transform_fn(search_signal_param_samples)
     
     # Need to iterate over search space and find the highest numerator/denominator??
-    numerators_all = _listener_train_state_i.apply_fn(_listener_train_state_i.params, search_signal_samples, rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0].probs # This is shaped (n_search, num_classes)
+    listener_logits = _listener_train_state_i.apply_fn(_listener_train_state_i.params, search_signal_samples, rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0].logits # This is shaped (n_search, num_classes)
 
     # Isolate obs referent index
-    numerators = numerators_all[:, ] # This is shape [n_search, 1]
-    # Find the thing with the highest numerator for r? find the one with the highest r.
+    numerators = listener_logits[:, _speaker_obs_i] # This is shape [n_search, num_classes]
+    
+    # Set the logits for obs to -jnp.inf so they don't show up in the denominator calculation
+    denominators = jax.nn.logsumexp(listener_logits.at[:, _speaker_obs_i].set(-jnp.inf), axis=1)
 
-    maxindex = jnp.argmax(numerators)
+    psr = jnp.exp(numerators-denominators)
+
+    ###### Select signal with the highest P(s|r)
+    maxindex = jnp.argmax(psr)
+
     maxaction = search_signal_param_samples[maxindex]
     
     log_prob = search_signal_gut_policy.log_prob(maxaction)

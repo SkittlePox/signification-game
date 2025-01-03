@@ -77,6 +77,8 @@
   "listener_n_samples": 50
   "speaker_n_samples": 50
   "speaker_n_search": 50
+  "listener_pr_weight": 1.5
+
 
 
 # WandB Params
