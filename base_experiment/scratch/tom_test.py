@@ -42,7 +42,8 @@ class Superagent:
         return self.listener.apply_fn(self.listener.params, obs)
     
     def interpret_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3): # obs is an image
-        # P(r|s) = P(s|r)P(r)
+        # P(r|s) p= P(s|r)P(r)P_R(r)
+        # P_R(r_i) = 1 / int_S f_i(s)p(s) ds + epsilon
         # P(s|r) p= exp(U(s:r))
         # U(s:r) = log(P_lit(r|s))
         # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
@@ -50,7 +51,9 @@ class Superagent:
         #### Find the referent for which P(r|s) is the highest
 
         # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
-        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 (should be unused!)
+        # This should be done using samples from all action generators. Can also be done using the extra action generator.
+        # Below currently samples from generator 0, which is reserved for making observations of class 0. This is only okay because it's a scratch experiment. In the future should use instances from all generators!
+        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 for now (should be unused in future!)
         signal_param_samples = signal_distribution.sample(seed=key, sample_shape=(speaker_action_dim, n_samples))[0]    # This is shaped (n_samples, 1, 12)
         
         # Generate actual images
@@ -74,8 +77,85 @@ class Superagent:
         pictogram_pi = distrax.Categorical(probs=p_lits)
 
         return pictogram_pi
+    
+    def interpret_pictogram_old_simple(self, key, obs, speaker_action_dim=21, n_samples=3): # obs is an image
+        # P(r|s) = P(s|r)P(r)
+        # P(s|r) p= exp(U(s:r))
+        # U(s:r) = log(P_lit(r|s))
+        # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
 
-    def create_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3, n_search=4): # obs is an integer between 0 and num_referents-1
+        #### Find the referent for which P(r|s) is the highest
+
+        # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
+        # This should be done using samples from all action generators. Can also be done using the extra action generator.
+        # Below currently samples from generator 0, which is reserved for making observations of class 0. This is only okay because it's a scratch experiment. In the future should use instances from all generators!
+        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 for now (should be unused in future!)
+        signal_param_samples = signal_distribution.sample(seed=key, sample_shape=(speaker_action_dim, n_samples))[0]    # This is shaped (n_samples, 1, 12)
+        
+        # Generate actual images
+        signal_samples = self.speaker_action_transform(signal_param_samples)    # This is shaped (n_samples, 28, 28)
+
+        listener_assessments = self.listener.apply_fn(self.listener.params, signal_samples)[0] # This is a categorical distribution. Index 1 is values
+        # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
+        
+        # Calculate denominators. Sum of probs
+        listener_probs = listener_assessments.probs # This is shaped (n_samples, 10)
+        # listener_logprobs = listener_assessments.log_prob(jnp.arange(10).reshape(10, 1))
+        # listener_logits = listener_assessments.logits
+        denominators = jnp.sum(listener_probs, axis=0)  # This is shaped (10,)
+        numerators = self.listener.apply_fn(self.listener.params, obs)[0].probs[0] # This is shaped (10,)
+        
+        # p_lits = numerators / denominators    # Instead of dividing directly, for numerical stability I will use the log quotient rule
+        p_lits = jnp.exp(jnp.log(numerators) - jnp.log(denominators))
+
+        # Assuming uniform probability, so no need to multiply by P(r)
+        # Could make a new distrax distribution, but this would involve importing distrax into simplified sig game, which I don't like
+        pictogram_pi = distrax.Categorical(probs=p_lits)
+
+        return pictogram_pi
+    
+    def create_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3, n_search=4, num_classes=10): # obs is an integer between 0 and num_referents-1
+        # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
+        # In terms of logits exp(l_i(s)) = f_i(s)
+        # P(s|r_i) p= exp( l_i(s) - log sum exp(l_j(s)) for j != i )
+        
+        key, numer_key, denom_key = jax.random.split(key, 3)
+
+        ######### Search for the signal with the highest P(s|r)
+
+        ###### Generate candidate stimuli
+
+        # Sample the generator n_search times.
+        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([obs], dtype=jnp.int32))[0]    # This is a distrax distribution
+        signal_param_samples = signal_distribution.sample(seed=denom_key, sample_shape=(speaker_action_dim, n_search))[0]    # This is shaped (n_search, 1, speaker_action_dim)
+        
+        # Generate actual images
+        signal_samples = self.speaker_action_transform(signal_param_samples)    # This is shaped (n_search, 32, 32)
+
+        # Get listener assessments l_i for each signal s
+        listener_assessments = self.listener.apply_fn(self.listener.params, signal_samples)[0] # This is a categorical distribution. Index 1 is values
+        # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
+
+        ###### Calculate P(s|r) using l_i values
+        
+        # Retrieve listener logits for each of the n_search samples
+        listener_logits = listener_assessments.logits # This is shaped (n_search, 10)
+        
+        # Numerators are l_i(s)
+        numerators = listener_logits[:, obs]
+
+        # Set the logits for obs to -jnp.inf so they don't show up in the denominator calculation
+        denominators = jax.nn.logsumexp(listener_logits.at[:, obs].set(-jnp.inf), axis=1)
+
+        psr = jnp.exp(numerators-denominators)
+
+        ###### Select signal with the highest P(s|r)
+        
+        maxindex = jnp.argmax(psr)
+        return signal_samples[maxindex]
+        
+
+    def create_pictogram_old_simple(self, key, obs, speaker_action_dim=21, n_samples=3, n_search=4): # obs is an integer between 0 and num_referents-1
         # P(s|r) p= exp(U(s:r))
         # U(s:r) = log(P_lit(r|s))
         # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
@@ -87,7 +167,7 @@ class Superagent:
         ###### Calculate denominator
 
         # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
-        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 (should be unused!)
+        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 for now (should be unused in future!)
         signal_param_samples = signal_distribution.sample(seed=denom_key, sample_shape=(speaker_action_dim, n_samples))[0]    # This is shaped (n_samples, 1, 12)
         
         # Generate actual images
@@ -107,7 +187,7 @@ class Superagent:
         # (I think I'll want to include things in the search in the denominator too!)
 
         # Sample lots of possible signals.
-        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 (should be unused!)
+        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 for now (should be unused in future!)
         signal_param_samples = signal_distribution.sample(seed=numer_key, sample_shape=(speaker_action_dim, n_search))[0]    # This is shaped (n_search, 1, 12)
         
         # Generate actual images
@@ -132,6 +212,7 @@ class Superagent:
         pictogram_pi = distrax.Categorical(probs=p_lits)
 
         return pictogram_pi
+        
     
 
 def test():
@@ -213,8 +294,8 @@ def test():
     for i in range(num_iters):
         key, key_i = jax.random.split(key)
         sp_key, ls_key = jax.random.split(key_i, 2)
-        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_samples=500, n_search=50)
-        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=500)
+        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_samples=500, n_search=100)
+        pi = agent1.interpret_pictogram_old_simple(ls_key, pictogram, n_samples=500)
         reading = pi.sample(seed=key_i)
 
         image_paths.append(local_path+f'/scratch/scratch_images/pic_{i}_sign_{i % 10}_read_{reading}.png')
