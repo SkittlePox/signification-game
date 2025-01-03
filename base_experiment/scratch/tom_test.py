@@ -41,44 +41,56 @@ class Superagent:
     def listen(self, obs): # This will return a categorical distribution which should be sampled to get action indices.
         return self.listener.apply_fn(self.listener.params, obs)
     
-    def interpret_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3): # obs is an image
-        # P(r|s) p= P(s|r)P(r)P_R(r)
+    def interpret_pictogram(self, key, obs, speaker_action_dim=21, n_samples=3, num_classes=10): # obs is an image
+        # P(r_i|s) p= P(s|r_i)P(r_i)P_R(r_i)
         # P_R(r_i) = 1 / int_S f_i(s)p(s) ds + epsilon
-        # P(s|r) p= exp(U(s:r))
-        # U(s:r) = log(P_lit(r|s))
-        # P_lit(r|s) p= f_r(s) / int_S f_r(s') ds'  P(r)
+        #   or in logits l_i terms: 1 / int_S exp(l_i(s)) p(s) ds + epsilon
+        # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i
 
-        #### Find the referent for which P(r|s) is the highest
+        ###### Find the referent for which P(r|s) is the highest
 
-        # Sample signal space n times (how is this done? By using existing actions or new actions for signals that haven't been used before?) This will be used for denominator of P_lit        
+        #### Calculate P(s|r_i) for each possible referent
+        # This is a simple operation
+
+        listener_assessments = self.listener.apply_fn(self.listener.params, obs)[0] # This is a categorical distribution. Index 1 is values
+        
+        def calc_psr(logits, index):
+            numerator = logits[index]
+            denominator = jax.nn.logsumexp(logits.at[index].set(-jnp.inf), axis=0)  # Set index to neg inf to remove it from denominator sum
+            return numerator - denominator
+
+        vmap_calc_psr = jax.vmap(calc_psr, in_axes=(None, 0))
+        log_psrs = vmap_calc_psr(listener_assessments.logits[0], jnp.arange(num_classes))
+
+        #### Calculate P_R(r_i) for each referent
+
+        # Sample signal space n_samples times
         # This should be done using samples from all action generators. Can also be done using the extra action generator.
         # Below currently samples from generator 0, which is reserved for making observations of class 0. This is only okay because it's a scratch experiment. In the future should use instances from all generators!
-        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array([0], dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values. Using speaker index 0 for now (should be unused in future!)
-        signal_param_samples = signal_distribution.sample(seed=key, sample_shape=(speaker_action_dim, n_samples))[0]    # This is shaped (n_samples, 1, 12)
+        signal_distribution = self.speaker.apply_fn(self.speaker.params, jnp.array(jnp.arange(num_classes), dtype=jnp.int32))[0]    # This is a distrax distribution. Index 1 is values.
+        signal_param_samples = signal_distribution.sample(seed=key, sample_shape=(n_samples)).reshape((-1, speaker_action_dim))    # This is shaped (n_samples*num_classes, speaker_action_dim). The reshape is to merge samples from all generators together
         
         # Generate actual images
-        signal_samples = self.speaker_action_transform(signal_param_samples)    # This is shaped (n_samples, 28, 28)
+        signal_samples = self.speaker_action_transform(signal_param_samples)    # This is shaped (n_samples, 32, 32)
 
         listener_assessments = self.listener.apply_fn(self.listener.params, signal_samples)[0] # This is a categorical distribution. Index 1 is values
-        # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
-        
-        # Calculate denominators. Sum of probs
-        listener_probs = listener_assessments.probs # This is shaped (n_samples, 10)
-        # listener_logprobs = listener_assessments.log_prob(jnp.arange(10).reshape(10, 1))
-        # listener_logits = listener_assessments.logits
-        denominators = jnp.sum(listener_probs, axis=0)  # This is shaped (10,)
-        numerators = self.listener.apply_fn(self.listener.params, obs)[0].probs[0] # This is shaped (10,)
-        
-        # p_lits = numerators / denominators    # Instead of dividing directly, for numerical stability I will use the log quotient rule
-        p_lits = jnp.exp(jnp.log(numerators) - jnp.log(denominators))
+        # This has nearly everything we need. At this point I could take the logits and do the calculation
 
-        # Assuming uniform probability, so no need to multiply by P(r)
-        # Could make a new distrax distribution, but this would involve importing distrax into simplified sig game, which I don't like
-        pictogram_pi = distrax.Categorical(probs=p_lits)
+        # Sum exponentiated logits using exp(logsumexp) vertically?
+        log_pRs = jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(n_samples)    # These should technically be multiplied by p(s) before summing, but assuming random uniform dist I'm just dividing by n_samples
+        # pRs = 1 / (pRs + 1e-4)
+
+        #### Calculate P(r_i|s)
+
+        log_prss = log_psrs + log_pRs - jnp.log(num_classes) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
+        log_prss -= jnp.sum(jnp.exp(log_prss))
+        prss = jnp.exp(log_prss)
+
+        pictogram_pi = distrax.Categorical(probs=prss)
 
         return pictogram_pi
     
-    def interpret_pictogram_old_simple(self, key, obs, speaker_action_dim=21, n_samples=3): # obs is an image
+    def interpret_pictogram_old_simple(self, key, obs, speaker_action_dim=21, n_samples=3, num_classes=10): # obs is an image
         # P(r|s) = P(s|r)P(r)
         # P(s|r) p= exp(U(s:r))
         # U(s:r) = log(P_lit(r|s))
@@ -287,7 +299,7 @@ def test():
     
     agent0 = superagents[0]
     agent1 = superagents[1]
-    num_iters = 5
+    num_iters = 10
     image_paths = []
     pictograms = []
 
@@ -295,7 +307,7 @@ def test():
         key, key_i = jax.random.split(key)
         sp_key, ls_key = jax.random.split(key_i, 2)
         pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_samples=500, n_search=100)
-        pi = agent1.interpret_pictogram_old_simple(ls_key, pictogram, n_samples=500)
+        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=50)
         reading = pi.sample(seed=key_i)
 
         image_paths.append(local_path+f'/scratch/scratch_images/pic_{i}_sign_{i % 10}_read_{reading}.png')
