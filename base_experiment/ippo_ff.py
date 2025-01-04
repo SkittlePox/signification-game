@@ -552,6 +552,7 @@ def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_ap
     return speaker_images
 
 
+# TODO: Fix jaxability
 def env_step(runner_state, env, config):    # This function is passed to jax.lax.scan, which means it cannot have any pythonic control flow (e.g., no "if" statements, "while" loops, etc.)
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     listener_train_states, speaker_train_states, log_env_state, obs, rng = runner_state
@@ -832,10 +833,12 @@ def make_train(config):
             runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, new_reset_rng[-1])
             
             ######### COLLECT TRAJECTORIES
+            # TODO: Fix jaxability
             runner_state, transition_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS'] + 1)
             # transition_batch is an instance of Transition with batched sub-objects
             # The shape of transition_batch is (num_steps, num_envs, ...) because it's the output of jax.lax.scan, which enumerates over steps
 
+            # TODO: Fix jaxability
             # Instead of executing the agents on the final observation to get their values, we are simply going to ignore the last observation from traj_batch.
             # We'll need to get the final value in transition_batch and cut off the last index
             # We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
@@ -846,8 +849,6 @@ def make_train(config):
             })
 
             ####### CALCULATE ADVANTAGE #############
-            listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
-            # listener_train_state is a tuple of TrainStates of length num_envs * env.num_listeners
 
             def _calculate_gae_listeners(trans_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
@@ -892,6 +893,20 @@ def make_train(config):
                     unroll=16,
                 )
                 return advantages, advantages + trans_batch.speaker_value * trans_batch.speaker_alive
+            
+            
+            #### Unpack runner_state
+
+            listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
+            # listener_train_state is a tuple of TrainStates of length num_envs * env.num_listeners
+            
+            #### Defining some important variables TODO: eventually move these out of scan loop re jaxability
+            batched_speaker_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in speaker_train_state])
+            speaker_apply_fn = speaker_train_state[0].apply_fn
+            speaker_action_transform = env._env.speaker_action_transform
+
+            batched_listener_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in listener_train_state])
+            listener_apply_fn = listener_train_state[0].apply_fn
 
             ###### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
 
@@ -911,7 +926,7 @@ def make_train(config):
                                                                             jnp.zeros((config["NUM_STEPS"], config["NUM_ENVS"], env_kwargs["num_speakers"]))), operand=None)
             
             ##### UPDATE AGENTS #####################
-
+            # TODO: Fix jaxability
             def _update_a_listener(i, listener_train_states, listener_trans_batch, listener_advantages, listener_targets):                
                 listener_train_state_i = listener_train_states[i]
                 listener_advantages_i = listener_advantages[:, :, i].reshape((config["NUM_MINIBATCHES_LISTENER"], -1))
@@ -937,7 +952,7 @@ def make_train(config):
                 new_listener_train_state_i, total_loss = jax.lax.scan(lambda train_state, i: update_minibatch_listener(i, listener_trans_batch_i, listener_advantages_i, listener_targets_i, train_state, config), listener_train_state_i, jnp.arange(config["NUM_MINIBATCHES_LISTENER"]))
 
                 return new_listener_train_state_i, total_loss
-            
+            # TODO: Fix jaxability
             def _update_a_speaker(i, speaker_train_states, speaker_trans_batch, speaker_advantages, speaker_targets):                
                 speaker_train_state_i = speaker_train_states[i]
                 speaker_advantages_i = speaker_advantages[:, :, i].reshape((config["NUM_MINIBATCHES_SPEAKER"], -1))
@@ -967,6 +982,7 @@ def make_train(config):
             # listener_map_outputs = tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs))))
             # speaker_map_outputs = tuple(map(lambda i: _update_a_speaker(i, speaker_train_state, trimmed_transition_batch, speaker_advantages, speaker_targets), range(len(speaker_rngs))))
             
+            # TODO: Fix jaxability
             # The below implements train freezing while the above commented-out lines do not
             listener_map_outputs = jax.lax.cond(train_listener, lambda _: tuple(map(lambda i: _update_a_listener(i, listener_train_state, trimmed_transition_batch, listener_advantages, listener_targets), range(len(listener_rngs)))),
                                                 lambda _: tuple([(lts, (jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],)), (jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],)), jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],)), jnp.zeros((config["NUM_MINIBATCHES_LISTENER"],))))) for lts in listener_train_state]), operand=None)
@@ -975,6 +991,7 @@ def make_train(config):
                                                lambda _: tuple([(sts, (jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],)), (jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],)), jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],)), jnp.zeros((config["NUM_MINIBATCHES_SPEAKER"],))))) for sts in speaker_train_state]), operand=None)
 
 
+            # TODO: Fix jaxability
             new_listener_train_state = jax.lax.cond(train_listener, lambda _: tuple([lmo[0] for lmo in listener_map_outputs]), lambda _: listener_train_state, operand=None)
             new_speaker_train_state = jax.lax.cond(train_speaker, lambda _: tuple([lmo[0] for lmo in speaker_map_outputs]), lambda _: speaker_train_state, operand=None)
 
@@ -984,21 +1001,16 @@ def make_train(config):
             ########################################################
             ######################### Below is just for logging
 
+            # TODO: Fix jaxability
             listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
             speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])   # I think this is the only use of the outputs
 
+            # TODO: Fix jaxability
             # The learning rate calculations are not correct because the speaker_lr_funcs and listener_lr_funcs are not the true lr schedules. If I just stick to the original lr schedule I'll get the right values
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
             
-            ### Collect speaker examples
-            batched_speaker_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in speaker_train_state])
-            speaker_apply_fn = speaker_train_state[0].apply_fn
-            speaker_action_transform = env._env.speaker_action_transform
-
-            batched_listener_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in listener_train_state])
-            listener_apply_fn = listener_train_state[0].apply_fn
-            
+            ### Collect speaker examples            
             speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             tom_speaker_examples = jax.lax.cond(((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0) & (env.agent_inferential_mode_fn(update_step) == 1), lambda _: get_tom_speaker_examples(next_rng, listener_apply_fn, batched_listener_params, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             ########
