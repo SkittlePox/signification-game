@@ -582,7 +582,7 @@ def get_speaker_action_transform(fn_name, image_dim):
             
             # P0, P1, P2 = spline_params.reshape((3, 2)) 
             P0, P1, P2, W = spline_params[0:2], spline_params[2:4], spline_params[4:6], spline_params[6]
-            W *= -0.002  # This is the weight param. -0.005 is too dark
+            W *= -0.003  # This is the weight param. -0.005 is too dark. -0.002 may be too light.
             t_values = jnp.linspace(0, 1, num=50)
             spline_points = bezier_spline(t_values, P0, P1, P2)
             x_points, y_points = jnp.round(spline_points).astype(int).T
