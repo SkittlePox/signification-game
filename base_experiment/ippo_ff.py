@@ -4,6 +4,7 @@ Based on PureJaxRL Implementation of PPO
 import os
 from functools import partial
 import jax
+import jax.experimental
 import jax.numpy as jnp
 import optax
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
@@ -359,6 +360,14 @@ def execute_individual_speaker(__rng, _speaker_train_state_i, _speaker_obs_i):
     log_prob = policy.log_prob(action)
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
+def execute_individual_speaker_test(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
+    __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
+    _speaker_obs_i = _speaker_obs_i.ravel()
+    policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+    action = policy.sample(seed=__rng)
+    log_prob = policy.log_prob(action)
+    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
+
 
 def execute_tom_listener(__rng, _listener_train_state_i, _listener_obs_i, _speaker_train_state_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, listener_pr_weight=1.5, **kwargs):  # obs is an image
     # P(r_i|s) p= P(s|r_i)P(r_i)P_R(r_i)
@@ -458,33 +467,70 @@ def execute_tom_speaker(__rng, _speaker_train_state_i, _listener_train_state_i, 
 
     return maxaction, log_prob.reshape(-1,), values[maxindex].reshape(-1,)
 
-def get_speaker_examples(runner_state, env, config):
-    _, speaker_train_states, log_env_state, obs, rng = runner_state
+def execute_tom_speaker_test(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=50, num_classes=10, speaker_action_dim=12):
+    # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
+    # In terms of logits exp(l_i(s)) = f_i(s)
+    # P(s|r_i) p= exp( l_i(s) - log sum exp(l_j(s)) for j != i )
+
+    __rng, listener_dropout_key, listener_noise_key = jax.random.split(__rng, 3)
+    __rng, speaker_dropout_key, speaker_noise_key = jax.random.split(__rng, 3)
+    __rng, numer_key, denom_key = jax.random.split(__rng, 3)
+    __rng, pi_sample_key = jax.random.split(__rng)
+
+    ######### Search for the signal with the highest P(r|s)
+
+    ###### Generate candidate stimuli
+
+    # Sample lots of possible signals.
+    search_signal_gut_policy, values = _speaker_apply_fn(_speaker_params_i, jnp.array([_speaker_obs_i], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})    # This is a distrax distribution. Index 1 is values. Using speaker index _speaker_obs_i, for generating pictograms of that class
+    search_signal_param_samples = search_signal_gut_policy.sample(seed=numer_key, sample_shape=(speaker_action_dim, speaker_n_search))[0]    # This is shaped (speaker_n_search, 1, speaker_action_size)
+    search_signal_param_samples = jnp.clip(search_signal_param_samples, a_min=0.0, a_max=1.0)
+    
+    # Generate actual images
+    search_signal_samples = speaker_action_transform_fn(search_signal_param_samples)
+    
+    # Need to iterate over search space and find the highest numerator/denominator??
+    listener_logits = _listener_apply_fn(_listener_params_i, search_signal_samples, rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0].logits # This is shaped (n_search, num_classes)
+
+    # Isolate obs referent index
+    # Numerators should be shape [n_search,]
+    numerators = listener_logits[:, _speaker_obs_i]
+    
+    # Set the logits for obs to -jnp.inf so they don't show up in the denominator calculation
+    denominators = jax.nn.logsumexp(listener_logits.at[:, _speaker_obs_i].set(-jnp.inf), axis=1)
+
+    psr = jnp.exp(numerators-denominators)
+
+    ###### Select signal with the highest P(s|r)
+    maxindex = jnp.argmax(psr)
+
+    maxaction = search_signal_param_samples[maxindex]
+    
+    log_prob = search_signal_gut_policy.log_prob(maxaction)
+
+    return maxaction, log_prob.reshape(-1,), values[maxindex].reshape(-1,)
+
+def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
     speaker_obs = jnp.tile(jnp.arange(config["ENV_KWARGS"]["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
     center_listener_obs = config["ENV_KWARGS"]["center_listener_obs"]
     sp_action_dim = config["ENV_KWARGS"]["speaker_action_dim"]
     num_speakers = config["ENV_KWARGS"]["num_speakers"]
-
     
-    
-    execute_individual_listener_test
-
-    def get_speaker_outputs(i):
-        vmap_execute_speaker = jax.vmap(execute_individual_speaker, in_axes=(0, None, 0))
-        speaker_actions = vmap_execute_speaker(speaker_rngs, speaker_train_states[i], speaker_obs)[0]    # Indices 1 and 2 are for logprobs and values. 0 is actions.
+    def get_speaker_outputs(speaker_params_i):
+        vmap_execute_speaker_test = jax.vmap(execute_individual_speaker_test, in_axes=(0, None, None, 0))
+        speaker_actions = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)[0]   # Indices 1 and 2 are for logprobs and values. 0 
         return speaker_actions.reshape(-1, sp_action_dim)
 
-    speaker_actions = jax.lax.map(get_speaker_outputs, jnp.arange(num_speakers)).reshape((-1, sp_action_dim))
-    speaker_images = env._env.speaker_action_transform(speaker_actions)
+    vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0))
+    speaker_actions = vmap_get_speaker_outputs(speaker_params).reshape((-1, sp_action_dim))
+    speaker_images = speaker_action_transform(speaker_actions)
     
     if center_listener_obs:
         speaker_images = center_obs(speaker_images)
-    # speaker_images = speaker_images.reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
     return speaker_images
 
-def get_tom_speaker_examples(runner_state, env, config):
-    listener_train_states, speaker_train_states, log_env_state, obs, rng = runner_state
+def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_apply_fn, speaker_params, speaker_action_transform, config):
     env_kwargs = config["ENV_KWARGS"]
     speaker_obs = jnp.tile(jnp.arange(env_kwargs["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
@@ -492,21 +538,17 @@ def get_tom_speaker_examples(runner_state, env, config):
     sp_action_dim = env_kwargs["speaker_action_dim"]
     num_speakers = env_kwargs["num_speakers"]
 
-    def get_speaker_outputs(i):
-        def execute_tom_speaker_with_action_transform(trng, sts, lts, _obs):
-            return execute_tom_speaker(trng, sts, lts, _obs, env._env.speaker_action_transform, env_kwargs["speaker_n_search"], env_kwargs["num_classes"], sp_action_dim)
-        
-        vmap_execute_speaker = jax.vmap(execute_tom_speaker_with_action_transform, in_axes=(0, None, None, 0))
-        
-        speaker_actions = vmap_execute_speaker(speaker_rngs, speaker_train_states[i], listener_train_states[i], speaker_obs)[0]    # Indices 1 and 2 are for logprobs and values. 0 is actions.
+    def get_speaker_outputs(speaker_params_i, listener_params_i):
+        vmap_execute_speaker_tom_test = jax.vmap(execute_tom_speaker_test, in_axes=(0, None, None, None, None, 0, None, None, None, None))
+        speaker_actions = vmap_execute_speaker_tom_test(speaker_rngs, speaker_apply_fn, speaker_params_i, listener_apply_fn, listener_params_i, speaker_obs, speaker_action_transform, env_kwargs["speaker_n_search"], env_kwargs["num_classes"], sp_action_dim)[0]   # Indices 1 and 2 are for logprobs and values. 0 
         return speaker_actions.reshape(-1, sp_action_dim)
         
-    speaker_actions = jax.lax.map(get_speaker_outputs, jnp.arange(num_speakers)).reshape((-1, sp_action_dim))
-    speaker_images = env._env.speaker_action_transform(speaker_actions)
+    vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0, 0))
+    speaker_actions = vmap_get_speaker_outputs(speaker_params, listener_params).reshape((-1, sp_action_dim))
+    speaker_images = speaker_action_transform(speaker_actions)
     
     if center_listener_obs:
         speaker_images = center_obs(speaker_images)
-    # speaker_images = speaker_images.reshape((config["ENV_KWARGS"]["num_speakers"] * config["SPEAKER_EXAMPLE_NUM"], config["ENV_KWARGS"]["num_classes"], config["ENV_KWARGS"]["image_dim"], config["ENV_KWARGS"]["image_dim"]))
     return speaker_images
 
 
@@ -948,8 +990,18 @@ def make_train(config):
             # The learning rate calculations are not correct because the speaker_lr_funcs and listener_lr_funcs are not the true lr schedules. If I just stick to the original lr schedule I'll get the right values
             speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
             listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
-            speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
-            tom_speaker_examples = jax.lax.cond(((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0) & (env.agent_inferential_mode_fn(update_step) == 1), lambda _: get_tom_speaker_examples(runner_state, env, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"], env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            
+            ### Collect speaker examples
+            batched_speaker_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in speaker_train_state])
+            speaker_apply_fn = speaker_train_state[0].apply_fn
+            speaker_action_transform = env._env.speaker_action_transform
+
+            batched_listener_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in listener_train_state])
+            listener_apply_fn = listener_train_state[0].apply_fn
+            
+            speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            tom_speaker_examples = jax.lax.cond(((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0) & (env.agent_inferential_mode_fn(update_step) == 1), lambda _: get_tom_speaker_examples(next_rng, listener_apply_fn, batched_listener_params, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            ########
             
             speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1)))
             if env_kwargs["center_listener_obs"]:
@@ -1072,11 +1124,11 @@ def make_train(config):
                 # metric_dict.update({f"predictions/mean state value estimate/listener {i}": jnp.mean(lv[i]).item() for i in range(len(lv))})
                 
                 if (u_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0:
-                    speaker_example_images = make_grid(np.array(torch.tensor(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))), nrow=env_kwargs["num_classes"], pad_value=0.25)
+                    speaker_example_images = make_grid(torch.tensor(np.array(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))), nrow=env_kwargs["num_classes"], pad_value=0.25)
                     final_speaker_example_images = wandb.Image(speaker_example_images, caption="speaker_examples")
                     metric_dict.update({"env/speaker_examples": final_speaker_example_images})
 
-                    tom_speaker_example_images = make_grid(np.array(torch.tensor(tom_speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))), nrow=env_kwargs["num_classes"], pad_value=0.25)
+                    tom_speaker_example_images = make_grid(torch.tensor(np.array(tom_speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))), nrow=env_kwargs["num_classes"], pad_value=0.25)
                     final_tom_speaker_example_images = wandb.Image(tom_speaker_example_images, caption="tom_speaker_examples")
                     metric_dict.update({"env/tom_speaker_examples": final_tom_speaker_example_images})
 
@@ -1136,6 +1188,90 @@ def make_train(config):
     return train
 
 
+def make_train_test(config):
+    env = define_env(config)
+    env = SimpSigGameLogWrapper(env)
+
+    env_kwargs = config["ENV_KWARGS"]
+
+    config["NUM_ACTORS"] = (env_kwargs["num_speakers"] + env_kwargs["num_listeners"]) * config["NUM_ENVS"]
+    config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
+    config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
+    
+    def train(rng):
+        # MAKE AGENTS
+        rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
+        listener_rngs = jax.random.split(rng_l, env_kwargs["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
+        speaker_rngs = jax.random.split(rng_s, env_kwargs["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
+        
+        listeners_stuff = [initialize_listener(env, x_rng, config, i) for i, x_rng in enumerate(listener_rngs)]
+        _listener_networks, listener_train_states, listener_lr_funcs = zip(*listeners_stuff) # listener_lr_funcs is for logging only, it's not actually used directly by the optimizer
+        
+        speakers_stuff = [initialize_speaker(env, x_rng, config, i) for i, x_rng in enumerate(speaker_rngs)]
+        _speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
+
+        # LOAD ICON PROBE
+        local_path = str(pathlib.Path().resolve())
+        model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+        raw_restored = icon_probe.load_probe_model(local_path+model_path_str+config["PROBE_MODEL_NAME"], None, action_dim=env_kwargs['num_classes'], opt=config["PROBE_OPTIMIZER"], no_train=True)
+        probe_train_state = raw_restored['model']
+
+        # INIT ENV
+        rng, _rng = jax.random.split(rng)
+        reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
+        obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
+
+        speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_SCHEDULE"])
+        listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_SCHEDULE"])
+        
+        # TRAIN LOOP
+        def _update_step(runner_state, update_step, env, config):
+            # runner_state is actually a tuple of runner_states, one per agent
+
+            rng = jax.random.fold_in(key=runner_state[4], data=update_step)
+            # new_rng, next_rng = jax.random.split(rng)
+
+            # new_reset_rng = jax.random.split(new_rng, config["NUM_ENVS"]+1)
+            # last_obs, log_env_state = env.reset(new_reset_rng[:-1], jnp.ones((config["NUM_ENVS"])) * update_step)  # This should probably be a new rng each time, also there should be multiple envs!!! This function keeps using the same env.
+            # runner_state = (runner_state[0], runner_state[1], log_env_state, last_obs, new_reset_rng[-1])
+
+            listener_train_state, speaker_train_state, log_env_state, last_obs, rng = runner_state
+
+            speaker_apply_fn = speaker_train_state[0].apply_fn
+
+            batched_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in speaker_train_state])
+
+            
+            speaker_exs = get_speaker_examples(rng, speaker_apply_fn, batched_params, env, config)
+
+            jax.debug.print(str(speaker_exs))
+            # runner_state = (new_listener_train_state, new_speaker_train_state, log_env_state, last_obs, next_rng)
+
+            # jax.experimental.io_callback(lambda x: print(x), None, speaker_exs)
+
+            return runner_state, update_step + 1
+
+        rng, _rng = jax.random.split(rng)
+
+        batched_params = jax.tree.map(lambda *args: jnp.stack(args), *[ts.params for ts in speaker_train_states])
+        runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
+        
+
+        ### For debugging speaker examples
+        # speaker_exs = get_speaker_examples(runner_state, env, config)
+        # speaker_example_images = make_grid(torch.tensor(np.array(speaker_exs.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))), nrow=env_kwargs["num_classes"], pad_value=0.25)
+        # speaker_exs2 = get_tom_speaker_examples(runner_state, env, config) # the output of this should be shape (200, 32, 32)
+        # speaker_example_images2 = make_grid(torch.tensor(np.array(speaker_exs2.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))), nrow=env_kwargs["num_classes"], pad_value=0.25)
+        
+        partial_update_fn = partial(_update_step, env=env, config=config)
+        runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+            partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS'])
+        )
+
+        return {"runner_state": runner_state, "traj_batch": traj_batch}
+
+    return train
+
 @hydra.main(version_base=None, config_path="config", config_name="default")
 def main(config):
 
@@ -1165,61 +1301,6 @@ def main(config):
         save_agents(listener_train_states, speaker_train_states, config)
 
     print("Done")
-
-
-@jax.profiler.annotate_function
-def test_rollout_execution(config, rng):    # I don't think this funciton works anymore. I've changed a lot.
-    env = define_env(config)
-    env = SimpSigGameLogWrapper(env)
-
-    config["NUM_ACTORS"] = (config["ENV_KWARGS"]["num_speakers"] + config["ENV_KWARGS"]["num_listeners"]) * config["NUM_ENVS"]
-    config["NUM_MINIBATCHES"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
-
-    # MAKE AGENTS
-    rng, rng_s, rng_l = jax.random.split(rng, 3)    # rng_s for speakers, rng_l for listeners
-    listener_rngs = jax.random.split(rng_l, config["ENV_KWARGS"]["num_listeners"] * config["NUM_ENVS"])   # Make an rng key for each listener
-    speaker_rngs = jax.random.split(rng_s, config["ENV_KWARGS"]["num_speakers"] * config["NUM_ENVS"])   # Make an rng key for each speaker
-    
-    listeners_stuff = [initialize_listener(env, x_rng, config) for x_rng in listener_rngs]
-    listener_networks, listener_train_states = zip(*listeners_stuff)
-    
-    speakers_stuff = [initialize_speaker(env, x_rng, config) for x_rng in speaker_rngs]
-    speaker_networks, speaker_train_states = zip(*speakers_stuff)
-    
-
-    # INIT ENV
-    rng, _rng = jax.random.split(rng)
-    reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
-    obs, log_env_state = env.reset(reset_rng, jnp.zeros((len(reset_rng))))  # log_env_state is a single variable, but each variable it has is actually batched
-
-    rng, _rng = jax.random.split(rng)
-    runner_state = (listener_train_states, speaker_train_states, log_env_state, obs, _rng)
-
-    # runner_state, transition = env_step(runner_state, env, config)    # This was for testing a single env_step
-    runner_state, traj_batch = jax.lax.scan(lambda rs, _: env_step(rs, env, config), runner_state, None, config['NUM_STEPS']) # This is if everything is working
-    # traj_batch is a Transition with sub-objects of shape (num_steps, num_envs, ...). It represents a rollout.
-    
-    return {"runner_state": runner_state, "traj_batch": traj_batch}
-
-
-@hydra.main(version_base=None, config_path="config", config_name="test")
-def test(config):
-    config = OmegaConf.to_container(
-        config, resolve=True, throw_on_missing=True
-    )
-    wandb.init(
-        entity=config["ENTITY"],
-        project=config["PROJECT"],
-        tags=["test"],
-        config=config,
-        mode=config["WANDB_MODE"],
-        save_code=True
-    )
-    wandb.run.log_code(".")
-    # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    rng = jax.random.PRNGKey(50)
-    out = test_rollout_execution(config, rng)
-    print(out['runner_state'])
 
 
 if __name__ == "__main__":
