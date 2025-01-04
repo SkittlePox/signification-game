@@ -134,6 +134,8 @@ class Superagent:
         # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
         # In terms of logits exp(l_i(s)) = f_i(s)
         # P(s|r_i) p= exp( l_i(s) - log sum exp(l_j(s)) for j != i )
+
+        # TODO: A problem occurs when obs is not a single integer, but an array of integers.
         
         key, numer_key, denom_key = jax.random.split(key, 3)
 
@@ -307,11 +309,13 @@ def test():
     image_paths = []
     pictograms = []
 
+    agent0.create_pictogram(key, jnp.array([0, 1, 2, 3, 4, 5, 6, 7, 8,9]), n_search=5)
+
     for i in range(num_iters):
         key, key_i = jax.random.split(key)
         sp_key, ls_key = jax.random.split(key_i, 2)
-        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_search=100)
-        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=10)
+        pictogram = agent0.create_pictogram(sp_key, jnp.array([i % 10]), n_search=5)
+        pi = agent1.interpret_pictogram(ls_key, pictogram, n_samples=5)
         reading = pi.sample(seed=key_i)
 
         image_paths.append(local_path+f'/scratch/scratch_images/pic_{i}_sign_{i % 10}_read_{reading}.png')
