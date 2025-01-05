@@ -33,12 +33,12 @@ class SimpSigGameLogWrapper(LogWrapper):
         obs, env_state, reward, done, info = jax.vmap(self._env.step_env)(
             keys, state.env_state, action
         )
-        ep_done = done["__all__"]
-        new_episode_return = state.episode_returns + self._batchify_floats(reward).T
+        ep_done = jnp.concatenate(done, axis=1)
+        _reward = jnp.concatenate(reward, axis=1)
+        new_episode_return = state.episode_returns + _reward    # (1, 18)
         new_episode_length = state.episode_lengths + 1
         old_ep_done = ep_done
 
-        ep_done = jnp.repeat(ep_done[:, None], new_episode_return.shape[1], axis=1)   # This is a major hotfix. Right now ep_done is one per env, as opposed to one per agent per env. This line extrapolates the one per env to one per agent per env.
         state = LogEnvState(
             env_state=env_state,
             episode_returns=new_episode_return * (1 - ep_done),
@@ -53,7 +53,7 @@ class SimpSigGameLogWrapper(LogWrapper):
         info["returned_episode_returns"] = state.returned_episode_returns
         info["returned_episode_lengths"] = state.returned_episode_lengths
         # info["returned_episode"] = jnp.full((self._env.num_agents,), old_ep_done) # This doesn't work for some reason
-        return obs, state, reward, done, info
+        return obs, state, reward, done, info   # done is a (speaker, listener) tuple of jnp arrays of shape (1, num_agents)
     
 
 class CustomBatchNorm(nn.Module):

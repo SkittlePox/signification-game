@@ -220,15 +220,18 @@ class SimplifiedSignificationGame(MultiAgentEnv):
                                           speaker_rewards_near_final + speaker_penalties,
                                           speaker_rewards_near_final)
 
-        rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
-        rewards["__all__"] = sum(rewards.values())
+        # rewards = {**{agent: speaker_rewards_final[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_rewards_final[i] for i, agent in enumerate(self.listener_agents)}}
+        # rewards["__all__"] = sum(rewards.values())
+
+        speaker_rewards = speaker_rewards_final[:self.num_speakers]
+        listener_rewards = listener_rewards_final
 
         speaker_alives = jnp.isin(jnp.arange(self.num_speakers), state.channel_map[:, 0]).astype(jnp.int32)
         listener_alives = jnp.isin(jnp.arange(self.num_listeners), state.channel_map[:, 1]).astype(jnp.int32)
 
-        alives = {**{agent: speaker_alives[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_alives[i] for i, agent in enumerate(self.listener_agents)}}
+        # alives = {**{agent: speaker_alives[i] for i, agent in enumerate(self.speaker_agents)}, **{agent: listener_alives[i] for i, agent in enumerate(self.listener_agents)}}
         # alives = {**{agent: 1 if i in state.channel_map[:, 0] else 0 for i, agent in enumerate(self.speaker_agents)}, **{agent: 1 if i in state.channel_map[:, 1] else 0 for i, agent in enumerate(self.listener_agents)}}
-        alives["__all__"] = 0 # It's important that this is False at all times. Because the MARL library thinks this variable is actually "dones", and __all__==True would signify end of episode
+        # alives["__all__"] = 0 # It's important that this is False at all times. Because the MARL library thinks this variable is actually "dones", and __all__==True would signify end of episode
 
         ######## Then, update the state.
         key, k1, k2, k3, k4, k5, k6, obs_key = jax.random.split(key, 8)
@@ -301,7 +304,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             agent_inferential_mode=self.agent_inferential_mode_fn(state.epoch)
         )
         
-        return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state), lax.stop_gradient(rewards), lax.stop_gradient(alives), {}
+        return lax.stop_gradient(self.get_obs(obs_key, state, as_dict)), lax.stop_gradient(state), (lax.stop_gradient(speaker_rewards), lax.stop_gradient(listener_rewards)), (lax.stop_gradient(speaker_alives), lax.stop_gradient(listener_alives)), {}
     
     @partial(jax.jit, static_argnums=[0, 3])
     def reset(self, key: chex.PRNGKey, epoch: int = 0, as_dict: bool = False) -> Tuple[Dict, State]:
