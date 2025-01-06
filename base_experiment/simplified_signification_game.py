@@ -146,7 +146,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
     def step_env(self, key: chex.PRNGKey, state: State, actions, as_dict: bool = False):
         """Performs a step in the environment."""
         
-        if isinstance(actions, dict):
+        if as_dict or isinstance(actions, dict):
             speaker_actions = jnp.array([actions[agent] for agent in self.speaker_agents])
             listener_actions = jnp.array([actions[agent] for agent in self.listener_agents])
             listener_log_prob = jnp.ones_like(listener_actions)
