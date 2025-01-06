@@ -5,6 +5,7 @@ import os
 from functools import partial
 import jax
 import jax.experimental
+import jax.flatten_util
 import jax.numpy as jnp
 import optax
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
@@ -757,6 +758,7 @@ def make_train(config):
         
         speakers_stuff = [initialize_speaker(env, x_rng, config, i) for i, x_rng in enumerate(speaker_rngs)]
         _speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
+        # I'm going to assume that all speakers share the same lr_fn, as well as all listeners sharing their own lr_fns. At least for logging purposes.
 
         # LOAD ICON PROBE
         local_path = str(pathlib.Path().resolve())
@@ -999,61 +1001,59 @@ def make_train(config):
                                                  lambda _: ((batched_speaker_params, batched_speaker_opt_states), (jnp.zeroes((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeroes((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeroes((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeroes((env_kwargs["num_speakers"], num_speaker_minibatches))))), None)
             
             ## Unpack the outputs
-            (final_listener_params, final_listener_opt_state), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)) = final_listener_outputs
-            (final_speaker_params, final_speaker_opt_state), (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy)) = final_speaker_outputs
+            (final_listener_params, final_listener_opt_states), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)) = final_listener_outputs
+            (final_speaker_params, final_speaker_opt_states), (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy)) = final_speaker_outputs
             ########################################################
 
             ## Update the runner_state for the next scan loop
-            runner_state = (final_speaker_params, final_listener_params, final_speaker_opt_state, final_listener_opt_state, new_log_env_state, new_obs, next_rng)
+            runner_state = (final_speaker_params, final_listener_params, final_speaker_opt_states, final_listener_opt_states, new_log_env_state, new_obs, next_rng)
             
             ########################################################
             ####################### LOGGING ########################
             #######################  BELOW  ########################
             ########################################################
 
-            # TODO: Fix jaxability
-            listener_loss = tuple([lmo[1] for lmo in listener_map_outputs])
-            speaker_loss = tuple([lmo[1] for lmo in speaker_map_outputs])   # I think this is the only use of the outputs
-
-            # TODO: Fix jaxability
-            # The learning rate calculations are not correct because the speaker_lr_funcs and listener_lr_funcs are not the true lr schedules. If I just stick to the original lr schedule I'll get the right values
-            speaker_current_lr = jnp.array([speaker_lr_funcs[i](speaker_train_state[i].opt_state[1][0].count) for i in range(len(speaker_train_state))])
-            listener_current_lr = jnp.array([listener_lr_funcs[i](listener_train_state[i].opt_state[1][0].count) for i in range(len(listener_train_state))])
+            listener_loss_for_logging = (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy))
+            speaker_loss_for_logging = (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy))
             
-            ### Collect speaker examples            
+            ## Collect speaker examples            
             speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, lambda _: get_speaker_examples(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             tom_speaker_examples = jax.lax.cond(((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0) & (env.agent_inferential_mode_fn(update_step) == 1), lambda _: get_tom_speaker_examples(next_rng, listener_apply_fn, batched_listener_params, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
-            ########
+            ## Both sets of examples are shape (num_classes * num_speakers * speaker_example_num, image_dim, image_dim)
             
-            speaker_images = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((len(speaker_train_state), -1)))
+            ## Collect the last set of speaker-generated images for this epoch.
+            speaker_images = speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((env_kwargs["num_speakers"]), -1))
             if env_kwargs["center_listener_obs"]:
                 speaker_images = center_obs(speaker_images)
-            speaker_images = speaker_images.reshape((len(speaker_train_state), -1, env_kwargs["image_dim"], env_kwargs["image_dim"]))   # NOTE: This code is not robust to more than 1 env
+            ## speaker_images is shaped (num_speakers, image_dim, image_dim)
 
-            def get_optimizer_param_mean(opt_state, param_name):    # Assumes Adam optimizer!
-                # Extract the specified parameter pytree
-                param_pytree = getattr(opt_state, param_name)
-                # Flatten the pytree to a list of arrays
-                param_arrays, _ = tree_flatten(param_pytree)
-                # Compute the mean of each array and average them
-                means = [jnp.mean(array) for array in param_arrays]
-                overall_mean = sum(means) / len(means)
-                return overall_mean
+            ### Calculate optimizer param stats (L2-Norm) and learning rates (assuming they are the same for all agents of that type)
+            speaker_nu = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(final_speaker_opt_states[1][0].nu)
+            speaker_mu = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(final_speaker_opt_states[1][0].mu)
+            listener_nu = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(final_listener_opt_states[1][0].nu)
+            listener_mu = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(final_listener_opt_states[1][0].mu)
+            ## Each is shaped (num_speakers,) or (num_listeners,)
+            speaker_current_lr = speaker_lr_funcs[0](batched_speaker_opt_states[1][0].count)
+            listener_current_lr = listener_lr_funcs[0](batched_listener_opt_states[1][0].count)
+            ## These are just floats. They are also not guaranteed to be correct.
+            optimizer_params_stats_for_logging = (speaker_nu, speaker_mu, listener_nu, listener_mu, speaker_current_lr, listener_current_lr)
+            ###
 
-            listener_optimizer_params = jnp.array([[get_optimizer_param_mean(lts.opt_state[1][0], "mu"), get_optimizer_param_mean(lts.opt_state[1][0], "nu")] for lts in new_listener_train_state])
-            speaker_optimizer_params = jnp.array([[get_optimizer_param_mean(sts.opt_state[1][0], "mu"), get_optimizer_param_mean(sts.opt_state[1][0], "nu")] for sts in new_speaker_train_state])
+            ## Calculate agent param stats (L2-Norm)
+            speaker_weight_magnitude = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(final_speaker_params)
+            listener_weight_magnitude = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(final_listener_params)
+            agent_param_stats_for_logging = (speaker_weight_magnitude, listener_weight_magnitude)
+            ## Each is shaped (num_speakers,) or (num_listeners,)
 
-
-            # TODO: Calculate and log weight magnitude!
-
-            ##### Evaluate iconicity probe and action penalties
-
+            ### Evaluate iconicity probe and action penalties
             def get_probe_logits():
-                speaker_images_for_icon_probe = env._env.speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, env_kwargs["image_dim"], env_kwargs["image_dim"], 1))
+                speaker_images_for_icon_probe = speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((env_kwargs["num_speakers"]*config["PROBE_NUM_EXAMPLES"], -1))).reshape((-1, env_kwargs["image_dim"], env_kwargs["image_dim"], 1))
                 # I need to calculate the whitesum penalty based on the speaker_images. I don't know what shape they are
                 return probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
-            
             probe_logits = jax.lax.cond((update_step + 1) % config["PROBE_LOGGING_ITER"] == 0, lambda _: get_probe_logits(), lambda _: jnp.zeros((config["PROBE_NUM_EXAMPLES"], env_kwargs["num_speakers"], env_kwargs["num_classes"])), operand=None)
+            ###
+
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, tom_speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits)
 
             def wandb_callback(metrics):
                 ll, sl, tb, les, speaker_lr, listener_lr, speaker_exs, tom_speaker_exs, speaker_imgs, l_optmizer_params, s_optmizer_params, u_step, p_logits = metrics
@@ -1187,7 +1187,7 @@ def make_train(config):
                 # metric_dict.update()
                 
                 wandb.log(metric_dict)
-            jax.experimental.io_callback(wandb_callback, None, (listener_loss, speaker_loss, trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, tom_speaker_examples, speaker_images, listener_optimizer_params, speaker_optimizer_params, update_step, probe_logits))
+            jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
             return runner_state, update_step + 1
 
@@ -1504,7 +1504,7 @@ def main(config):
 
     rng = jax.random.PRNGKey(config["JAX_RANDOM_SEED"])
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    train = make_train_test(config)
+    train = make_train(config)
     out = train(rng)
 
     if config["PICKLE_FINAL_AGENTS"]:
