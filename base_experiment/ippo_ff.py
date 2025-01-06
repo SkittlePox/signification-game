@@ -25,6 +25,7 @@ from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
 import pathlib
 import icon_probe
+import time
 from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents
 
 
@@ -500,6 +501,50 @@ def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_ap
         speaker_images = center_obs(speaker_images)
     return speaker_images
 
+def calculate_gae_listeners(trans_batch, last_val, gamma, gae_lambda):
+    def _get_advantages(gae_and_next_value, transition):
+        gae, next_value = gae_and_next_value
+        alive, value, reward = (
+            transition.listener_alive,
+            transition.listener_value,
+            transition.listener_reward,
+        )
+        delta = reward + gamma * next_value * alive - value
+        gae = delta + gamma * gae_lambda * alive * gae
+        gae = gae * alive
+        return (gae, value), gae
+
+    _, advantages = jax.lax.scan(
+        _get_advantages,
+        (jnp.zeros_like(last_val), last_val),
+        trans_batch,
+        reverse=True,
+        unroll=16,
+    )
+    return advantages, advantages + trans_batch.listener_value * trans_batch.listener_alive
+
+def calculate_gae_speakers(trans_batch, last_val, gamma, gae_lambda):
+    def _get_advantages(gae_and_next_value, transition):
+        gae, next_value = gae_and_next_value
+        alive, value, reward = (
+            transition.speaker_alive,
+            transition.speaker_value,
+            transition.speaker_reward,
+        )
+        delta = reward + gamma * next_value * alive - value
+        gae = delta + gamma * gae_lambda * alive * gae
+        gae = gae * alive
+        return (gae, value), gae
+
+    _, advantages = jax.lax.scan(
+        _get_advantages,
+        (jnp.zeros_like(last_val), last_val),
+        trans_batch,
+        reverse=True,
+        unroll=16,
+    )
+    return advantages, advantages + trans_batch.speaker_value * trans_batch.speaker_alive
+
 def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):    # This function is passed to jax.lax.scan, which means it cannot have any pythonic control flow (e.g., no "if" statements, "while" loops, etc.)
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     batched_speaker_params, batched_listener_params, log_env_state, obs, rng = runner_state
@@ -758,7 +803,6 @@ def make_train(config):
         
         speakers_stuff = [initialize_speaker(env, x_rng, config, i) for i, x_rng in enumerate(speaker_rngs)]
         _speaker_networks, speaker_train_states, speaker_lr_funcs = zip(*speakers_stuff) # speaker_lr_funcs is for logging only, it's not actually used directly by the optimizer
-        # I'm going to assume that all speakers share the same lr_fn, as well as all listeners sharing their own lr_fns. At least for logging purposes.
 
         # LOAD ICON PROBE
         local_path = str(pathlib.Path().resolve())
@@ -773,8 +817,11 @@ def make_train(config):
 
         speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_SCHEDULE"])
         listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_SCHEDULE"])
+        
+        num_speaker_minibatches = config["NUM_MINIBATCHES_SPEAKER"]
+        num_listener_minibatches = config["NUM_MINIBATCHES_LISTENER"]
 
-        # DEFINE TRAINING VARIABLES/FUNCTIONS
+        # DEFINE TRAINING VARIABLES/FUNCTIONS ###########
         speaker_apply_fn = speaker_train_states[0].apply_fn
         listener_apply_fn = listener_train_states[0].apply_fn
 
@@ -788,6 +835,54 @@ def make_train(config):
         batched_listener_opt_states = jax.vmap(listener_optimizer_tx.init)(batched_listener_params)
         
         speaker_action_transform = env._env.speaker_action_transform
+
+        _calculate_gae_listeners = partial(calculate_gae_listeners, gamma=config["GAMMA"], gae_lambda=config["GAE_LAMBDA"])
+        _calculate_gae_speakers = partial(calculate_gae_speakers, gamma=config["GAMMA"], gae_lambda=config["GAE_LAMBDA"])
+
+        def update_speaker(_rng, trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i, speaker_params_i, speaker_opt_state_i):
+            carry_state = (_rng, speaker_params_i, speaker_opt_state_i)
+            step_data = (trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i)
+            
+            partial_update_speaker = partial(update_minibatch_speaker, speaker_apply_fn=speaker_apply_fn, speaker_optimizer_tx=speaker_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_speaker=config["L2_REG_COEF_SPEAKER"], vf_coef=config["VF_COEF"], ent_coef_speaker=config["ENT_COEF_SPEAKER"])
+            
+            def scan_step(carry, step_input):
+                _rng, speaker_params_i, speaker_opt_state_i = carry
+                trans_batch, advantages, targets = step_input
+                _this_rng, _next_rng = jax.random.split(_rng)
+
+                speaker_update_args = (_this_rng, trans_batch, advantages, targets, speaker_params_i, speaker_opt_state_i)
+                (updated_speaker_params, updated_speaker_opt_state), loss = partial_update_speaker(speaker_update_args)
+                
+                # Carry forward updated state
+                return (_next_rng, updated_speaker_params, updated_speaker_opt_state), loss
+            
+            (final_rng, final_speaker_params, final_speaker_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
+            return (final_speaker_params, final_speaker_opt_state), total_loss
+        
+        def update_listener(_rng, trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i, listener_params_i, listener_opt_state_i):
+            carry_state = (_rng, listener_params_i, listener_opt_state_i)
+            step_data = (trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i)
+            
+            partial_update_listener = partial(update_minibatch_listener, listener_apply_fn=listener_apply_fn, listener_optimizer_tx=listener_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_listener=config["L2_REG_COEF_LISTENER"], vf_coef=config["VF_COEF"], ent_coef_listener=config["ENT_COEF_LISTENER"])
+            
+            def scan_step(carry, step_input):
+                _rng, listener_params_i, listener_opt_state_i = carry
+                trans_batch, advantages, targets = step_input
+                _this_rng, _next_rng = jax.random.split(_rng)
+
+                listener_update_args = (_this_rng, trans_batch, advantages, targets, listener_params_i, listener_opt_state_i)
+                (updated_listener_params, updated_listener_opt_state), loss = partial_update_listener(listener_update_args)
+                
+                # Carry forward updated state
+                return (_next_rng, updated_listener_params, updated_listener_opt_state), loss
+            
+            (final_rng, final_listener_params, final_listener_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
+            return (final_listener_params, final_listener_opt_state), total_loss
+        
+        vmap_update_speaker = jax.vmap(update_speaker, in_axes=(0, 2, 2, 2, 0, 0))
+        vmap_update_listener = jax.vmap(update_listener, in_axes=(0, 2, 2, 2, 0, 0))
+        
+        ##########################
 
         runner_state = (batched_speaker_params, batched_listener_params, batched_speaker_opt_states, batched_listener_opt_states, log_env_state, obs, _rng)
         
@@ -833,52 +928,7 @@ def make_train(config):
             ####### CALCULATE ADVANTAGE #############
             ## This is unnecessary for bandits, but ideally this code can be extended to pomdps
 
-            def _calculate_gae_listeners(trans_batch, last_val):
-                def _get_advantages(gae_and_next_value, transition):
-                    gae, next_value = gae_and_next_value
-                    alive, value, reward = (
-                        transition.listener_alive,
-                        transition.listener_value,
-                        transition.listener_reward,
-                    )
-                    delta = reward + config["GAMMA"] * next_value * alive - value
-                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
-                    gae = gae * alive
-                    return (gae, value), gae
-
-                _, advantages = jax.lax.scan(
-                    _get_advantages,
-                    (jnp.zeros_like(last_val), last_val),
-                    trans_batch,
-                    reverse=True,
-                    unroll=16,
-                )
-                return advantages, advantages + trans_batch.listener_value * trans_batch.listener_alive
-
-            def _calculate_gae_speakers(trans_batch, last_val):
-                def _get_advantages(gae_and_next_value, transition):
-                    gae, next_value = gae_and_next_value
-                    alive, value, reward = (
-                        transition.speaker_alive,
-                        transition.speaker_value,
-                        transition.speaker_reward,
-                    )
-                    delta = reward + config["GAMMA"] * next_value * alive - value
-                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
-                    gae = gae * alive
-                    return (gae, value), gae
-
-                _, advantages = jax.lax.scan(
-                    _get_advantages,
-                    (jnp.zeros_like(last_val), last_val),
-                    trans_batch,
-                    reverse=True,
-                    unroll=16,
-                )
-                return advantages, advantages + trans_batch.speaker_value * trans_batch.speaker_alive
-
-
-            ###### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
+            #### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
             train_speaker = speaker_train_freezing_fn(update_step)
             train_listener = listener_train_freezing_fn(update_step)
 
@@ -900,7 +950,6 @@ def make_train(config):
             update_speaker_rngs = jax.random.split(update_speaker_rng, env_kwargs["num_speakers"])
             
             ### Listeners: Reshape variables into minibatches
-            num_listener_minibatches = config["NUM_MINIBATCHES_LISTENER"]
             listener_advantages = listener_advantages.reshape((num_listener_minibatches, -1) + listener_advantages.shape[1:])
             listener_targets = listener_targets.reshape((num_listener_minibatches, -1) + listener_targets.shape[1:])
             
@@ -929,30 +978,8 @@ def make_train(config):
             # )
             ############################################
             
-            def update_listener(_rng, trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i, listener_params_i, listener_opt_state_i):
-                carry_state = (_rng, listener_params_i, listener_opt_state_i)
-                step_data = (trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i)
-                
-                partial_update_listener = partial(update_minibatch_listener, listener_apply_fn=listener_apply_fn, listener_optimizer_tx=listener_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_listener=config["L2_REG_COEF_LISTENER"], vf_coef=config["VF_COEF"], ent_coef_listener=config["ENT_COEF_LISTENER"])
-                
-                def scan_step(carry, step_input):
-                    _rng, listener_params_i, listener_opt_state_i = carry
-                    trans_batch, advantages, targets = step_input
-                    _this_rng, _next_rng = jax.random.split(_rng)
-
-                    listener_update_args = (_this_rng, trans_batch, advantages, targets, listener_params_i, listener_opt_state_i)
-                    (updated_listener_params, updated_listener_opt_state), loss = partial_update_listener(listener_update_args)
-                    
-                    # Carry forward updated state
-                    return (_next_rng, updated_listener_params, updated_listener_opt_state), loss
-                
-                (final_rng, final_listener_params, final_listener_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
-                return (final_listener_params, final_listener_opt_state), total_loss
-
-            vmap_update_listener = jax.vmap(update_listener, in_axes=(0, 2, 2, 2, 0, 0))
 
             ### Speakers: Reshape variables into minibatches
-            num_speaker_minibatches = config["NUM_MINIBATCHES_SPEAKER"]
             speaker_advantages = speaker_advantages.reshape((num_speaker_minibatches, -1) + speaker_advantages.shape[1:])
             speaker_targets = speaker_targets.reshape((num_speaker_minibatches, -1) + speaker_targets.shape[1:])
             
@@ -964,28 +991,7 @@ def make_train(config):
                 obs=trimmed_transition_batch.speaker_obs.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_obs.shape[1:]),
                 alive=trimmed_transition_batch.speaker_alive.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_alive.shape[1:]),
             )
-
-            def update_speaker(_rng, trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i, speaker_params_i, speaker_opt_state_i):
-                carry_state = (_rng, speaker_params_i, speaker_opt_state_i)
-                step_data = (trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i)
-                
-                partial_update_speaker = partial(update_minibatch_speaker, speaker_apply_fn=speaker_apply_fn, speaker_optimizer_tx=speaker_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_speaker=config["L2_REG_COEF_SPEAKER"], vf_coef=config["VF_COEF"], ent_coef_speaker=config["ENT_COEF_SPEAKER"])
-                
-                def scan_step(carry, step_input):
-                    _rng, speaker_params_i, speaker_opt_state_i = carry
-                    trans_batch, advantages, targets = step_input
-                    _this_rng, _next_rng = jax.random.split(_rng)
-
-                    speaker_update_args = (_this_rng, trans_batch, advantages, targets, speaker_params_i, speaker_opt_state_i)
-                    (updated_speaker_params, updated_speaker_opt_state), loss = partial_update_speaker(speaker_update_args)
-                    
-                    # Carry forward updated state
-                    return (_next_rng, updated_speaker_params, updated_speaker_opt_state), loss
-                
-                (final_rng, final_speaker_params, final_speaker_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
-                return (final_speaker_params, final_speaker_opt_state), total_loss
-
-            vmap_update_speaker = jax.vmap(update_speaker, in_axes=(0, 2, 2, 2, 0, 0))
+            ###############
             
             ##### Finally execute the compiled update functions
             ###
@@ -1242,8 +1248,11 @@ def make_train_test(config):
 
         speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_SCHEDULE"])
         listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_SCHEDULE"])
+        
+        num_speaker_minibatches = config["NUM_MINIBATCHES_SPEAKER"]
+        num_listener_minibatches = config["NUM_MINIBATCHES_LISTENER"]
 
-        # DEFINE TRAINING VARIABLES/FUNCTIONS
+        # DEFINE TRAINING VARIABLES/FUNCTIONS ###########
         speaker_apply_fn = speaker_train_states[0].apply_fn
         listener_apply_fn = listener_train_states[0].apply_fn
 
@@ -1257,6 +1266,54 @@ def make_train_test(config):
         batched_listener_opt_states = jax.vmap(listener_optimizer_tx.init)(batched_listener_params)
         
         speaker_action_transform = env._env.speaker_action_transform
+
+        _calculate_gae_listeners = partial(calculate_gae_listeners, gamma=config["GAMMA"], gae_lambda=config["GAE_LAMBDA"])
+        _calculate_gae_speakers = partial(calculate_gae_speakers, gamma=config["GAMMA"], gae_lambda=config["GAE_LAMBDA"])
+
+        def update_speaker(_rng, trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i, speaker_params_i, speaker_opt_state_i):
+            carry_state = (_rng, speaker_params_i, speaker_opt_state_i)
+            step_data = (trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i)
+            
+            partial_update_speaker = partial(update_minibatch_speaker, speaker_apply_fn=speaker_apply_fn, speaker_optimizer_tx=speaker_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_speaker=config["L2_REG_COEF_SPEAKER"], vf_coef=config["VF_COEF"], ent_coef_speaker=config["ENT_COEF_SPEAKER"])
+            
+            def scan_step(carry, step_input):
+                _rng, speaker_params_i, speaker_opt_state_i = carry
+                trans_batch, advantages, targets = step_input
+                _this_rng, _next_rng = jax.random.split(_rng)
+
+                speaker_update_args = (_this_rng, trans_batch, advantages, targets, speaker_params_i, speaker_opt_state_i)
+                (updated_speaker_params, updated_speaker_opt_state), loss = partial_update_speaker(speaker_update_args)
+                
+                # Carry forward updated state
+                return (_next_rng, updated_speaker_params, updated_speaker_opt_state), loss
+            
+            (final_rng, final_speaker_params, final_speaker_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
+            return (final_speaker_params, final_speaker_opt_state), total_loss
+        
+        def update_listener(_rng, trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i, listener_params_i, listener_opt_state_i):
+            carry_state = (_rng, listener_params_i, listener_opt_state_i)
+            step_data = (trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i)
+            
+            partial_update_listener = partial(update_minibatch_listener, listener_apply_fn=listener_apply_fn, listener_optimizer_tx=listener_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_listener=config["L2_REG_COEF_LISTENER"], vf_coef=config["VF_COEF"], ent_coef_listener=config["ENT_COEF_LISTENER"])
+            
+            def scan_step(carry, step_input):
+                _rng, listener_params_i, listener_opt_state_i = carry
+                trans_batch, advantages, targets = step_input
+                _this_rng, _next_rng = jax.random.split(_rng)
+
+                listener_update_args = (_this_rng, trans_batch, advantages, targets, listener_params_i, listener_opt_state_i)
+                (updated_listener_params, updated_listener_opt_state), loss = partial_update_listener(listener_update_args)
+                
+                # Carry forward updated state
+                return (_next_rng, updated_listener_params, updated_listener_opt_state), loss
+            
+            (final_rng, final_listener_params, final_listener_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
+            return (final_listener_params, final_listener_opt_state), total_loss
+        
+        vmap_update_speaker = jax.vmap(update_speaker, in_axes=(0, 2, 2, 2, 0, 0))
+        vmap_update_listener = jax.vmap(update_listener, in_axes=(0, 2, 2, 2, 0, 0))
+        
+        ##########################
 
         runner_state = (batched_speaker_params, batched_listener_params, batched_speaker_opt_states, batched_listener_opt_states, log_env_state, obs, _rng)
         
@@ -1302,52 +1359,7 @@ def make_train_test(config):
             ####### CALCULATE ADVANTAGE #############
             ## This is unnecessary for bandits, but ideally this code can be extended to pomdps
 
-            def _calculate_gae_listeners(trans_batch, last_val):
-                def _get_advantages(gae_and_next_value, transition):
-                    gae, next_value = gae_and_next_value
-                    alive, value, reward = (
-                        transition.listener_alive,
-                        transition.listener_value,
-                        transition.listener_reward,
-                    )
-                    delta = reward + config["GAMMA"] * next_value * alive - value
-                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
-                    gae = gae * alive
-                    return (gae, value), gae
-
-                _, advantages = jax.lax.scan(
-                    _get_advantages,
-                    (jnp.zeros_like(last_val), last_val),
-                    trans_batch,
-                    reverse=True,
-                    unroll=16,
-                )
-                return advantages, advantages + trans_batch.listener_value * trans_batch.listener_alive
-
-            def _calculate_gae_speakers(trans_batch, last_val):
-                def _get_advantages(gae_and_next_value, transition):
-                    gae, next_value = gae_and_next_value
-                    alive, value, reward = (
-                        transition.speaker_alive,
-                        transition.speaker_value,
-                        transition.speaker_reward,
-                    )
-                    delta = reward + config["GAMMA"] * next_value * alive - value
-                    gae = delta + config["GAMMA"] * config["GAE_LAMBDA"] * alive * gae
-                    gae = gae * alive
-                    return (gae, value), gae
-
-                _, advantages = jax.lax.scan(
-                    _get_advantages,
-                    (jnp.zeros_like(last_val), last_val),
-                    trans_batch,
-                    reverse=True,
-                    unroll=16,
-                )
-                return advantages, advantages + trans_batch.speaker_value * trans_batch.speaker_alive
-
-
-            ###### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
+            #### At this point we can selectively train the speakers and listeners based on whether they are alive and whether train freezing is on
             train_speaker = speaker_train_freezing_fn(update_step)
             train_listener = listener_train_freezing_fn(update_step)
 
@@ -1369,7 +1381,6 @@ def make_train_test(config):
             update_speaker_rngs = jax.random.split(update_speaker_rng, env_kwargs["num_speakers"])
             
             ### Listeners: Reshape variables into minibatches
-            num_listener_minibatches = config["NUM_MINIBATCHES_LISTENER"]
             listener_advantages = listener_advantages.reshape((num_listener_minibatches, -1) + listener_advantages.shape[1:])
             listener_targets = listener_targets.reshape((num_listener_minibatches, -1) + listener_targets.shape[1:])
             
@@ -1398,30 +1409,8 @@ def make_train_test(config):
             # )
             ############################################
             
-            def update_listener(_rng, trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i, listener_params_i, listener_opt_state_i):
-                carry_state = (_rng, listener_params_i, listener_opt_state_i)
-                step_data = (trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i)
-                
-                partial_update_listener = partial(update_minibatch_listener, listener_apply_fn=listener_apply_fn, listener_optimizer_tx=listener_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_listener=config["L2_REG_COEF_LISTENER"], vf_coef=config["VF_COEF"], ent_coef_listener=config["ENT_COEF_LISTENER"])
-                
-                def scan_step(carry, step_input):
-                    _rng, listener_params_i, listener_opt_state_i = carry
-                    trans_batch, advantages, targets = step_input
-                    _this_rng, _next_rng = jax.random.split(_rng)
-
-                    listener_update_args = (_this_rng, trans_batch, advantages, targets, listener_params_i, listener_opt_state_i)
-                    (updated_listener_params, updated_listener_opt_state), loss = partial_update_listener(listener_update_args)
-                    
-                    # Carry forward updated state
-                    return (_next_rng, updated_listener_params, updated_listener_opt_state), loss
-                
-                (final_rng, final_listener_params, final_listener_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
-                return (final_listener_params, final_listener_opt_state), total_loss
-
-            vmap_update_listener = jax.vmap(update_listener, in_axes=(0, 2, 2, 2, 0, 0))
 
             ### Speakers: Reshape variables into minibatches
-            num_speaker_minibatches = config["NUM_MINIBATCHES_SPEAKER"]
             speaker_advantages = speaker_advantages.reshape((num_speaker_minibatches, -1) + speaker_advantages.shape[1:])
             speaker_targets = speaker_targets.reshape((num_speaker_minibatches, -1) + speaker_targets.shape[1:])
             
@@ -1433,28 +1422,6 @@ def make_train_test(config):
                 obs=trimmed_transition_batch.speaker_obs.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_obs.shape[1:]),
                 alive=trimmed_transition_batch.speaker_alive.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_alive.shape[1:]),
             )
-
-            def update_speaker(_rng, trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i, speaker_params_i, speaker_opt_state_i):
-                carry_state = (_rng, speaker_params_i, speaker_opt_state_i)
-                step_data = (trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i)
-                
-                partial_update_speaker = partial(update_minibatch_speaker, speaker_apply_fn=speaker_apply_fn, speaker_optimizer_tx=speaker_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_speaker=config["L2_REG_COEF_SPEAKER"], vf_coef=config["VF_COEF"], ent_coef_speaker=config["ENT_COEF_SPEAKER"])
-                
-                def scan_step(carry, step_input):
-                    _rng, speaker_params_i, speaker_opt_state_i = carry
-                    trans_batch, advantages, targets = step_input
-                    _this_rng, _next_rng = jax.random.split(_rng)
-
-                    speaker_update_args = (_this_rng, trans_batch, advantages, targets, speaker_params_i, speaker_opt_state_i)
-                    (updated_speaker_params, updated_speaker_opt_state), loss = partial_update_speaker(speaker_update_args)
-                    
-                    # Carry forward updated state
-                    return (_next_rng, updated_speaker_params, updated_speaker_opt_state), loss
-                
-                (final_rng, final_speaker_params, final_speaker_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
-                return (final_speaker_params, final_speaker_opt_state), total_loss
-
-            vmap_update_speaker = jax.vmap(update_speaker, in_axes=(0, 2, 2, 2, 0, 0))
             ###############
             
             (final_listener_params, final_listener_opt_state), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)) = vmap_update_listener(update_listener_rngs, listener_transition_batch, listener_advantages, listener_targets, batched_listener_params, batched_listener_opt_states)
@@ -1473,14 +1440,24 @@ def make_train_test(config):
         # speaker_exs2 = get_tom_speaker_examples(runner_state, env, config) # the output of this should be shape (200, 32, 32)
         # speaker_example_images2 = make_grid(torch.tensor(np.array(speaker_exs2.reshape((-1, 1, env_kwargs["image_dim"], env_kwargs["image_dim"])))), nrow=env_kwargs["num_classes"], pad_value=0.25)
         
+        start_exec = time.time()
+        
         partial_update_fn = partial(_update_step, env=env, config=config)
-        runner_state, traj_batch = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
+        result = jax.lax.scan( # Perform the update step for a specified number of updates and update the runner state
             partial_update_fn, runner_state, jnp.arange(config['UPDATE_EPOCHS'])
         )
+        jax.block_until_ready(result)
+        
+        end_exec = time.time()
+        runner_state, _ = result
+        # print(str(runner_state[0]))
+        speaker_weight_magnitude = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(runner_state[0])
+        listener_weight_magnitude = jax.vmap(lambda x: jnp.linalg.norm(jax.flatten_util.ravel_pytree(x)[0]), in_axes=(0))(runner_state[1])
+        print(speaker_weight_magnitude)
+        print(listener_weight_magnitude)
+        print(end_exec - start_exec)
 
-        print(traj_batch)
-
-        return {"runner_state": runner_state, "traj_batch": traj_batch}
+        return {"runner_state": runner_state}
 
     return train
 
@@ -1504,7 +1481,7 @@ def main(config):
 
     rng = jax.random.PRNGKey(config["JAX_RANDOM_SEED"])
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
-    train = make_train(config)
+    train = make_train_test(config)
     out = train(rng)
 
     if config["PICKLE_FINAL_AGENTS"]:
