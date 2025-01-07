@@ -628,7 +628,7 @@ def get_speaker_action_transform(fn_name, image_dim):
 
 ##################################################################
 
-def make_grid_jnp(images, nrow=8, padding=2, pad_value=0.0):
+def make_grid_jnp(images, nrow=8, padding=1, pad_value=0.0):
     """
     Create a grid of images using JAX.
     
