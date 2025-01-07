@@ -675,14 +675,14 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
         entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
         # Calculate L2 regularization
-        l2_penalty = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
-        l2_reg = l2_reg_coef_listener * l2_penalty
+        l2_mag = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
+        l2_penalty = l2_reg_coef_listener * l2_mag
 
         total_loss = (
                 loss_actor
                 + vf_coef * value_loss
                 - ent_coef_listener * entropy
-                + l2_reg
+                + l2_penalty
         )
         return total_loss, (value_loss, loss_actor, entropy)
  
@@ -747,14 +747,14 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
         # Calculate L2 regularization
-        l2_penalty = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
-        l2_reg = l2_reg_coef_speaker * l2_penalty
+        l2_mag = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
+        l2_penalty = l2_reg_coef_speaker * l2_mag
 
         total_loss = (
                 loss_actor
                 + vf_coef * value_loss
                 - ent_coef_speaker * entropy
-                + l2_reg
+                + l2_penalty
         )
         return total_loss, (value_loss, loss_actor, entropy)
     
