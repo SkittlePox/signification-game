@@ -282,6 +282,9 @@ def initialize_listener(env, rng, config, i):
         # This LR function is for logging purposes only, and it could be wrong! need to change the train state below
         train_state = raw_restored['model']# .replace(tx=new_tx, key=rng)
 
+        # I can reset the counts of the opt_states
+        # train_state.opt_state[1][0] = train_state.opt_state[1][0]._replace(count=jnp.array(0))
+
         listener_network = None
 
     return listener_network, train_state, lr_func
@@ -955,7 +958,14 @@ def make_train(config):
         listener_optimizer_tx = listener_train_states[0].tx
 
         batched_speaker_opt_states = jax.vmap(speaker_optimizer_tx.init)(batched_speaker_params)
-        batched_listener_opt_states = jax.vmap(listener_optimizer_tx.init)(batched_listener_params)
+        
+        if config["PRETRAINED_LISTENERS"] == "":    # New agents, new optimizer state
+            batched_listener_opt_states = jax.vmap(listener_optimizer_tx.init)(batched_listener_params)
+        else:   # Loaded agents, old optimizer state
+            if config["RESET_LISTENER_OPTIMIZER_COUNTS"]:   # Set counts to 0 so that we can use a new lr schedule
+                batched_listener_opt_states = jax.tree.map(lambda *args: jnp.stack(args), *[(ts.opt_state[0], (ts.opt_state[1][0]._replace(count=jnp.array(0)),ts.opt_state[1][1]._replace(count=jnp.array(0)))) for ts in listener_train_states])
+            else:       # Don't reset counts. This is not recommended unless you want to resume training and use the exact same scheduler as when the agents were spawned.
+                batched_listener_opt_states = jax.tree.map(lambda *args: jnp.stack(args), *[ts.opt_state for ts in listener_train_states])
         
         speaker_action_transform = env._env.speaker_action_transform
 

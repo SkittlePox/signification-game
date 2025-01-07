@@ -19,7 +19,8 @@
 
 "LISTENER_OPTIMIZER": "adam"
 
-"PRETRAINED_LISTENERS": "" #"agents-cifar100-53e-5000dp-fd4e" #"agents-cifar10-600e-3000dp-84e5"
+"PRETRAINED_LISTENERS": "agents-cifar10-peach-spaceship-2253-2000e-5000dp-0fea" #"agents-cifar100-53e-5000dp-fd4e" #"agents-cifar10-600e-3000dp-84e5"
+"RESET_LISTENER_OPTIMIZER_COUNTS": True
 "PRETRAINED_SPEAKERS": "" #"agents-cifar10-600e-3000dp-84e5"
 
 "LISTENER_ARCH": 'conv'

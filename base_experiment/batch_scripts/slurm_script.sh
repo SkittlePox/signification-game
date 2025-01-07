@@ -5,7 +5,7 @@
 #SBATCH -c 4
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=18:00:00
+#SBATCH --time=8:00:00
 #SBATCH --mem=12GB
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
@@ -48,6 +48,11 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part1b-R5b - Squeeze - ManipCoop 1000 - negative curvature penalty" ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=360 ENV_KWARGS.sigmoid_stretch=0.009 ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_curve_penalty_coef=-0.05 ENV_KWARGS.reward_parity_fn="1.0 at 1000" SPEAKER_TRAIN_SCHEDULE="off then on at 200" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 200 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 WANDB_MODE=online
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part1b-R7c - Squeeze - ManipCoop 600 - larger negative whitesum penalty + autocenter" ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=360 ENV_KWARGS.sigmoid_stretch=0.009 ENV_KWARGS.center_listener_obs=True ENV_KWARGS.speaker_whitesum_penalty_coef=-0.02 ENV_KWARGS.speaker_curve_penalty_coef=0.0 ENV_KWARGS.reward_parity_fn="1.0 at 600" SPEAKER_TRAIN_SCHEDULE="off then on at 200" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 200 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 WANDB_MODE=online
 
+#### For testing listener train state loading. Doing this with MNIST
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8b - mnist - listeners epoch 100 with 5000 datapoints" +dataset=mnist ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.0" ENV_KWARGS.listener_n_samples=50 ENV_KWARGS.speaker_n_samples=50 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=100 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+# Load listeners, manip setting. Train speakers and listeners. Should see perfect icons.
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8c - Test with pretrained mnist listeners" +dataset=mnist PRETRAINED_LISTENERS="agents-mnist-100e-5000dp-13fd" ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.2" ENV_KWARGS.reward_parity_fn=manip SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=500 WANDB_MODE=online
+
 
 #### ToM Experiments (These can take a long time, probably 3-4x as long per epoch.)
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R3 - Cifar-10 basic gut listener test" ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="all_env" ENV_KWARGS.listener_n_samples=50 ENV_KWARGS.speaker_n_samples=50 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 25 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 UPDATE_EPOCHS=1500 WANDB_MODE=online
@@ -56,14 +61,14 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 
 #### For collecting listeners to run ToM experiments on
-python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R10a - cifar10 just listeners 5000" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.0" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R10a - cifar10 just listeners 5000" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.0" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R10b - cifar10 just listeners 10000" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.0" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=10000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R11a - cifar10 1 gut speaker and listeners" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.2" LISTENER_LR_SCHEDULE="1e-6 anneal to 1e-5 at 1000" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10-2000e-5000dp-2d21" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
-# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R11b - cifar10 1 gut speaker and listeners" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.1" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10-2000e-5000dp-b770" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R11b - cifar10 2 gut speaker and listeners" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.2" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10-peach-spaceship-2253-2000e-5000dp-0fea" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
 
-# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R12 - cifar10 4 tom speakers and 10 listeners pr 0.8 listener samples 15" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.4" ENV_KWARGS.agent_inferential_mode_fn=tom ENV_KWARGS.listener_n_samples=15 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.listener_pr_weight=0.8 LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 2000 anneal to 1e-5 at 3000" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10-2000e-5000dp-b770" UPDATE_EPOCHS=1000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
+## For a Speaker Baseline. 0.5 channel ratio, random speaker assignment.
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R12 - cifar10 speaker baseline 0.5 channel ratio" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.5" ENV_KWARGS.speaker_assignment_method="random" LISTENER_LR_SCHEDULE="1e-6 anneal to 1e-5 at 2000" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10-peach-spaceship-2253-2000e-5000dp-0fea" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
 
-#### For testing listener train state loading. Doing this with MNIST
-# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8b - mnist - listeners epoch 100 with 5000 datapoints" +dataset=mnist ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.0" ENV_KWARGS.listener_n_samples=50 ENV_KWARGS.speaker_n_samples=50 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=100 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
-# Load listeners, manip setting. Train speakers and listeners. Should see perfect icons.
-# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8c - Test with pretrained mnist listeners" +dataset=mnist PRETRAINED_LISTENERS="agents-mnist-100e-5000dp-13fd" ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.2" ENV_KWARGS.reward_parity_fn=manip SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=500 WANDB_MODE=online
+## For tom agents. 0.5 channel ratio, random speaker assignment.
+python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R13 - cifar10 tom agents pr 0.8 listener samples 6" +dataset=cifar10 ENV_KWARGS.channel_ratio_fn="0.5" ENV_KWARGS.speaker_assignment_method="random" ENV_KWARGS.agent_inferential_mode_fn=tom ENV_KWARGS.listener_n_samples=6 ENV_KWARGS.speaker_n_search=5 ENV_KWARGS.listener_pr_weight=0.8 LISTENER_LR_SCHEDULE="1e-6 anneal to 1e-5 at 2000" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10-peach-spaceship-2253-2000e-5000dp-0fea" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False
+
