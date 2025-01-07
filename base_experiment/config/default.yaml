@@ -69,7 +69,7 @@
   "reward_parity_fn": "coop"  # "1.0 at 300", "coop", "manip"
   "agent_inferential_mode_fn": "gut" # Default is "gut", "tom at 300"
   "channel_ratio_fn": 0.7  # E.g. "1.0 at 300", "sigmoid-custom"
-  "speaker_referent_span_fn": 20 # default should be the same as num_classes above
+  "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "mandate_unitary_channel_map": True
   "sigmoid_offset": 600
   "sigmoid_stretch": 5e-3

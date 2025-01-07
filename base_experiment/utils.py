@@ -157,7 +157,7 @@ def save_agents(listener_train_states, speaker_train_states, config):
     model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
     model_uuid = str(uuid.uuid4())[:4]
 
-    agent_logdir = local_path+model_path_str+'agents-'+f'{config["ENV_DATASET"]}-{config["UPDATE_EPOCHS"]}e-{config["ENV_NUM_DATAPOINTS"]}dp-'+model_uuid+'/'
+    agent_logdir = local_path+model_path_str+'agents-'+f'{config["ENV_DATASET"]}-{config["WANDB_RUN_NAME"]}-{config["UPDATE_EPOCHS"]}e-{config["ENV_NUM_DATAPOINTS"]}dp-'+model_uuid+'/'
     os.makedirs(agent_logdir, exist_ok=True)
 
     for i, lts in enumerate(listener_train_states):

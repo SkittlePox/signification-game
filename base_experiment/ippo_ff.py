@@ -816,12 +816,12 @@ def wandb_callback(metrics):
     metric_dict.update({"loss averages/entropy listeners": jnp.mean(listener_entropy).item()})
 
     speaker_nu, speaker_mu, listener_nu, listener_mu, speaker_current_lr, listener_current_lr = optimizer_params_stats_for_logging
-    metric_dict.update({"optimizer/mean speaker nu": jnp.mean(speaker_nu).item()})
-    metric_dict.update({"optimizer/mean speaker mu": jnp.mean(speaker_mu).item()})
-    metric_dict.update({"optimizer/mean listener nu": jnp.mean(listener_nu).item()})
-    metric_dict.update({"optimizer/mean listener mu": jnp.mean(listener_mu).item()})
-    metric_dict.update({"optimizer/mean learning rate speaker": speaker_current_lr.item()})
-    metric_dict.update({"optimizer/mean learning rate listener": listener_current_lr.item()})
+    metric_dict.update({"optimizer/avg magnitude speaker nu": jnp.mean(speaker_nu).item()})
+    metric_dict.update({"optimizer/avg magnitude speaker mu": jnp.mean(speaker_mu).item()})
+    metric_dict.update({"optimizer/avg magnitude listener nu": jnp.mean(listener_nu).item()})
+    metric_dict.update({"optimizer/avg magnitude listener mu": jnp.mean(listener_mu).item()})
+    metric_dict.update({"optimizer/mean learning rate speaker": jnp.mean(speaker_current_lr).item()})
+    metric_dict.update({"optimizer/mean learning rate listener": jnp.mean(listener_current_lr).item()})
 
     speaker_param_magnitude, listener_param_magnitude = agent_param_stats_for_logging
     metric_dict.update({f"param magnitude/speaker {i}": speaker_param_magnitude[i] for i in range(len(speaker_param_magnitude))})
@@ -1222,7 +1222,7 @@ def main(config):
     )
     # print(OmegaConf.to_yaml(config))
     # return
-    wandb.init(
+    run = wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=["main"],
@@ -1236,8 +1236,11 @@ def main(config):
     # with jax.profiler.trace("/tmp/jax-trace", create_perfetto_link=True):
     train = make_train(config)
     result = train(rng)
+    run.finish()
 
     if config["PICKLE_FINAL_AGENTS"]:
+        config["WANDB_RUN_NAME"] = run.name
+        
         speaker_train_states = result["train_states"][0]
         listener_train_states = result["train_states"][1]
         final_speaker_params, final_listener_params, final_speaker_opt_states, final_listener_opt_states, _, _, _ = result["runner_state"]
