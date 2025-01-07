@@ -675,8 +675,8 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
         loss_actor = loss_actor.sum() / (alive.sum() + 1e-8)
         entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
-        # Calculate L2 regularization (sum of squares of parameters)
-        l2_penalty = sum(jnp.sum(jnp.square(param)) for param in jax.tree.leaves(params))
+        # Calculate L2 regularization
+        l2_penalty = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
         l2_reg = l2_reg_coef_listener * l2_penalty
 
         total_loss = (
@@ -748,8 +748,8 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         loss_actor = loss_actor.sum() / (alive.sum() + 1e-8)
         entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
 
-        # Calculate L2 regularization (sum of squares of parameters)
-        l2_penalty = sum(jnp.sum(jnp.square(param)) for param in jax.tree.leaves(params))
+        # Calculate L2 regularization
+        l2_penalty = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
         l2_reg = l2_reg_coef_speaker * l2_penalty
 
         total_loss = (
@@ -826,6 +826,8 @@ def wandb_callback(metrics):
     speaker_param_magnitude, listener_param_magnitude = agent_param_stats_for_logging
     metric_dict.update({f"param magnitude/speaker {i}": speaker_param_magnitude[i] for i in range(len(speaker_param_magnitude))})
     metric_dict.update({f"param magnitude/listener {i}": listener_param_magnitude[i] for i in range(len(listener_param_magnitude))})
+    metric_dict.update({"param magnitude/all speakers": jnp.mean(speaker_param_magnitude).item()})
+    metric_dict.update({"param magnitude/all listeners": jnp.mean(listener_param_magnitude).item()})
 
     ##### Transition batch logging
     image_from_speaker_channel = jnp.where(trimmed_transition_batch.channel_map[..., 0] < trimmed_transition_batch.speaker_alive.shape[1], True, False)
