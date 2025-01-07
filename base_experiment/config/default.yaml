@@ -6,7 +6,7 @@
 "ENT_COEF_LISTENER": 0.02  # 0.02 is good for dense, 0.015 is good for conv
 "ENT_COEF_SPEAKER": 1e-2
 "L2_REG_COEF_LISTENER": 1e-3 # These are subject to change after the bugfix
-"L2_REG_COEF_SPEAKER": 1e-3 # These are subject to change after the bugfix
+"L2_REG_COEF_SPEAKER": 5e-4 # These are subject to change after the bugfix
 "OPTIMIZER_SPEAKER_B1": 0.9
 "OPTIMIZER_SPEAKER_B2": 0.999
 "OPTIMIZER_LISTENER_B1": 0.9
