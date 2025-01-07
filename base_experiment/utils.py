@@ -628,6 +628,41 @@ def get_speaker_action_transform(fn_name, image_dim):
 
 ##################################################################
 
+def make_grid_jnp(images, nrow=8, padding=2, pad_value=0.0):
+    """
+    Create a grid of images using JAX.
+    
+    Args:
+        images: jnp.array of shape (N, C, H, W) - batch of images.
+        nrow: Number of images per row.
+        padding: Padding between images.
+        pad_value: Value to use for padding.
+    
+    Returns:
+        jnp.array: Grid image of shape (C, H_grid, W_grid)
+    """
+    N, C, H, W = images.shape  # Extract dimensions
+    
+    # Calculate number of rows in the grid
+    nrows = (N + nrow - 1) // nrow  # Ensure all images fit in the grid
+
+    # Pad the batch to fit exactly into the grid
+    pad_images = jnp.pad(
+        images,
+        ((0, nrow * nrows - N), (0, 0), (padding, padding), (padding, padding)),
+        mode='constant',
+        constant_values=pad_value
+    )
+    
+    # Reshape into a grid
+    pad_images = pad_images.reshape(nrows, nrow, C, H + 2 * padding, W + 2 * padding)
+    
+    # Rearrange axes to stack rows and columns
+    pad_images = pad_images.transpose(0, 3, 1, 4, 2)  # (nrows, H+pad, ncols, W+pad, C)
+    grid = pad_images.reshape(nrows * (H + 2 * padding), nrow * (W + 2 * padding), C)
+    
+    return grid.transpose(2, 0, 1)  # Return in (C, H_grid, W_grid)
+
 if __name__ == "__main__":
     # Step 1: Download MNIST Dataset
     # mnist = datasets.MNIST(root='/tmp/mnist/', download=True)
