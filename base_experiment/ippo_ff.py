@@ -646,7 +646,6 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
         _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -1e8, 1e8)
         log_probs = jnp.clip(log_probs, -1e8, 1e8)
         
-
         # CALCULATE VALUE LOSS
         values = jnp.clip(values, -1e3, 1e3)
         _i_value = jnp.clip(_i_value, -1e3, 1e3)
@@ -716,8 +715,8 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         dropout_key, noise_key = jax.random.split(__rng)
         _i_policy, _i_value = speaker_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
-        _i_log_prob = _i_policy.log_prob(_actions)
-        _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * -1e8)
+        _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -1e8, 1e8)
+        log_probs = jnp.clip(log_probs, -1e8, 1e8)
 
         # CALCULATE VALUE LOSS
         values = jnp.clip(values, -1e3, 1e3)
@@ -732,7 +731,6 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).sum() / (alive.sum() + 1e-8))
 
         # CALCULATE ACTOR LOSS
-        log_probs = jnp.maximum(log_probs, jnp.ones_like(log_probs) * -1e8)
         ratio = jnp.exp(_i_log_prob - log_probs)
         gae_for_i = jnp.clip((advantages - advantages.mean()) / (advantages.std() + 1e-8), -10, 10)
         loss_actor1 = ratio * gae_for_i * alive
