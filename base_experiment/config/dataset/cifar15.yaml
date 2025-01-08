@@ -1,19 +1,18 @@
 # @package _global_
-"PROBE_MODEL_NAME": "probe-cifar20-5k-5k-60e-adam-89b1"
-"ENV_DATASET": "cifar100"
+"PROBE_MODEL_NAME": "probe-cifar20-5k-5k-60e-adam-89b1" # This probe is out of date
+"ENV_DATASET": "cifar15"
 
+"ENT_COEF_LISTENER": 0.07
+"ENT_COEF_SPEAKER": 0.001
+"L2_REG_COEF_LISTENER": 1e-2
+"L2_REG_COEF_SPEAKER": 5e-4
+"LISTENER_LR_SCHEDULE": "1e-4" #"1e-4 jump to 1e-6 at 300"
+"SPEAKER_LR_SCHEDULE": 1e-5
 
-"LISTENER_ARCH": 'conv'
-"ENT_COEF_LISTENER": 7e-3
-"ENT_COEF_SPEAKER": 0.006
-"L2_REG_COEF_LISTENER": 6e-5
-"L2_REG_COEF_SPEAKER": 7e-4
-"LISTENER_LR_SCHEDULE":  2e-5 #"1e-4 jump to 1e-6 at 600"
-"SPEAKER_LR_SCHEDULE": 1e-4
 
 "NUM_STEPS": 2048 # 2048
-"UPDATE_EPOCHS": 1000
-"MINIBATCH_SIZE_LISTENER": 128 # This must be a whole divisor of NUM_STEPS
+"UPDATE_EPOCHS": 2000
+"MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "ENV_NUM_DATAPOINTS": 5000
 
@@ -22,8 +21,8 @@
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR
   "speaker_action_transform": "splines_weight"
   "speaker_action_dim": 21  # This must be a multiple of 6 for "splines", 7 for "splines_weight"
-  "num_classes": 20
-  "speaker_referent_span_fn": 20
+  "num_classes": 15
+  "speaker_referent_span_fn": 15
 
 
 "ENV_DATASET_CATEGORIES": {
@@ -34,9 +33,9 @@
     # "beaver": 4,
     # "bed": 5,
     # "bee": 6,
-    "beetle": 7,
+    # "beetle": 7,
     "bicycle": 8,
-    "bottle": 9,
+    # "bottle": 9,
     "bowl": 10,
     # "boy": 11,
     "bridge": 12,
@@ -54,7 +53,7 @@
     # "cockroach": 24,
     # "couch": 25,
     "crab": 26,
-    "crocodile": 27,
+    # "crocodile": 27,
     # "cup": 28,
     # "dinosaur": 29,
     "dolphin": 30,
@@ -67,12 +66,12 @@
     # "house": 37,
     # "kangaroo": 38,
     # "keyboard": 39,
-    # "lamp": 40,
+    "lamp": 40,
     # "lawn_mower": 41,
     # "leopard": 42,
     # "lion": 43,
     # "lizard": 44,
-    "lobster": 45,
+    # "lobster": 45,
     # "man": 46,
     # "maple_tree": 47,
     # "motorcycle": 48,
@@ -90,10 +89,10 @@
     # "plain": 60,
     # "plate": 61,
     # "poppy": 62,
-    "porcupine": 63,
+    # "porcupine": 63,
     # "possum": 64,
     # "rabbit": 65,
-    "raccoon": 66,
+    # "raccoon": 66,
     # "ray": 67,
     # "road": 68,
     "rocket": 69,
@@ -104,7 +103,7 @@
     # "shrew": 74,
     # "skunk": 75,
     # "skyscraper": 76,
-    # "snail": 77,
+    "snail": 77,
     "snake": 78,
     "spider": 79,
     # "squirrel": 80,
@@ -115,7 +114,7 @@
     # "tank": 85,
     # "telephone": 86,
     # "television": 87,
-    "tiger": 88,
+    # "tiger": 88,
     # "tractor": 89,
     # "train": 90,
     # "trout": 91,

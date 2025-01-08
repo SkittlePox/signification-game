@@ -19,8 +19,8 @@
 
 "LISTENER_OPTIMIZER": "adam"
 
-"PRETRAINED_LISTENERS": "agents-cifar10-peach-spaceship-2253-2000e-5000dp-0fea" #"agents-cifar100-53e-5000dp-fd4e" #"agents-cifar10-600e-3000dp-84e5"
-"RESET_LISTENER_OPTIMIZER_COUNTS": True
+"PRETRAINED_LISTENERS": "" #"agents-cifar100-53e-5000dp-fd4e" #"agents-cifar10-600e-3000dp-84e5"
+"RESET_LISTENER_OPTIMIZER_COUNTS": True # Probably always keep this True
 "PRETRAINED_SPEAKERS": "" #"agents-cifar10-600e-3000dp-84e5"
 
 "LISTENER_ARCH": 'conv'
@@ -34,6 +34,10 @@
 
 "SPEAKER_NOISE_LATENT_DIM": 10
 "SPEAKER_NOISE_LATENT_STDDEV": 0.05
+
+"LISTENER_N_SAMPLES": 5
+"SPEAKER_N_SEARCH": 7
+"LISTENER_PR_WEIGHT": 1.5
 
 "NUM_ENVS": 1  # Always 1
 "NUM_STEPS": 2048 # 2048
@@ -75,11 +79,6 @@
   "sigmoid_offset": 600
   "sigmoid_stretch": 5e-3
   "sigmoid_height": 1.0
-  "listener_n_samples": 5
-  "speaker_n_search": 7
-  "listener_pr_weight": 1.5
-
-
 
 # WandB Params
 "WANDB_MODE": "disabled"

@@ -1,0 +1,43 @@
+program: ippo_ff.py
+method: bayes
+name: speaker-sweep-cifar10-3spline-tom
+metric:
+  goal: maximize
+  name: reward/mean reward/speaker 0
+parameters:
+  WANDB_MODE:
+    value: online
+  UPDATE_EPOCHS:
+    value: 1000
+  NUM_STEPS:
+    value: 2048
+  SPEAKER_LR_SCHEDULE:
+    max: 1e-3
+    min: 1e-5
+    distribution: log_uniform_values
+  ENT_COEF_SPEAKER:
+    max: 0.1
+    min: 1e-3
+    distribution: log_uniform_values
+  L2_REG_COEF_SPEAKER:
+    max: 1e-3
+    min: 1e-6
+    distribution: log_uniform_values
+  SPEAKER_TRAIN_SCHEDULE:
+    value: "on"
+  LISTENER_LR_SCHEDULE:
+    value: "1e-6 anneal to 1e-5 at 1000"
+  MINIBATCH_SIZE_SPEAKER:
+    values: [32, 64, 128]
+  SPEAKER_EXAMPLE_LOGGING_ITER:
+    value: 50
+  PRETRAINED_LISTENERS:
+    value: "agents-cifar10-2000e-5000dp-2d21"
+
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - +dataset=cifar10
+  - ${args_no_hyphens}
