@@ -9,10 +9,8 @@ import jax.flatten_util
 import jax.numpy as jnp
 import optax
 from typing import Sequence, NamedTuple, Any, Dict, Tuple
-from jax.tree_util import tree_flatten, tree_map
 import wandb
 import hydra
-import torch
 import json
 import cloudpickle
 from flax.training import train_state, orbax_utils
@@ -46,6 +44,7 @@ class Transition(NamedTuple):
     listener_obs: jnp.ndarray
     listener_alive: jnp.ndarray
     channel_map: jnp.ndarray
+    listener_obs_source: jnp.ndarray
 
 
 class HalfTransition(NamedTuple):
@@ -562,11 +561,13 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     speaker_action_transform = env._env.speaker_action_transform
 
     ## set aside parameters for tom agents
-    listener_n_samples = env_kwargs["listener_n_samples"]
     num_classes = env_kwargs["num_classes"]
+    
+    listener_n_samples = config["LISTENER_N_SAMPLES"]
+    listener_pr_weight = config["LISTENER_PR_WEIGHT"]
+    speaker_n_search = config["SPEAKER_N_SEARCH"]
+
     speaker_action_dim = env_kwargs["speaker_action_dim"]
-    listener_pr_weight = env_kwargs["listener_pr_weight"]
-    speaker_n_search = env_kwargs["speaker_n_search"]
 
     ##### COLLECT ACTIONS FROM AGENTS
     rng, l_rng, r_rng = jax.random.split(rng, 3)
@@ -616,6 +617,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     listener_obs = listener_obs.reshape((1, env_kwargs["num_listeners"], env_kwargs["image_dim"], env_kwargs["image_dim"]))
 
     channel_map = log_env_state.env_state.channel_map
+    listener_obs_source = log_env_state.env_state.listener_obs_source
 
     transition = Transition(
         speaker_actions,
@@ -630,7 +632,8 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
         listener_log_probs,
         listener_obs,
         listener_alive,
-        channel_map
+        channel_map,
+        listener_obs_source
     )
 
     runner_state = (batched_speaker_params, batched_listener_params, env_state, new_obs, next_rng)
@@ -831,7 +834,7 @@ def wandb_callback(metrics):
     metric_dict.update({"param magnitude/all listeners": jnp.mean(listener_param_magnitude).item()})
 
     ##### Transition batch logging
-    image_from_speaker_channel = jnp.where(trimmed_transition_batch.channel_map[..., 0] < trimmed_transition_batch.speaker_alive.shape[1], True, False)
+    image_from_speaker_channel = trimmed_transition_batch.listener_obs_source.astype('bool')
     image_from_env_channel = jnp.invert(image_from_speaker_channel)
     
     #### Reward logging
@@ -1033,7 +1036,7 @@ def make_train(config):
             ######### COLLECT TRAJECTORIES
             runner_state_for_env_step = (batched_speaker_params, batched_listener_params, log_env_state, last_obs, this_rng)
             partial_env_step = partial(env_step, speaker_apply_fn=speaker_apply_fn, listener_apply_fn=listener_apply_fn, env=env, config=config)
-            runner_state_from_env_step, transition_batch = jax.lax.scan(lambda rs, _: partial_env_step(rs), runner_state_for_env_step, jnp.arange(config['NUM_STEPS'] + 1))
+            runner_state_from_env_step, transition_batch = jax.lax.scan(lambda rs, _: partial_env_step(rs), runner_state_for_env_step, jnp.arange(config['NUM_STEPS'] + 2))  # +2, then skim away the first step and last step
             _, _, new_log_env_state, new_obs, _ = runner_state_from_env_step
             ## transition_batch is an instance of Transition with batched sub-objects
             ## The shape of transition_batch is (num_steps, num_envs, ...) because it's the output of jax.lax.scan, which enumerates over steps
@@ -1043,19 +1046,20 @@ def make_train(config):
             ## We want to cleave off the final step, so it should go from shape (A, B, C) to shape (A-1, B, C)
             ## We also need to shift rewards and alives for speakers over by 1 to the left. speaker gets a delayed reward.
             trimmed_transition_batch = Transition( # Assuming a single environment, so squeezing here. E.g. speaker_action will now be shape (num_steps, num_agents)
-                speaker_action=jnp.squeeze(transition_batch.speaker_action[:-1, ...]),
-                speaker_reward=jnp.squeeze(transition_batch.speaker_reward[1:, ...]),
-                speaker_value=jnp.squeeze(transition_batch.speaker_value[:-1, ...]),
-                speaker_log_prob=jnp.squeeze(transition_batch.speaker_log_prob[:-1, ...]),
-                speaker_obs=jnp.squeeze(transition_batch.speaker_obs[:-1, ...]),
-                speaker_alive=jnp.squeeze(transition_batch.speaker_alive[1:, ...]),
-                listener_action=jnp.squeeze(transition_batch.listener_action[:-1, ...]),
-                listener_reward=jnp.squeeze(transition_batch.listener_reward[:-1, ...]),
-                listener_value=jnp.squeeze(transition_batch.listener_value[:-1, ...]),
-                listener_log_prob=jnp.squeeze(transition_batch.listener_log_prob[:-1, ...]),
-                listener_obs=jnp.squeeze(transition_batch.listener_obs[:-1, ...]),
-                listener_alive=jnp.squeeze(transition_batch.listener_alive[:-1, ...]),
-                channel_map=jnp.squeeze(transition_batch.channel_map[:-1, ...])
+                speaker_action=jnp.squeeze(transition_batch.speaker_action[1:-1, ...]),
+                speaker_reward=jnp.squeeze(transition_batch.speaker_reward[2:, ...]),
+                speaker_value=jnp.squeeze(transition_batch.speaker_value[1:-1, ...]),
+                speaker_log_prob=jnp.squeeze(transition_batch.speaker_log_prob[1:-1, ...]),
+                speaker_obs=jnp.squeeze(transition_batch.speaker_obs[1:-1, ...]),
+                speaker_alive=jnp.squeeze(transition_batch.speaker_alive[2:, ...]),
+                listener_action=jnp.squeeze(transition_batch.listener_action[1:-1, ...]),
+                listener_reward=jnp.squeeze(transition_batch.listener_reward[1:-1, ...]),
+                listener_value=jnp.squeeze(transition_batch.listener_value[1:-1, ...]),
+                listener_log_prob=jnp.squeeze(transition_batch.listener_log_prob[1:-1, ...]),
+                listener_obs=jnp.squeeze(transition_batch.listener_obs[1:-1, ...]),
+                listener_alive=jnp.squeeze(transition_batch.listener_alive[1:-1, ...]),
+                channel_map=jnp.squeeze(transition_batch.channel_map[1:-1, ...]),
+                listener_obs_source=jnp.squeeze(transition_batch.listener_obs_source[1:-1, ...])
             )
 
             ####### CALCULATE ADVANTAGE #############

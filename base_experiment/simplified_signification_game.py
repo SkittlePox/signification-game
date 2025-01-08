@@ -271,7 +271,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             speaker_images_for_new_state = center_obs(speaker_images_for_new_state)
 
         # Calculate listener_obs_source based on state.next_channel_map. It should be the size of the number of speakers and be 0 if from env, 1 if from speaker. Based on channel ratio fn.
-        listener_obs_values = jnp.where(state.next_channel_map[:, 0] > self.num_speakers, 0, 1)
+        listener_obs_values = jnp.where(state.next_channel_map[:, 0] < self.num_speakers, 1, 0)
         listener_obs_indices = state.next_channel_map[:, 1]
         listener_obs_source = jnp.zeros((self.num_listeners)).at[listener_obs_indices].set(listener_obs_values).squeeze()
 
@@ -341,7 +341,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_channel_map = jnp.hstack((speakers, listeners))
 
         # Calculate listener_obs_source based on next_channel_map. It should be the size of the number of speakers and be 0 if from env, 1 if from speaker. Based on channel ratio fn.
-        listener_obs_values = jnp.where(next_channel_map[:, 0] > self.num_speakers, 0, 1)
+        listener_obs_values = jnp.where(next_channel_map[:, 0] < self.num_speakers, 1, 0)
         listener_obs_indices = next_channel_map[:, 1]
         listener_obs_source = jnp.zeros((self.num_listeners)).at[listener_obs_indices].set(listener_obs_values).squeeze()
         
