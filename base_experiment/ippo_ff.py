@@ -119,7 +119,7 @@ def define_env(config):
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
         return env
         
-    elif dataset_name == 'cifar100':
+    elif dataset_name in ('cifar100', 'cifar15', 'cifar20'):    # This will also work for cifar 15 and 20
         download_path = '/tmp/cifar100/'
         os.makedirs(download_path, exist_ok=True)
         
@@ -492,7 +492,7 @@ def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_ap
 
     def get_speaker_outputs(speaker_params_i, listener_params_i):
         vmap_execute_speaker_tom_test = jax.vmap(execute_tom_speaker, in_axes=(0, None, None, None, None, 0, None, None, None, None))
-        speaker_actions = vmap_execute_speaker_tom_test(speaker_rngs, speaker_apply_fn, speaker_params_i, listener_apply_fn, listener_params_i, speaker_obs, speaker_action_transform, env_kwargs["speaker_n_search"], env_kwargs["num_classes"], sp_action_dim)[0]   # Indices 1 and 2 are for logprobs and values. 0 
+        speaker_actions = vmap_execute_speaker_tom_test(speaker_rngs, speaker_apply_fn, speaker_params_i, listener_apply_fn, listener_params_i, speaker_obs, speaker_action_transform, config["SPEAKER_N_SEARCH"], env_kwargs["num_classes"], sp_action_dim)[0]   # Indices 1 and 2 are for logprobs and values. 0 
         return speaker_actions.reshape(-1, sp_action_dim)
         
     vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0, 0))
@@ -649,8 +649,8 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
         _i_policy, _i_value = listener_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
         # _i_log_prob = _i_policy.log_prob(_actions) 
         # _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * -1e8)
-        _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -1e8, 1e8)
-        log_probs = jnp.clip(log_probs, -1e8, 1e8)
+        _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -50.0, 1.0)
+        log_probs = jnp.clip(log_probs, -50.0, 1.0)
         
         # CALCULATE VALUE LOSS
         values = jnp.clip(values, -1e3, 1e3)
