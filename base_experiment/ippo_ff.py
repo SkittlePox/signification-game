@@ -876,7 +876,11 @@ def wandb_callback(metrics):
     metric_dict.update({f"predictions/action log probs/listener {i} for env images": mean_listener_log_probs_for_env_images[i].item() for i in range(len(mean_listener_log_probs_for_env_images))})
     metric_dict.update({"predictions/action log probs/all listeners for env images": jnp.mean(mean_listener_log_probs_for_env_images).item()})
 
-    # TODO: Log listener pRs from trimmed_transition_batch
+    #### Listener P_R(r) logging
+    mean_listener_pRs = jnp.mean(trimmed_transition_batch.listener_pRs, axis=0)
+    mean_listener_pRs_avged = jnp.mean(mean_listener_pRs, axis=0)
+    metric_dict.update({f"inference/listener {i} referent {j}": mean_listener_pRs[i][j].item() for i in range(len(mean_listener_pRs)) for j in range(mean_listener_pRs.shape[1])})
+    metric_dict.update({f"inference/all listeners referent {i}": mean_listener_pRs_avged[i].item() for i in range(len(mean_listener_pRs_avged))})
     
     #### Speaker example logging
     speaker_example_debug_flag, speaker_example_logging_iter = speaker_example_logging_params

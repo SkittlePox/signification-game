@@ -40,13 +40,13 @@
 "LISTENER_PR_WEIGHT": 1.5
 
 "NUM_ENVS": 1  # Always 1
-"NUM_STEPS": 16 # 2048
+"NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 4000
-"MINIBATCH_SIZE_LISTENER": 16 # 32 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 16 # 128 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 32 # 32 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
 
 "PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8" # for cifar10 # "probe-5k-20k-20e-sgd-bedc" # for mnist
-"PROBE_NUM_EXAMPLES": 16 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 512 # 500 # This must be less than or equal to "NUM_STEPS"
 "PROBE_MODEL": "cnn"
 "PROBE_OPTIMIZER": "adam"
 
