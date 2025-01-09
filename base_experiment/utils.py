@@ -628,7 +628,7 @@ def get_speaker_action_transform(fn_name, image_dim):
 
 ##################################################################
 
-def make_grid_jnp(images, nrow=10, padding=1, pad_value=0.0):
+def make_grid_jnp(images, rowlen=10, padding=1, pad_value=0.0):
     """
     Create a grid of images using JAX.
     
@@ -644,22 +644,22 @@ def make_grid_jnp(images, nrow=10, padding=1, pad_value=0.0):
     N, C, H, W = images.shape  # Extract dimensions
     
     # Calculate number of rows in the grid
-    nrows = (N + nrow - 1) // nrow  # Ensure all images fit in the grid
+    nrows = (N + rowlen - 1) // rowlen  # Ensure all images fit in the grid
 
     # Pad the batch to fit exactly into the grid
     pad_images = jnp.pad(
         images,
-        ((0, nrow * nrows - N), (0, 0), (padding, padding), (padding, padding)),
+        ((0, rowlen * nrows - N), (0, 0), (padding, padding), (padding, padding)),
         mode='constant',
         constant_values=pad_value
     )
     
     # Reshape into a grid
-    pad_images = pad_images.reshape(nrows, nrow, C, H + 2 * padding, W + 2 * padding)
+    pad_images = pad_images.reshape(nrows, rowlen, C, H + 2 * padding, W + 2 * padding)
     
     # Rearrange axes to stack rows and columns
     pad_images = pad_images.transpose(0, 3, 1, 4, 2)  # (nrows, H+pad, ncols, W+pad, C)
-    grid = pad_images.reshape(nrows * (H + 2 * padding), nrow * (W + 2 * padding), C)
+    grid = pad_images.reshape(nrows * (H + 2 * padding), rowlen * (W + 2 * padding), C)
     
     return grid.transpose(2, 0, 1)  # Return in (C, H_grid, W_grid)
 

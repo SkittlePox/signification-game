@@ -1,8 +1,9 @@
 # @package _global_
-"PROBE_MODEL_NAME": "probe-cifar15-5k-5k-60e-adam-3171"
-"ENV_DATASET": "cifar15"
+"PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8"
+"PROBE_OPTIMIZER": "sgd"
+"ENV_DATASET": "cifar10b"
 
-"ENT_COEF_LISTENER": 0.01
+"ENT_COEF_LISTENER": 0.07
 "ENT_COEF_SPEAKER": 0.001
 "L2_REG_COEF_LISTENER": 1e-2
 "L2_REG_COEF_SPEAKER": 5e-4
@@ -10,9 +11,9 @@
 "SPEAKER_LR_SCHEDULE": 1e-5
 
 
-"NUM_STEPS": 1024 # 2048
+"NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 2000
-"MINIBATCH_SIZE_LISTENER": 128 # 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "MINIBATCH_SIZE_SPEAKER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "ENV_NUM_DATAPOINTS": 5000
 
@@ -21,8 +22,8 @@
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR
   "speaker_action_transform": "splines_weight"
   "speaker_action_dim": 21  # This must be a multiple of 6 for "splines", 7 for "splines_weight"
-  "num_classes": 15
-  "speaker_referent_span_fn": 15
+  "num_classes": 10
+  "speaker_referent_span_fn": 10
 
 
 "ENV_DATASET_CATEGORIES": {
@@ -36,9 +37,9 @@
     # "beetle": 7,
     "bicycle": 8,
     # "bottle": 9,
-    "bowl": 10,
+    # "bowl": 10,
     # "boy": 11,
-    "bridge": 12,
+    # "bridge": 12,
     # "bus": 13,
     "butterfly": 14,
     "camel": 15,
@@ -48,7 +49,7 @@
     # "cattle": 19,
     # "chair": 20,
     # "chimpanzee": 21,
-    "clock": 22,
+    # "clock": 22,
     # "cloud": 23,
     # "cockroach": 24,
     # "couch": 25,
@@ -57,7 +58,7 @@
     # "cup": 28,
     # "dinosaur": 29,
     "dolphin": 30,
-    "elephant": 31,
+    # "elephant": 31,
     # "flatfish": 32,
     # "forest": 33,
     # "fox": 34,
@@ -66,7 +67,7 @@
     # "house": 37,
     # "kangaroo": 38,
     # "keyboard": 39,
-    "lamp": 40,
+    # "lamp": 40,
     # "lawn_mower": 41,
     # "leopard": 42,
     # "lion": 43,

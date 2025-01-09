@@ -119,7 +119,7 @@ def define_env(config):
         env = SimplifiedSignificationGame(**config["ENV_KWARGS"], dataset=(images, labels))
         return env
         
-    elif dataset_name in ('cifar100', 'cifar15', 'cifar20'):    # This will also work for cifar 15 and 20
+    elif dataset_name in ('cifar100', 'cifar15', 'cifar20', 'cifar10b'):
         download_path = '/tmp/cifar100/'
         os.makedirs(download_path, exist_ok=True)
         
@@ -665,8 +665,8 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
         value_loss = (0.5 * jnp.maximum(value_losses, value_losses_clipped).sum() / (alive.sum() + 1e-8))
 
         # CALCULATE ACTOR LOSS
-        ratio = jnp.exp(_i_log_prob - log_probs)
-        gae_for_i = jnp.clip((advantages - advantages.mean()) / (advantages.std() + 1e-8), -10, 10)
+        ratio = jnp.exp(jnp.clip(_i_log_prob - log_probs, -10.0, 10.0))
+        gae_for_i = jnp.clip((advantages - advantages.mean()) / (advantages.std() + 1e-6), -10, 10)
         loss_actor1 = ratio * gae_for_i * alive
         loss_actor2 = (
                 jnp.clip(
@@ -678,24 +678,25 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
         )
         loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
         loss_actor = loss_actor.sum() / (alive.sum() + 1e-8)
-        entropy = (_i_policy.entropy() * alive).sum() / (alive.sum() + 1e-8)
+        entropy = (jnp.clip(_i_policy.entropy(), -1e3, 1e3) * alive).sum() / (alive.sum() + 1e-8)
 
         # Calculate L2 regularization
         l2_mag = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
-        l2_penalty = l2_reg_coef_listener * l2_mag
 
         total_loss = (
                 loss_actor
                 + vf_coef * value_loss
                 - ent_coef_listener * entropy
-                + l2_penalty
+                + l2_reg_coef_listener * l2_mag
         )
+        total_loss = jnp.nan_to_num(total_loss, nan=0.0, posinf=1e3, neginf=-1e3)
+
         return total_loss, (value_loss, loss_actor, entropy)
  
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
 
     total_loss, grads = grad_fn(
-        listener_params_i,    # params don't change across minibatches, they are for the same agent.
+        listener_params_i,
         trans_batch_i.obs,
         trans_batch_i.action, 
         trans_batch_i.value, 
@@ -786,7 +787,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     return runner_state, total_loss
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
     num_speakers = trimmed_transition_batch.speaker_alive.shape[-1]
     num_listeners = trimmed_transition_batch.listener_alive.shape[-1]
@@ -876,19 +877,19 @@ def wandb_callback(metrics):
     if (update_step + 1 - speaker_example_debug_flag) % speaker_example_logging_iter == 0:
         gut_speaker_examples, tom_speaker_examples = speaker_examples
 
-        gut_speaker_examples_image = make_grid_jnp(jnp.expand_dims(gut_speaker_examples, axis=1), nrow=num_speakers, pad_value=0.25)
+        gut_speaker_examples_image = make_grid_jnp(jnp.expand_dims(gut_speaker_examples, axis=1), rowlen=num_classes, pad_value=0.25)
         final_gut_speaker_example_images = wandb.Image(np.array(gut_speaker_examples_image), caption="speaker_examples")
         metric_dict.update({"env/speaker_examples": final_gut_speaker_example_images})
 
-        tom_speaker_examples_image = make_grid_jnp(jnp.expand_dims(tom_speaker_examples, axis=1), nrow=num_speakers, pad_value=0.25)
+        tom_speaker_examples_image = make_grid_jnp(jnp.expand_dims(tom_speaker_examples, axis=1), rowlen=num_classes, pad_value=0.25)
         final_tom_speaker_example_images = wandb.Image(np.array(tom_speaker_examples_image), caption="tom_speaker_examples")
         metric_dict.update({"env/tom_speaker_examples": final_tom_speaker_example_images})
 
-        listener_images = make_grid_jnp(jnp.expand_dims(trimmed_transition_batch.listener_obs[-1], axis=1), nrow=num_listeners, pad_value=0.25)
+        listener_images = make_grid_jnp(jnp.expand_dims(trimmed_transition_batch.listener_obs[-1], axis=1), rowlen=num_listeners, pad_value=0.25)
         final_listener_images = wandb.Image(np.array(listener_images), caption=f"classified as: {str(trimmed_transition_batch.listener_action[-1])}")
         metric_dict.update({"env/last_listener_obs": final_listener_images})
 
-        speaker_images = make_grid_jnp(jnp.expand_dims(final_speaker_images, axis=1), nrow=num_listeners, pad_value=0.25)
+        speaker_images = make_grid_jnp(jnp.expand_dims(final_speaker_images, axis=1), rowlen=num_speakers, pad_value=0.25)
         final_speaker_images = wandb.Image(np.array(speaker_images), caption=f"tried generating: {str(trimmed_transition_batch.speaker_obs[-2])}")
         metric_dict.update({"env/speaker_images": final_speaker_images})
         
@@ -1206,7 +1207,7 @@ def make_train(config):
             speaker_example_logging_params = (config["SPEAKER_EXAMPLE_DEBUG"], config["SPEAKER_EXAMPLE_LOGGING_ITER"])
             probe_logging_params = (config["PROBE_LOGGING_ITER"], config["PROBE_NUM_EXAMPLES"])
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits)# trimmed_transition_batch, log_env_state, speaker_current_lr, listener_current_lr, speaker_examples, tom_speaker_examples, speaker_images, update_step, probe_logits)
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             

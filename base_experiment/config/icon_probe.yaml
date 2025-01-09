@@ -8,15 +8,15 @@
 
 "PROBE_MODEL": "cnn"
 
-"ENV_DATASET": "cifar100"
+"ENV_DATASET": "cifar15"
 "ENV_KWARGS":
-  "num_classes": 20
+  "num_classes": 15
   "image_dim": 32
 
 "TRAIN_MODEL": True
 "SAVE_MODEL": True
 "EVAL_MODEL": False
-"MODEL_NAME_PREFIX": "probe-cifar20-5k-5k-60e-adam-"
+"MODEL_NAME_PREFIX": "probe-cifar15-5k-5k-60e-adam-"
 "MODEL_NAME_EVAL": "probe-cifar10-5k-20k-20e-sgd-bedc"
 
 
@@ -24,7 +24,7 @@
 "WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "icon-probe"
-"WANDB_NOTES": "Training probe for cifar-100-40"
+"WANDB_NOTES": "Training probe for cifar-15"
 "DEBUGGER": False
 
 
@@ -36,9 +36,9 @@
     # "beaver": 4,
     # "bed": 5,
     # "bee": 6,
-    "beetle": 7,
+    # "beetle": 7,
     "bicycle": 8,
-    "bottle": 9,
+    # "bottle": 9,
     "bowl": 10,
     # "boy": 11,
     "bridge": 12,
@@ -56,7 +56,7 @@
     # "cockroach": 24,
     # "couch": 25,
     "crab": 26,
-    "crocodile": 27,
+    # "crocodile": 27,
     # "cup": 28,
     # "dinosaur": 29,
     "dolphin": 30,
@@ -69,12 +69,12 @@
     # "house": 37,
     # "kangaroo": 38,
     # "keyboard": 39,
-    # "lamp": 40,
+    "lamp": 40,
     # "lawn_mower": 41,
     # "leopard": 42,
     # "lion": 43,
     # "lizard": 44,
-    "lobster": 45,
+    # "lobster": 45,
     # "man": 46,
     # "maple_tree": 47,
     # "motorcycle": 48,
@@ -92,10 +92,10 @@
     # "plain": 60,
     # "plate": 61,
     # "poppy": 62,
-    "porcupine": 63,
+    # "porcupine": 63,
     # "possum": 64,
     # "rabbit": 65,
-    "raccoon": 66,
+    # "raccoon": 66,
     # "ray": 67,
     # "road": 68,
     "rocket": 69,
@@ -106,7 +106,7 @@
     # "shrew": 74,
     # "skunk": 75,
     # "skyscraper": 76,
-    # "snail": 77,
+    "snail": 77,
     "snake": 78,
     "spider": 79,
     # "squirrel": 80,
@@ -117,7 +117,7 @@
     # "tank": 85,
     # "telephone": 86,
     # "television": 87,
-    "tiger": 88,
+    # "tiger": 88,
     # "tractor": 89,
     # "train": 90,
     # "trout": 91,

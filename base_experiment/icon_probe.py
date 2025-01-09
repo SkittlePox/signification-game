@@ -70,13 +70,13 @@ class BigCNN(nn.Module):
         return x
 
 
-@jax.jit
-def apply_model(state, images, labels):
+# @jax.jit  # For some reason this won't jit. Try changing the one_hot line back to a number from num_classes and it jits.
+def apply_model(state, images, labels, num_classes):
     """Computes gradients, loss and accuracy for a single batch."""
 
     def loss_fn(params):
         logits = state.apply_fn({'params': params}, images)
-        one_hot = jax.nn.one_hot(labels, 20)    # This must be the number of classes!!
+        one_hot = jax.nn.one_hot(labels, num_classes)
         loss = jnp.mean(optax.softmax_cross_entropy(
             logits=logits, labels=one_hot))
         return loss, logits
@@ -92,7 +92,7 @@ def update_model(state, grads):
     return state.apply_gradients(grads=grads)
 
 
-def train_epoch(state, train_ds, batch_size, rng):
+def train_epoch(state, train_ds, batch_size, num_classes, rng):
     """Train for a single epoch."""
     train_ds_size = len(train_ds['image'])
     steps_per_epoch = train_ds_size // batch_size
@@ -107,7 +107,7 @@ def train_epoch(state, train_ds, batch_size, rng):
     for perm in perms:
         batch_images = train_ds['image'][perm, ...]
         batch_labels = train_ds['label'][perm, ...]
-        logits, grads, loss, accuracy = apply_model(state, batch_images, batch_labels)
+        logits, grads, loss, accuracy = apply_model(state, batch_images, batch_labels, num_classes)
         state = update_model(state, grads)
         epoch_loss.append(loss)
         epoch_accuracy.append(accuracy)
@@ -134,8 +134,8 @@ def get_dataset(config):
         probe_val_images = images[n_env_imgs:]
         probe_val_labels = labels[n_env_imgs:]
 
-        train_ds = {"image": env_images, "label": env_labels}
-        test_ds = {"image": probe_val_images, "label": probe_val_labels}
+        train_ds = {"image": env_images, "label": env_labels, "num_classes": config["ENV_KWARGS"]["num_classes"]}
+        test_ds = {"image": probe_val_images, "label": probe_val_labels, "num_classes": config["ENV_KWARGS"]["num_classes"]}
 
         return train_ds, test_ds
     
@@ -204,12 +204,12 @@ def get_dataset(config):
         probe_val_images = all_images[config["ENV_NUM_DATAPOINTS"]:config["ENV_NUM_DATAPOINTS"]+config["PROBE_NUM_DATAPOINTS_VALIDATION"]]
         probe_val_labels = all_labels[config["ENV_NUM_DATAPOINTS"]:config["ENV_NUM_DATAPOINTS"]+config["PROBE_NUM_DATAPOINTS_VALIDATION"]]
 
-        train_ds = {"image": env_images, "label": env_labels}
-        test_ds = {"image": probe_val_images, "label": probe_val_labels}
+        train_ds = {"image": env_images, "label": env_labels, "num_classes": config["ENV_KWARGS"]["num_classes"]}
+        test_ds = {"image": probe_val_images, "label": probe_val_labels, "num_classes": config["ENV_KWARGS"]["num_classes"]}
 
         return train_ds, test_ds
     
-    elif config["ENV_DATASET"] == 'cifar100':
+    elif config["ENV_DATASET"] in ('cifar100', 'cifar15', 'cifar20'):
         download_path = '/tmp/cifar100/'
         os.makedirs(download_path, exist_ok=True)
         
@@ -280,8 +280,8 @@ def get_dataset(config):
         probe_val_images = filtered_images[config["ENV_NUM_DATAPOINTS"]:config["ENV_NUM_DATAPOINTS"]+config["PROBE_NUM_DATAPOINTS_VALIDATION"]]
         probe_val_labels = converted_labels[config["ENV_NUM_DATAPOINTS"]:config["ENV_NUM_DATAPOINTS"]+config["PROBE_NUM_DATAPOINTS_VALIDATION"]]
 
-        train_ds = {"image": env_images, "label": env_labels}
-        test_ds = {"image": probe_val_images, "label": probe_val_labels}
+        train_ds = {"image": env_images, "label": env_labels, "num_classes": config["ENV_KWARGS"]["num_classes"]}
+        test_ds = {"image": probe_val_images, "label": probe_val_labels, "num_classes": config["ENV_KWARGS"]["num_classes"]}
 
         return train_ds, test_ds
 
@@ -328,15 +328,15 @@ def train_and_evaluate(config) -> train_state.TrainState:
     rng = jax.random.key(0)
 
     rng, init_rng = jax.random.split(rng)
-    state = create_train_state(init_rng, config)
+    state = create_train_state(init_rng, config, config["ENV_KWARGS"]["num_classes"])
 
     for epoch in range(1, config["NUM_EPOCHS"] + 1):
         rng, input_rng = jax.random.split(rng)
         train_logits, state, train_loss, train_accuracy, perms = train_epoch(
-            state, train_ds, config["BATCH_SIZE"], input_rng
+            state, train_ds, config["BATCH_SIZE"], train_ds['num_classes'], input_rng
         )
         test_logits, _, test_loss, test_accuracy = apply_model(
-            state, test_ds['image'], test_ds['label']
+            state, test_ds['image'], test_ds['label'], test_ds['num_classes']
         )
 
         train_entropy, train_per_class_entropy = calculate_entropy(train_logits, train_ds['label'][perms[-1]])  # Just calc entropy for the last batch
@@ -382,11 +382,11 @@ def evaluate_model(state, config):
     train_ds, test_ds = get_dataset(config)
 
     train_logits, _, train_loss, train_accuracy = apply_model(
-            state, train_ds['image'], train_ds['label']
+            state, train_ds['image'], train_ds['label'], train_ds['num_classes']
         )
 
     test_logits, _, test_loss, test_accuracy = apply_model(
-            state, test_ds['image'], test_ds['label']
+            state, test_ds['image'], test_ds['label'], test_ds['num_classes']
         )
     
 
