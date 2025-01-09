@@ -43,6 +43,7 @@ class Transition(NamedTuple):
     listener_log_prob: jnp.ndarray
     listener_obs: jnp.ndarray
     listener_alive: jnp.ndarray
+    listener_pRs: jnp.ndarray
     channel_map: jnp.ndarray
     listener_obs_source: jnp.ndarray
 
@@ -404,10 +405,10 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     
     # Sum exponentiated logits using exp(logsumexp) vertically?
     log_pRs = -(jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(listener_n_samples))    # These should technically be multiplied by p(s) before summing, but assuming random uniform dist I'm just dividing by n_samples
-    log_pRs *= listener_pr_weight        # NOTE: This will definitely need to be tuned. Between 0.1 and 2.0 I'm guessing. Maybe need a sweep later.
+    log_pRs_weighted = log_pRs * listener_pr_weight        # NOTE: This will definitely need to be tuned. Between 0.1 and 2.0 I'm guessing. Maybe need a sweep later.
 
     #### Calculate P(r_i|s)
-    log_prss = log_psrs + log_pRs - jnp.log(num_classes) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
+    log_prss = log_psrs + log_pRs_weighted - jnp.log(num_classes) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
     log_prss -= jax.nn.logsumexp(log_prss)
     prss = jnp.exp(log_prss)
 
@@ -417,7 +418,7 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     log_prob = pictogram_pi.log_prob(pictogram_action)
 
     # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
-    return pictogram_action.reshape(-1,), log_prob.reshape(-1,), values.reshape(-1,)
+    return pictogram_action.reshape(-1,), log_prob.reshape(-1,), values.reshape(-1,), jnp.exp(log_pRs)
 
 def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=50, num_classes=10, speaker_action_dim=12):
     # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
@@ -579,20 +580,21 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     naive_listener_actions, naive_listener_log_probs, naive_listener_values = jax.vmap(execute_individual_listener, in_axes=(0, None, 0, 0))(listener_rngs, listener_apply_fn, batched_listener_params, listener_obs)
     # Collect tom actions
     def calc_tom_listener_actions():
-        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight)
+        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values, full_tom_listener_pRs = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight)
         tom_listener_actions = jax.lax.select(listener_obs_source == 1, full_tom_listener_actions, naive_listener_actions)
         tom_listener_log_probs = jax.lax.select(listener_obs_source == 1, full_tom_listener_log_probs, naive_listener_log_probs)
         tom_listener_values = jax.lax.select(listener_obs_source == 1, full_tom_listener_values, naive_listener_values)
-        return tom_listener_actions, tom_listener_log_probs, tom_listener_values
+        return tom_listener_actions, tom_listener_log_probs, tom_listener_values, full_tom_listener_pRs
     # Choose the right ones
-    listener_actions, listener_log_probs, listener_values = jax.lax.cond(
+    listener_actions, listener_log_probs, listener_values, listener_pRs = jax.lax.cond(
         global_agent_inferential_mode == 0,
-        lambda _: (naive_listener_actions, naive_listener_log_probs, naive_listener_values),
+        lambda _: (naive_listener_actions, naive_listener_log_probs, naive_listener_values, jnp.zeros((env_kwargs["num_listeners"], num_classes))),
         lambda _: calc_tom_listener_actions(),
         None)
     listener_actions = listener_actions.reshape((1, -1))
     listener_log_probs = listener_log_probs.reshape((1, -1))
     listener_values = listener_values.reshape((1, -1))
+    # listener_pRs = listener_pRs.reshape((num_classes, -1))
 
     ## COLLECT SPEAKER ACTIONS
     # No need to save computation, since speakers don't change their speaking based on their listener, unlike listeners.
@@ -619,6 +621,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     channel_map = log_env_state.env_state.channel_map
     listener_obs_source = log_env_state.env_state.listener_obs_source
 
+    # TODO: Add listener_pRs here
     transition = Transition(
         speaker_actions,
         speaker_reward,
@@ -632,6 +635,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
         listener_log_probs,
         listener_obs,
         listener_alive,
+        listener_pRs,
         channel_map,
         listener_obs_source
     )
@@ -871,6 +875,8 @@ def wandb_callback(metrics):
     mean_listener_log_probs_for_env_images = jnp.sum(trimmed_transition_batch.listener_log_prob * image_from_env_channel, axis=0) / (jnp.sum(image_from_env_channel, axis=0) + 1e-8)
     metric_dict.update({f"predictions/action log probs/listener {i} for env images": mean_listener_log_probs_for_env_images[i].item() for i in range(len(mean_listener_log_probs_for_env_images))})
     metric_dict.update({"predictions/action log probs/all listeners for env images": jnp.mean(mean_listener_log_probs_for_env_images).item()})
+
+    # TODO: Log listener pRs from trimmed_transition_batch
     
     #### Speaker example logging
     speaker_example_debug_flag, speaker_example_logging_iter = speaker_example_logging_params
@@ -1059,6 +1065,7 @@ def make_train(config):
                 listener_log_prob=jnp.squeeze(transition_batch.listener_log_prob[1:-1, ...]),
                 listener_obs=jnp.squeeze(transition_batch.listener_obs[1:-1, ...]),
                 listener_alive=jnp.squeeze(transition_batch.listener_alive[1:-1, ...]),
+                listener_pRs=transition_batch.listener_pRs[1:-1, ...],
                 channel_map=jnp.squeeze(transition_batch.channel_map[1:-1, ...]),
                 listener_obs_source=jnp.squeeze(transition_batch.listener_obs_source[1:-1, ...])
             )

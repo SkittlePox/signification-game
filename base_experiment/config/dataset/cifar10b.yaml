@@ -11,10 +11,10 @@
 "SPEAKER_LR_SCHEDULE": 1e-5
 
 
-"NUM_STEPS": 2048 # 2048
+# "NUM_STEPS": 2048 # 2048
 "UPDATE_EPOCHS": 2000
-"MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 64 # 64 # This must be a whole divisor of NUM_STEPS
+# "MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
+# "MINIBATCH_SIZE_SPEAKER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "ENV_NUM_DATAPOINTS": 5000
 
 "ENV_KWARGS":
