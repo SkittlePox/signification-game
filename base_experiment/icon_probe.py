@@ -61,6 +61,7 @@ class BigCNN(nn.Module):
         # x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
 
         # Global Average Pooling (reduces overfitting by reducing parameters)
+        jax.debug.print(x.shape)
         x = x.reshape((x.shape[0], -1))  # flatten
         x = nn.Dense(features=256)(x)
         x = nn.relu(x)
@@ -70,13 +71,13 @@ class BigCNN(nn.Module):
         return x
 
 
-# @jax.jit  # For some reason this won't jit. Try changing the one_hot line back to a number from num_classes and it jits.
-def apply_model(state, images, labels, num_classes):
+@jax.jit  # For some reason this won't jit. Try changing the one_hot line back to a number from num_classes and it jits.
+def apply_model(state, images, labels):
     """Computes gradients, loss and accuracy for a single batch."""
 
     def loss_fn(params):
         logits = state.apply_fn({'params': params}, images)
-        one_hot = jax.nn.one_hot(labels, num_classes)
+        one_hot = jax.nn.one_hot(labels, 10)
         loss = jnp.mean(optax.softmax_cross_entropy(
             logits=logits, labels=one_hot))
         return loss, logits
@@ -107,7 +108,7 @@ def train_epoch(state, train_ds, batch_size, num_classes, rng):
     for perm in perms:
         batch_images = train_ds['image'][perm, ...]
         batch_labels = train_ds['label'][perm, ...]
-        logits, grads, loss, accuracy = apply_model(state, batch_images, batch_labels, num_classes)
+        logits, grads, loss, accuracy = apply_model(state, batch_images, batch_labels)
         state = update_model(state, grads)
         epoch_loss.append(loss)
         epoch_accuracy.append(accuracy)
@@ -209,7 +210,7 @@ def get_dataset(config):
 
         return train_ds, test_ds
     
-    elif config["ENV_DATASET"] in ('cifar100', 'cifar15', 'cifar20'):
+    elif config["ENV_DATASET"] in ('cifar100', 'cifar15', 'cifar20', 'cifar10b'):
         download_path = '/tmp/cifar100/'
         os.makedirs(download_path, exist_ok=True)
         
@@ -251,10 +252,12 @@ def get_dataset(config):
         with open(download_path+'cifar-100-python/train', 'rb') as f:   # 50,000 images
             train_data = pickle.load(f, encoding='bytes')
         
-        # with open(download_path+'cifar-100-python/test', 'rb') as f:
-        #     test_data = pickle.load(f, encoding='bytes')
+        with open(download_path+'cifar-100-python/test', 'rb') as f:
+            test_data = pickle.load(f, encoding='bytes')
 
-        raw_images = train_data[b'data'].astype('float32') / 255.0
+        raw_images_train = train_data[b'data'].astype('float32') / 255.0
+        raw_images_test = test_data[b'data'].astype('float32') / 255.0
+        raw_images = jnp.concat((raw_images_train, raw_images_test))
 
         red_channel = raw_images[:, :1024].reshape(-1, 32, 32, 1)
         green_channel = raw_images[:, 1024:2048].reshape(-1, 32, 32, 1)
@@ -262,7 +265,10 @@ def get_dataset(config):
 
         # Convert to grayscale using the weighted formula: 0.299*R + 0.587*G + 0.114*B
         all_images = jnp.array((0.299 * red_channel + 0.587 * green_channel + 0.114 * blue_channel), dtype=jnp.float32)
-        all_labels = jnp.array(train_data[b'fine_labels'], dtype=jnp.int32)
+        
+        all_labels_train = jnp.array(train_data[b'fine_labels'], dtype=jnp.int32)
+        all_labels_test = jnp.array(test_data[b'fine_labels'], dtype=jnp.int32)
+        all_labels = jnp.concat((all_labels_train, all_labels_test))
 
         mask = jnp.isin(all_labels, acceptable_labels)
         
@@ -336,7 +342,7 @@ def train_and_evaluate(config) -> train_state.TrainState:
             state, train_ds, config["BATCH_SIZE"], train_ds['num_classes'], input_rng
         )
         test_logits, _, test_loss, test_accuracy = apply_model(
-            state, test_ds['image'], test_ds['label'], test_ds['num_classes']
+            state, test_ds['image'], test_ds['label']
         )
 
         train_entropy, train_per_class_entropy = calculate_entropy(train_logits, train_ds['label'][perms[-1]])  # Just calc entropy for the last batch
@@ -382,11 +388,11 @@ def evaluate_model(state, config):
     train_ds, test_ds = get_dataset(config)
 
     train_logits, _, train_loss, train_accuracy = apply_model(
-            state, train_ds['image'], train_ds['label'], train_ds['num_classes']
+            state, train_ds['image'], train_ds['label']
         )
 
     test_logits, _, test_loss, test_accuracy = apply_model(
-            state, test_ds['image'], test_ds['label'], test_ds['num_classes']
+            state, test_ds['image'], test_ds['label']
         )
     
 

@@ -1,5 +1,5 @@
 "ENV_NUM_DATAPOINTS": 5000
-"PROBE_NUM_DATAPOINTS_VALIDATION": 5000
+"PROBE_NUM_DATAPOINTS_VALIDATION": 1000
 "BATCH_SIZE": 128
 "NUM_EPOCHS": 60
 "LEARNING_RATE": 0.001
@@ -8,15 +8,15 @@
 
 "PROBE_MODEL": "cnn"
 
-"ENV_DATASET": "cifar15"
+"ENV_DATASET": "cifar10b"
 "ENV_KWARGS":
-  "num_classes": 15
+  "num_classes": 10
   "image_dim": 32
 
 "TRAIN_MODEL": True
 "SAVE_MODEL": True
 "EVAL_MODEL": False
-"MODEL_NAME_PREFIX": "probe-cifar15-5k-5k-60e-adam-"
+"MODEL_NAME_PREFIX": "probe-cifar10b-5k-1k-60e-adam-"
 "MODEL_NAME_EVAL": "probe-cifar10-5k-20k-20e-sgd-bedc"
 
 
@@ -24,7 +24,7 @@
 "WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "icon-probe"
-"WANDB_NOTES": "Training probe for cifar-15"
+"WANDB_NOTES": "Training probe for cifar-10b"
 "DEBUGGER": False
 
 
@@ -39,9 +39,9 @@
     # "beetle": 7,
     "bicycle": 8,
     # "bottle": 9,
-    "bowl": 10,
+    # "bowl": 10,
     # "boy": 11,
-    "bridge": 12,
+    # "bridge": 12,
     # "bus": 13,
     "butterfly": 14,
     "camel": 15,
@@ -51,7 +51,7 @@
     # "cattle": 19,
     # "chair": 20,
     # "chimpanzee": 21,
-    "clock": 22,
+    # "clock": 22,
     # "cloud": 23,
     # "cockroach": 24,
     # "couch": 25,
@@ -60,7 +60,7 @@
     # "cup": 28,
     # "dinosaur": 29,
     "dolphin": 30,
-    "elephant": 31,
+    # "elephant": 31,
     # "flatfish": 32,
     # "forest": 33,
     # "fox": 34,
@@ -69,7 +69,7 @@
     # "house": 37,
     # "kangaroo": 38,
     # "keyboard": 39,
-    "lamp": 40,
+    # "lamp": 40,
     # "lawn_mower": 41,
     # "leopard": 42,
     # "lion": 43,

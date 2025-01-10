@@ -1,6 +1,5 @@
 # @package _global_
-"PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8"
-"PROBE_OPTIMIZER": "sgd"
+"PROBE_MODEL_NAME": "probe-cifar10b-5k-1k-60e-adam-e35a"
 "ENV_DATASET": "cifar10b"
 
 "ENT_COEF_LISTENER": 0.07
