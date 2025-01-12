@@ -393,7 +393,9 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
 
     # Sample signal space n times    
     signal_distribution = _speaker_apply_fn(_speaker_params_i, jnp.array(jnp.arange(num_classes), dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
-    signal_param_samples = signal_distribution.sample(seed=__rng, sample_shape=(listener_n_samples)).reshape((-1, speaker_action_dim))    # This is shaped (n_samples*num_classes, speaker_action_dim). The reshape is to merge samples from all generators together
+    signal_param_samples_preshape = signal_distribution.sample(seed=__rng, sample_shape=(listener_n_samples))    # This is shaped (n_samples, num_classes, speaker_action_dim)
+    signal_log_probs_preshape = signal_distribution.log_prob(signal_param_samples_preshape)
+    signal_param_samples = signal_param_samples_preshape.reshape((-1, speaker_action_dim))  # This is shaped (n_samples*num_classes, speaker_action_dim). The reshape is to merge samples from all generators together
     signal_param_samples = jnp.clip(signal_param_samples, a_min=0.0, a_max=1.0)
 
     # Generate actual images
@@ -404,7 +406,8 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
     
     # Sum exponentiated logits using exp(logsumexp) vertically?
-    log_pRs = -(jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(listener_n_samples))    # These should technically be multiplied by p(s) before summing, but assuming random uniform dist I'm just dividing by n_samples
+    # log_pRs = -(jax.nn.logsumexp(listener_assessments.logits + signal_log_probs, axis=0) - jnp.log(listener_n_samples))
+    log_pRs = -(jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(listener_n_samples))    # These should technically be multiplied by p(s) before summing (i.e. multiplying by log_prob), but assuming random uniform dist I'm just dividing by n_samples
     log_pRs_weighted = log_pRs * listener_pr_weight        # NOTE: This will definitely need to be tuned. Between 0.1 and 2.0 I'm guessing. Maybe need a sweep later.
 
     #### Calculate P(r_i|s)
