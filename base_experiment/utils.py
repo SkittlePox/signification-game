@@ -5,6 +5,7 @@ from torchvision import datasets
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax.scipy.special import gammaln
 import math
 import yaml
 import uuid
@@ -142,6 +143,12 @@ def get_anneal_schedule(description, num_minibatches=1):
     return schedule
 
 
+def calc_log_volume(cov, d, k):
+    det_sigma = jnp.linalg.det(cov)
+    log_volume = (d / 2) * jnp.log(jnp.pi) + d * jnp.log(k) - gammaln(d / 2 + 1) + 0.5 * jnp.log(det_sigma)
+    return log_volume
+
+
 ####### Saving agents
 
 def save_model(train_state, model_name):
@@ -234,12 +241,13 @@ def get_agent_inferential_mode_fn(phrase, params):
     # This function returns a function over epochs that determines whether agents will use ToM or not (gut)
     # The function outputs a boolean, 0 for gut and 1 for ToM
     if phrase in ("gut", "reflexive"):
-        return lambda _: 0
+        return lambda _: 0.0
     elif phrase in ("tom", "ToM", "theory-of-mind"):
-        return lambda _: 1
+        return lambda _: 1.0
     elif " at " in phrase:
-        crf_params = phrase.split(" at ")
-        return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0, lambda _: 1, operand=None)  # Assumed starting with gut
+        return get_anneal_schedule(phrase)
+    else:
+        return lambda x: float(phrase)
 
 @jax.jit
 def create_unitary_channel_map(list1, list2, key):  # NOTE: This simply doesn't work. It's not easy to do this in a jittable fashion.

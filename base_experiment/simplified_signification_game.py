@@ -46,7 +46,7 @@ class State:
     epoch: int
     requested_num_speaker_images: int
     requested_speaker_referent_span: int
-    agent_inferential_mode: int
+    agent_inferential_mode: float
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):

@@ -13,6 +13,7 @@ import wandb
 import hydra
 import json
 import cloudpickle
+import flax.linen as nn
 from flax.training import train_state, orbax_utils
 import orbax.checkpoint
 import pickle
@@ -24,7 +25,7 @@ from agents import *
 import pathlib
 import icon_probe
 import time
-from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents, make_grid_jnp
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents, make_grid_jnp, calc_log_volume
 
 
 class TrainState(train_state.TrainState):
@@ -361,8 +362,14 @@ def execute_individual_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _spe
     __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
     _speaker_obs_i = _speaker_obs_i.ravel()
     policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
-    action = policy.sample(seed=__rng)
-    log_prob = policy.log_prob(action)
+    action, log_prob = policy.sample_and_log_prob(seed=__rng)
+
+    # d = 21  # Dimensionality
+    # k = 3.5  # Mahalanobis radius
+    # cov = policy.covariance()
+    # log_volume = calc_log_volume(cov, d, k)
+    # approx_log_prob = log_volume + log_prob
+
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
 def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _listener_obs_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, listener_pr_weight=1.5):  # obs is an image
@@ -379,7 +386,7 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
 
     #### Calculate P(s|r_i) for each possible referent
 
-    listener_assessments, values = _listener_apply_fn(_listener_params_i, _listener_obs_i, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key}) # This is a categorical distribution.
+    listener_assessments_for_obs, values = _listener_apply_fn(_listener_params_i, _listener_obs_i, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key}) # This is a categorical distribution.
     
     def calc_psr(logits, index):
         numerator = logits[index]
@@ -387,14 +394,14 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
         return numerator - denominator
 
     vmap_calc_psr = jax.vmap(calc_psr, in_axes=(None, 0))
-    log_psrs = vmap_calc_psr(listener_assessments.logits[0], jnp.arange(num_classes))
+    log_psrs = vmap_calc_psr(listener_assessments_for_obs.logits[0], jnp.arange(num_classes))
 
     #### Calculate P_R(r_i) for each referent
 
     # Sample signal space n times    
     signal_distribution = _speaker_apply_fn(_speaker_params_i, jnp.array(jnp.arange(num_classes), dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})[0]    # This is a distrax distribution. Index 1 is values. Using num_classes for fresh speaker samplings
     signal_param_samples_preshape = signal_distribution.sample(seed=__rng, sample_shape=(listener_n_samples))    # This is shaped (n_samples, num_classes, speaker_action_dim)
-    signal_log_probs_preshape = signal_distribution.log_prob(signal_param_samples_preshape)
+    _signal_log_probs_preshape = signal_distribution.log_prob(signal_param_samples_preshape)
     signal_param_samples = signal_param_samples_preshape.reshape((-1, speaker_action_dim))  # This is shaped (n_samples*num_classes, speaker_action_dim). The reshape is to merge samples from all generators together
     signal_param_samples = jnp.clip(signal_param_samples, a_min=0.0, a_max=1.0)
 
@@ -405,8 +412,7 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     listener_assessments = _listener_apply_fn(_listener_params_i, signal_samples, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key})[0] # This is a categorical distribution. Index 1 is values
     # This has nearly everything we need. At this point I could take the logits, the probs, or the logprobs and do the calculation
     
-    # Sum exponentiated logits using exp(logsumexp) vertically?
-    # log_pRs = -(jax.nn.logsumexp(listener_assessments.logits + signal_log_probs, axis=0) - jnp.log(listener_n_samples))
+    # Sum exponentiated logits using logsumexp
     log_pRs = -(jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(listener_n_samples))    # These should technically be multiplied by p(s) before summing (i.e. multiplying by log_prob), but assuming random uniform dist I'm just dividing by n_samples
     log_pRs_weighted = log_pRs * listener_pr_weight        # NOTE: This will definitely need to be tuned. Between 0.1 and 2.0 I'm guessing. Maybe need a sweep later.
 
@@ -418,10 +424,11 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     pictogram_pi = distrax.Categorical(probs=prss)
     
     pictogram_action = pictogram_pi.sample(seed=pi_sample_key)
-    log_prob = pictogram_pi.log_prob(pictogram_action)
+    log_prob_tom_pi = pictogram_pi.log_prob(pictogram_action).reshape(-1,)  # Might want to use a different log_prob! I.e. the one from the original listener policy
+    # _log_prob_gut_pi = listener_assessments_for_obs.log_prob(pictogram_action) # This is the log_prob for the original listener policy, which was generated from the listener observation
 
     # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
-    return pictogram_action.reshape(-1,), log_prob.reshape(-1,), values.reshape(-1,), jnp.exp(log_pRs)
+    return pictogram_action.reshape(-1,), log_prob_tom_pi, values.reshape(-1,), jnp.exp(log_pRs)
 
 def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=50, num_classes=10, speaker_action_dim=12):
     # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
@@ -574,7 +581,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     speaker_action_dim = env_kwargs["speaker_action_dim"]
 
     ##### COLLECT ACTIONS FROM AGENTS
-    rng, l_rng, r_rng = jax.random.split(rng, 3)
+    rng, l_rng, r_rng, t_rng = jax.random.split(rng, 4)
     listener_rngs = jax.random.split(l_rng, len(listener_obs))
     speaker_rngs = jax.random.split(r_rng, len(speaker_obs))
     
@@ -590,7 +597,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
         return tom_listener_actions, tom_listener_log_probs, tom_listener_values, full_tom_listener_pRs
     # Choose the right ones
     listener_actions, listener_log_probs, listener_values, listener_pRs = jax.lax.cond(
-        global_agent_inferential_mode == 0,
+        global_agent_inferential_mode == 0.0,
         lambda _: (naive_listener_actions, naive_listener_log_probs, naive_listener_values, jnp.zeros((env_kwargs["num_listeners"], num_classes))),
         lambda _: calc_tom_listener_actions(),
         None)
@@ -600,11 +607,27 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     # listener_pRs = listener_pRs.reshape((num_classes, -1))
 
     ## COLLECT SPEAKER ACTIONS
-    # No need to save computation, since speakers don't change their speaking based on their listener, unlike listeners.
+    requested_num_tom_speakers = jnp.floor(global_agent_inferential_mode * len(speaker_obs))
+    # Collect naive actions
+    naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values = jax.vmap(execute_individual_speaker, in_axes=(0, None, 0, 0))(speaker_rngs, speaker_apply_fn, batched_speaker_params, speaker_obs)
+    # Collect tom actions
+    def calc_tom_speaker_actions():
+        mask_pre_shuffle = jnp.where(jnp.arange(len(speaker_obs)) < requested_num_tom_speakers, 1, 0)
+        mask = jax.random.permutation(t_rng, mask_pre_shuffle)
+        log_and_value_mask = jnp.expand_dims(mask, axis=1)
+        speaker_action_mask = jnp.expand_dims(log_and_value_mask, axis=1) * jnp.ones_like(naive_speaker_actions)
+        # speaker_action_mask = mask * jnp.ones_like(naive_speaker_actions)
+        
+        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, speaker_n_search, num_classes, speaker_action_dim)
+        tom_speaker_actions = jax.lax.select(speaker_action_mask == 1, full_tom_speaker_actions, naive_speaker_actions)
+        tom_speaker_log_probs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_probs, naive_speaker_log_probs)
+        tom_speaker_values = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_values, naive_speaker_values)
+        return (tom_speaker_actions, tom_speaker_log_probs, tom_speaker_values)
+    # Choose the right ones
     speaker_actions, speaker_log_probs, speaker_values = jax.lax.cond(
-        global_agent_inferential_mode == 0,
-        lambda _: jax.vmap(execute_individual_speaker, in_axes=(0, None, 0, 0))(speaker_rngs, speaker_apply_fn, batched_speaker_params, speaker_obs),
-        lambda _: jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, speaker_n_search, num_classes, speaker_action_dim),
+        requested_num_tom_speakers == 0,
+        lambda _: (naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values),
+        lambda _: calc_tom_speaker_actions(),
         None)
     speaker_actions = speaker_actions.reshape((1, -1, speaker_action_dim))
     speaker_log_probs = speaker_log_probs.reshape((1, -1))
@@ -647,7 +670,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     
     return runner_state, transition
 
-def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimizer_tx, clip_eps, l2_reg_coef_listener, vf_coef, ent_coef_listener):
+def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimizer_tx, clip_eps, l2_reg_coef_listener, vf_coef, ent_coef_listener, actor_coef_listener):
     __rng, trans_batch_i, advantages_i, targets_i, listener_params_i, listener_opt_state_i = runner_state
 
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
@@ -691,7 +714,7 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
         l2_mag = jnp.linalg.norm(jax.flatten_util.ravel_pytree(params)[0])
 
         total_loss = (
-                loss_actor
+                loss_actor * actor_coef_listener
                 + vf_coef * value_loss
                 - ent_coef_listener * entropy
                 + l2_reg_coef_listener * l2_mag
@@ -1013,7 +1036,7 @@ def make_train(config):
             carry_state = (_rng, listener_params_i, listener_opt_state_i)
             step_data = (trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i)
             
-            partial_update_listener = partial(update_minibatch_listener, listener_apply_fn=listener_apply_fn, listener_optimizer_tx=listener_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_listener=config["L2_REG_COEF_LISTENER"], vf_coef=config["VF_COEF"], ent_coef_listener=config["ENT_COEF_LISTENER"])
+            partial_update_listener = partial(update_minibatch_listener, listener_apply_fn=listener_apply_fn, listener_optimizer_tx=listener_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_listener=config["L2_REG_COEF_LISTENER"], vf_coef=config["VF_COEF"], ent_coef_listener=config["ENT_COEF_LISTENER"], actor_coef_listener=config["ACTOR_COEF_LISTENER"])
             
             def scan_step(carry, step_input):
                 _rng, listener_params_i, listener_opt_state_i = carry
@@ -1173,7 +1196,7 @@ def make_train(config):
             gut_speaker_examples = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
                                             lambda _: get_speaker_examples(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), 
                                             lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
-            tom_speaker_examples = jax.lax.cond(((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0) & (env.agent_inferential_mode_fn(update_step) == 1), 
+            tom_speaker_examples = jax.lax.cond(((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0) & config["LOG_TOM_SPEAKER_EXAMPLES"], 
                                                 lambda _: get_tom_speaker_examples(next_rng, listener_apply_fn, batched_listener_params, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), 
                                                 lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             speaker_examples = (gut_speaker_examples, tom_speaker_examples)
