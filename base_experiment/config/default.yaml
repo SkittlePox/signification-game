@@ -7,10 +7,12 @@
 "ENT_COEF_SPEAKER": 1e-2
 "L2_REG_COEF_LISTENER": 1e-3 # These are subject to change after the bugfix
 "L2_REG_COEF_SPEAKER": 5e-4 # These are subject to change after the bugfix
+"ACTOR_COEF_LISTENER": 1.0
 "OPTIMIZER_SPEAKER_B1": 0.9
 "OPTIMIZER_SPEAKER_B2": 0.999
 "OPTIMIZER_LISTENER_B1": 0.9
 "OPTIMIZER_LISTENER_B2": 0.999
+
 
 "SPEAKER_LR_SCHEDULE": "1e-4"
 "LISTENER_LR_SCHEDULE": "1e-4" #"1e-4 jump to 1e-6 at 300"# 2e-4 is good for conv, 1e-3 is good for dense
@@ -72,7 +74,7 @@
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "coop"  # "1.0 at 300", "coop", "manip"
-  "agent_inferential_mode_fn": "tom" # Default is "gut", "tom at 300"
+  "agent_inferential_mode_fn": "gut" # Default is "gut" or 0.0, same as lr schedule syntax e.g. "0.23 anneal to 1.0 at 10"
   "channel_ratio_fn": 0.7  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "mandate_unitary_channel_map": True
@@ -88,6 +90,7 @@
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5
 "SPEAKER_EXAMPLE_NUM": 2
 "SPEAKER_EXAMPLE_DEBUG": False
+"LOG_TOM_SPEAKER_EXAMPLES": False
 "PROBE_LOGGING_ITER": 1
 "WANDB_NOTES": ""
 
