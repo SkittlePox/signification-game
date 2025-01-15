@@ -142,6 +142,11 @@ def get_anneal_schedule(description, num_minibatches=1):
 
     return schedule
 
+def get_tom_speaker_n_search_fn(phrase):
+    if " at " in phrase:
+        return get_anneal_schedule(phrase)
+    else:
+        return lambda _: int(phrase)
 
 def calc_log_volume(cov, d, k):
     det_sigma = jnp.linalg.det(cov)

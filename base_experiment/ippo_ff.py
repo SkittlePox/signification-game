@@ -493,7 +493,7 @@ def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_t
         speaker_images = center_obs(speaker_images)
     return speaker_images
 
-def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_apply_fn, speaker_params, speaker_action_transform, config):
+def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_apply_fn, speaker_params, speaker_action_transform, config, tom_speaker_n_search):
     env_kwargs = config["ENV_KWARGS"]
     speaker_obs = jnp.tile(jnp.arange(env_kwargs["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
@@ -503,7 +503,7 @@ def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_ap
 
     def get_speaker_outputs(speaker_params_i, listener_params_i):
         vmap_execute_speaker_tom_test = jax.vmap(execute_tom_speaker, in_axes=(0, None, None, None, None, 0, None, None, None, None))
-        speaker_actions = vmap_execute_speaker_tom_test(speaker_rngs, speaker_apply_fn, speaker_params_i, listener_apply_fn, listener_params_i, speaker_obs, speaker_action_transform, config["SPEAKER_N_SEARCH"], env_kwargs["num_classes"], sp_action_dim)[0]   # Indices 1 and 2 are for logprobs and values. 0 
+        speaker_actions = vmap_execute_speaker_tom_test(speaker_rngs, speaker_apply_fn, speaker_params_i, listener_apply_fn, listener_params_i, speaker_obs, speaker_action_transform, tom_speaker_n_search, env_kwargs["num_classes"], sp_action_dim)[0]   # Indices 1 and 2 are for logprobs and values. 0 
         return speaker_actions.reshape(-1, sp_action_dim)
         
     vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0, 0))
@@ -558,7 +558,7 @@ def calculate_gae_speakers(trans_batch, last_val, gamma, gae_lambda):
     )
     return advantages, advantages + trans_batch.speaker_value * trans_batch.speaker_alive
 
-def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):    # This function is passed to jax.lax.scan, which means it cannot have any pythonic control flow (e.g., no "if" statements, "while" loops, etc.)
+def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom_speaker_n_search):    # This function is passed to jax.lax.scan, which means it cannot have any pythonic control flow (e.g., no "if" statements, "while" loops, etc.)
     """This function literally is just for collecting rollouts, which involves applying the joint policy to the env and stepping forward."""
     batched_speaker_params, batched_listener_params, log_env_state, obs, rng = runner_state
     speaker_obs, listener_obs = obs
@@ -576,7 +576,6 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     
     listener_n_samples = config["LISTENER_N_SAMPLES"]
     listener_pr_weight = config["LISTENER_PR_WEIGHT"]
-    speaker_n_search = config["SPEAKER_N_SEARCH"]
 
     speaker_action_dim = env_kwargs["speaker_action_dim"]
 
@@ -616,9 +615,8 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
         mask = jax.random.permutation(t_rng, mask_pre_shuffle)
         log_and_value_mask = jnp.expand_dims(mask, axis=1)
         speaker_action_mask = jnp.expand_dims(log_and_value_mask, axis=1) * jnp.ones_like(naive_speaker_actions)
-        # speaker_action_mask = mask * jnp.ones_like(naive_speaker_actions)
         
-        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, speaker_n_search, num_classes, speaker_action_dim)
+        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, num_classes, speaker_action_dim)
         tom_speaker_actions = jax.lax.select(speaker_action_mask == 1, full_tom_speaker_actions, naive_speaker_actions)
         tom_speaker_log_probs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_probs, naive_speaker_log_probs)
         tom_speaker_values = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_values, naive_speaker_values)
@@ -647,7 +645,6 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config):   
     channel_map = log_env_state.env_state.channel_map
     listener_obs_source = log_env_state.env_state.listener_obs_source
 
-    # TODO: Add listener_pRs here
     transition = Transition(
         speaker_actions,
         speaker_reward,
@@ -824,10 +821,11 @@ def wandb_callback(metrics):
 
     metric_dict = {}
 
-    channel_ratio, speaker_referent_span, speaker_tom_com_ratio = env_info_for_logging
+    channel_ratio, speaker_referent_span, speaker_tom_com_ratio, tom_speaker_n_search = env_info_for_logging
     metric_dict.update({"env/avg_channel_ratio": channel_ratio})
     metric_dict.update({"env/speaker_referent_span": speaker_referent_span})
     metric_dict.update({"env/speaker_tom_com_ratio": speaker_tom_com_ratio})
+    metric_dict.update({"env/speaker_tom_n_search": tom_speaker_n_search})
 
     speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy) = speaker_loss_for_logging
     metric_dict.update({f"loss/total loss/speaker {i}": speaker_loss_total[i] for i in range(len(speaker_loss_total))})
@@ -984,6 +982,7 @@ def make_train(config):
 
         speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_SCHEDULE"])
         listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_SCHEDULE"])
+        tom_speaker_n_search_fn = get_tom_speaker_n_search_fn(config["SPEAKER_N_SEARCH"])
         
         num_speaker_minibatches = config["NUM_MINIBATCHES_SPEAKER"]
         num_listener_minibatches = config["NUM_MINIBATCHES_LISTENER"]
@@ -1071,9 +1070,11 @@ def make_train(config):
             this_rng, next_rng = jax.random.split(rng_folded)
             last_obs, log_env_state = env.reset(this_rng.reshape((1, 2)), jnp.ones((1,)) * update_step)
 
+            tom_speaker_n_search = jnp.floor(tom_speaker_n_search_fn(update_step)).astype(int)
+
             ######### COLLECT TRAJECTORIES
             runner_state_for_env_step = (batched_speaker_params, batched_listener_params, log_env_state, last_obs, this_rng)
-            partial_env_step = partial(env_step, speaker_apply_fn=speaker_apply_fn, listener_apply_fn=listener_apply_fn, env=env, config=config)
+            partial_env_step = partial(env_step, speaker_apply_fn=speaker_apply_fn, listener_apply_fn=listener_apply_fn, env=env, config=config, tom_speaker_n_search=tom_speaker_n_search)
             runner_state_from_env_step, transition_batch = jax.lax.scan(lambda rs, _: partial_env_step(rs), runner_state_for_env_step, jnp.arange(config['NUM_STEPS'] + 2))  # +2, then skim away the first step and last step
             _, _, new_log_env_state, new_obs, _ = runner_state_from_env_step
             ## transition_batch is an instance of Transition with batched sub-objects
@@ -1198,7 +1199,7 @@ def make_train(config):
                                             lambda _: get_speaker_examples(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), 
                                             lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             tom_speaker_examples = jax.lax.cond(((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0) & config["LOG_TOM_SPEAKER_EXAMPLES"], 
-                                                lambda _: get_tom_speaker_examples(next_rng, listener_apply_fn, batched_listener_params, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), 
+                                                lambda _: get_tom_speaker_examples(next_rng, listener_apply_fn, batched_listener_params, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config, tom_speaker_n_search), 
                                                 lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             speaker_examples = (gut_speaker_examples, tom_speaker_examples)
             ## Both sets of examples are shape (num_classes * num_speakers * speaker_example_num, image_dim, image_dim)
@@ -1239,7 +1240,7 @@ def make_train(config):
             channel_ratio = log_env_state.env_state.requested_num_speaker_images[0] / env_kwargs["num_channels"]
             speaker_referent_span = log_env_state.env_state.requested_speaker_referent_span[0]
             speaker_tom_com_ratio = log_env_state.env_state.agent_inferential_mode[0]
-            env_info_for_logging = (channel_ratio, speaker_referent_span, speaker_tom_com_ratio)
+            env_info_for_logging = (channel_ratio, speaker_referent_span, speaker_tom_com_ratio, tom_speaker_n_search)
             ###
 
             ### Some other debug info
