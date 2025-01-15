@@ -215,8 +215,9 @@ def get_channel_ratio_fn(phrase, params):
         return lambda x: jax.lax.cond(x < eval(phrase.split("-")[-1]), fn, lambda _: 0.0, operand=x)
     else:
         if " at " in phrase:
-            crf_params = phrase.split(" at ")
-            return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: eval(crf_params[0]), operand=None)
+            return get_anneal_schedule(phrase)
+            # crf_params = phrase.split(" at ")
+            # return lambda x: jax.lax.cond(x < eval(crf_params[1]), lambda _: 0.0, lambda _: eval(crf_params[0]), operand=None)
         else:
             return lambda x: float(phrase)
         
@@ -247,7 +248,7 @@ def get_agent_inferential_mode_fn(phrase, params):
     elif " at " in phrase:
         return get_anneal_schedule(phrase)
     else:
-        return lambda x: float(phrase)
+        return lambda _: float(phrase)
 
 @jax.jit
 def create_unitary_channel_map(list1, list2, key):  # NOTE: This simply doesn't work. It's not easy to do this in a jittable fashion.

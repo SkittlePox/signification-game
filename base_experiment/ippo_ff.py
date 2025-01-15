@@ -824,9 +824,10 @@ def wandb_callback(metrics):
 
     metric_dict = {}
 
-    channel_ratio, speaker_referent_span = env_info_for_logging
+    channel_ratio, speaker_referent_span, speaker_tom_com_ratio = env_info_for_logging
     metric_dict.update({"env/avg_channel_ratio": channel_ratio})
     metric_dict.update({"env/speaker_referent_span": speaker_referent_span})
+    metric_dict.update({"env/speaker_tom_com_ratio": speaker_tom_com_ratio})
 
     speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy) = speaker_loss_for_logging
     metric_dict.update({f"loss/total loss/speaker {i}": speaker_loss_total[i] for i in range(len(speaker_loss_total))})
@@ -1237,7 +1238,8 @@ def make_train(config):
             ### Collect env channel info
             channel_ratio = log_env_state.env_state.requested_num_speaker_images[0] / env_kwargs["num_channels"]
             speaker_referent_span = log_env_state.env_state.requested_speaker_referent_span[0]
-            env_info_for_logging = (channel_ratio, speaker_referent_span)
+            speaker_tom_com_ratio = log_env_state.env_state.agent_inferential_mode[0]
+            env_info_for_logging = (channel_ratio, speaker_referent_span, speaker_tom_com_ratio)
             ###
 
             ### Some other debug info

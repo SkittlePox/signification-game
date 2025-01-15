@@ -60,7 +60,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.channel_ratio_fn = get_channel_ratio_fn(channel_ratio_fn, kwargs) if isinstance(channel_ratio_fn, str) else lambda _: channel_ratio_fn if isinstance(channel_ratio_fn, int) else channel_ratio_fn
         self.speaker_referent_span_fn = get_speaker_referent_span_fn(speaker_referent_span_fn, kwargs) if isinstance(speaker_referent_span_fn, str) else lambda _: speaker_referent_span_fn if isinstance(speaker_referent_span_fn, int) else speaker_referent_span_fn
         self.reward_parity_fn = get_reward_parity_fn(reward_parity_fn, kwargs) if isinstance(reward_parity_fn, str) else reward_parity_fn
-        self.agent_inferential_mode_fn = get_agent_inferential_mode_fn(agent_inferential_mode_fn, kwargs) if isinstance(agent_inferential_mode_fn, str) else agent_inferential_mode_fn
+        self.agent_inferential_mode_fn = get_agent_inferential_mode_fn(str(agent_inferential_mode_fn), kwargs)
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.speaker_whitesum_penalty_coef = speaker_whitesum_penalty_coef
         self.speaker_curve_penalty_coef = speaker_curve_penalty_coef
