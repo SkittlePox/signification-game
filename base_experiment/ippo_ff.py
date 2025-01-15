@@ -25,7 +25,7 @@ from agents import *
 import pathlib
 import icon_probe
 import time
-from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents, make_grid_jnp, calc_log_volume
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, save_agents, make_grid_jnp, calc_log_volume, get_tom_speaker_n_search_fn
 
 
 class TrainState(train_state.TrainState):
@@ -430,7 +430,7 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
     return pictogram_action.reshape(-1,), log_prob_tom_pi, values.reshape(-1,), jnp.exp(log_pRs)
 
-def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=50, num_classes=10, speaker_action_dim=12):
+def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=5, max_speaker_n_search=10, num_classes=10, speaker_action_dim=12):
     # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
     # In terms of logits exp(l_i(s)) = f_i(s)
     # P(s|r_i) p= exp( l_i(s) - log sum exp(l_j(s)) for j != i )
@@ -446,7 +446,7 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
 
     # Sample lots of possible signals.
     search_signal_gut_policy, values = _speaker_apply_fn(_speaker_params_i, jnp.array([_speaker_obs_i], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})    # This is a distrax distribution. Index 1 is values. Using speaker index _speaker_obs_i, for generating pictograms of that class
-    search_signal_param_samples = search_signal_gut_policy.sample(seed=numer_key, sample_shape=(speaker_action_dim, speaker_n_search))[0]    # This is shaped (speaker_n_search, 1, speaker_action_size)
+    search_signal_param_samples = search_signal_gut_policy.sample(seed=numer_key, sample_shape=(speaker_action_dim, max_speaker_n_search))[0]    # This is shaped (speaker_n_search, 1, speaker_action_size)
     search_signal_param_samples = jnp.clip(search_signal_param_samples, a_min=0.0, a_max=1.0)
     
     # Generate actual images
@@ -465,7 +465,10 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
     psr = jnp.exp(numerators-denominators)
 
     ###### Select signal with the highest P(s|r)
-    maxindex = jnp.argmax(psr)
+    # Nuke the (max_speaker_n_search - speaker_n_search) last referents
+    mask = jnp.where(jnp.arange(max_speaker_n_search) < speaker_n_search, 1, 0)
+    masked_psr = jax.lax.select(mask, psr, jnp.ones_like(psr)*-jnp.inf)
+    maxindex = jnp.argmax(masked_psr)
 
     maxaction = search_signal_param_samples[maxindex]
     
@@ -500,10 +503,11 @@ def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_ap
     center_listener_obs = env_kwargs["center_listener_obs"]
     sp_action_dim = env_kwargs["speaker_action_dim"]
     num_speakers = env_kwargs["num_speakers"]
+    max_speaker_n_search = config["MAX_SPEAKER_N_SEARCH"]
 
     def get_speaker_outputs(speaker_params_i, listener_params_i):
-        vmap_execute_speaker_tom_test = jax.vmap(execute_tom_speaker, in_axes=(0, None, None, None, None, 0, None, None, None, None))
-        speaker_actions = vmap_execute_speaker_tom_test(speaker_rngs, speaker_apply_fn, speaker_params_i, listener_apply_fn, listener_params_i, speaker_obs, speaker_action_transform, tom_speaker_n_search, env_kwargs["num_classes"], sp_action_dim)[0]   # Indices 1 and 2 are for logprobs and values. 0 
+        vmap_execute_speaker_tom_test = jax.vmap(execute_tom_speaker, in_axes=(0, None, None, None, None, 0, None, None, None, None, None))
+        speaker_actions = vmap_execute_speaker_tom_test(speaker_rngs, speaker_apply_fn, speaker_params_i, listener_apply_fn, listener_params_i, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, env_kwargs["num_classes"], sp_action_dim)[0]   # Indices 1 and 2 are for logprobs and values. 0 
         return speaker_actions.reshape(-1, sp_action_dim)
         
     vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0, 0))
@@ -579,6 +583,8 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
 
     speaker_action_dim = env_kwargs["speaker_action_dim"]
 
+    max_speaker_n_search = config["MAX_SPEAKER_N_SEARCH"]
+
     ##### COLLECT ACTIONS FROM AGENTS
     rng, l_rng, r_rng, t_rng = jax.random.split(rng, 4)
     listener_rngs = jax.random.split(l_rng, len(listener_obs))
@@ -616,7 +622,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
         log_and_value_mask = jnp.expand_dims(mask, axis=1)
         speaker_action_mask = jnp.expand_dims(log_and_value_mask, axis=1) * jnp.ones_like(naive_speaker_actions)
         
-        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, num_classes, speaker_action_dim)
+        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, num_classes, speaker_action_dim)
         tom_speaker_actions = jax.lax.select(speaker_action_mask == 1, full_tom_speaker_actions, naive_speaker_actions)
         tom_speaker_log_probs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_probs, naive_speaker_log_probs)
         tom_speaker_values = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_values, naive_speaker_values)
@@ -982,7 +988,7 @@ def make_train(config):
 
         speaker_train_freezing_fn = get_train_freezing(config["SPEAKER_TRAIN_SCHEDULE"])
         listener_train_freezing_fn = get_train_freezing(config["LISTENER_TRAIN_SCHEDULE"])
-        tom_speaker_n_search_fn = get_tom_speaker_n_search_fn(config["SPEAKER_N_SEARCH"])
+        tom_speaker_n_search_fn = get_tom_speaker_n_search_fn(str(config["SPEAKER_N_SEARCH"]))
         
         num_speaker_minibatches = config["NUM_MINIBATCHES_SPEAKER"]
         num_listener_minibatches = config["NUM_MINIBATCHES_LISTENER"]
