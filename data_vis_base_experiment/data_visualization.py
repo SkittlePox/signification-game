@@ -9,13 +9,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 
-def download_speaker_examples(run_id, directory):
+def download_speaker_examples(run_id, directory, tom_examples_only=False):
+    fname_fragment = "tom_speaker_examples" if tom_examples_only else "speaker_examples"
     os.makedirs(directory, exist_ok=True)
     api = wandb.Api()
     run = api.run(run_id)
     files = run.files()
     for file in tqdm(files, desc="Downloading speaker examples"):
-        if "speaker_examples" in str(file):
+        if fname_fragment in str(file):
             file.download(root=directory)
 
 def download_probe_data(run_id, directory, which_speakers=[0]):
@@ -29,14 +30,15 @@ def download_probe_data(run_id, directory, which_speakers=[0]):
         probe_entropy_df.to_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv"), index=False)
 
 
-def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=30, method="uniform", **kwargs):
+def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=28, method="uniform", fname_prefix="", speaker_selection=None, **kwargs):
+    height_dx = image_dim + 2   # Assuming 2px border
     image_dir = os.path.join(directory, "media/images/env/")
     files = os.listdir(image_dir)
 
     output_dir = os.path.join(directory, "data_vis/")
     os.makedirs(output_dir, exist_ok=True)
 
-    fname_template = "speaker_examples_"
+    fname_template = fname_prefix+"speaker_examples_"
 
     sorted_files = sorted([f for f in files if fname_template in f],
                          key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
@@ -87,20 +89,30 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=3
         graphic_name = f"{fname_template}{start_epoch}s_{epoch_span}s_{x_stretch}x_{count}c_{str(uuid.uuid4())[:6]}"
 
     # Read and concatenate images
-    images = []
-    for i, f in enumerate(image_files):
-        img = Image.open(os.path.join(image_dir, f))
-        img_array = np.array(img)
-        if i == len(image_files) - 1:
-            images.append(img_array[:height_dx+2])
-        else:
-            images.append(img_array[:height_dx])
-        print(f)
+    if speaker_selection == None:   # TODO: eventually merge these two branches
+        images = []
+        for i, f in enumerate(image_files):
+            img = Image.open(os.path.join(image_dir, f))
+            img_array = np.array(img)
+            local_height_dx = height_dx+2 if i == len(image_files) - 1 else height_dx
+            images.append(img_array[:local_height_dx])
+            print(f)
+    else:
+        images = []
+        for i, f in enumerate(image_files):
+            img = Image.open(os.path.join(image_dir, f))
+            img_array = np.array(img)
+            local_height_dx = height_dx+2 if i == len(image_files) - 1 else height_dx
+            row_imgs = []
+            for ii, j in enumerate(speaker_selection):
+                local_width_dx = height_dx+2 if ii == len(speaker_selection) - 1 else height_dx
+                row_imgs.append(img_array[height_dx*j:height_dx*j+local_height_dx, height_dx*ii:height_dx*ii+local_width_dx])
+            row_img = np.concatenate(row_imgs, axis=1)            
+            images.append(row_img)
+            print(f)
 
     combined = np.concatenate(images, axis=0)
     combined_image = Image.fromarray(combined)
-    
-    
     combined_image.save(output_dir + f"{graphic_name}.png")
 
     # Save image filenames
@@ -109,7 +121,7 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, height_dx=3
             f.write(f"{img_file}\n")
 
 
-def make_graphics():
+def make_graphics_part1():
     # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
 
     # Download data for Part1 all V1
@@ -175,6 +187,43 @@ def make_graphics():
         make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
 
 
+def make_graphics_part2():
+    # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
+
+    ## Download data for Part2
+    # Curvature runs
+    # download_speaker_examples(run_id="signification-team/signification-game/jgbklnk8", directory="./sweet-shape-2348/", tom_examples_only=True)   # speaker_selection=[11, 0, 12, 2, 2, 12, 0, 14, 2, 12]
+    # download_speaker_examples(run_id="signification-team/signification-game/p1jvmtsq", directory="./worldly-lion-2349/", tom_examples_only=True)    # has larger speaker l2 norm
+
+    ## Make evolution graphics for 2348 and 2348
+    directories = ["./worldly-lion-2349/"]
+    for directory in directories:
+        make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12], start_epoch=149, count=20, interval_epoch=75)
+        make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12], start_epoch=149, count=20, epoch_span=1800, x_stretch=100.0, method="1/x")
+        make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12], start_epoch=149, count=20, epoch_span=1800, x_stretch=0.0, method="1/x")
+
+    # Make graphics for Part1b  (Manip-Coop at epoch 1000) Squeezed (odd numbered)
+    # directories = ["./azure-leaf-1963/", "./vivid-water-1965/", "./devout-shadow-1967/", "./absurd-feather-1969/"]
+    # for directory in directories[2:]:
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, interval_epoch=300)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, interval_epoch=150)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
+
+    
+    # Make graphics for Part1b  (Manip-Coop at epoch 600) Squeezed
+    # directories = ["./soft-sun-1970/", "./atomic-firefly-1971/", "./divine-deluge-1972/", "./whole-firefly-1973/", "./cool-armadillo-1975/", "./glad-grass-1976/"]
+    # for directory in directories[-2:]:
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, interval_epoch=300)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, interval_epoch=150)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
+
+
 def make_probe_plot(directories, labels, sp_num=0, num_epochs=None):
     datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv")) for directory in directories]
     sns.set_theme(style="darkgrid")
@@ -232,9 +281,11 @@ def make_plots():
     # download_probe_data(run_id="signification-team/signification-game/2vy8mbfi", directory="./treasured-sound-1945/") # Coop - Curve penalty
     # download_probe_data(run_id="signification-team/signification-game/dlezjmad", directory="./true-forest-1934/") # Coop - Size penalty
 
-    make_probe_plot(directories=["./drawn-shape-1950/", "./cool-armadillo-1975/", "./whole-firefly-1973/", "./true-forest-1934/", "./treasured-sound-1945/"],
-                    labels=["Manipulation", "Manip-coop - Size Penalty", "Manip-coop - Curve Penalty", "Coop - Size Penalty", "Coop - Curve Penalty"],
-                    num_epochs=3300)
+    # make_probe_plot(directories=["./drawn-shape-1950/", "./cool-armadillo-1975/", "./whole-firefly-1973/", "./true-forest-1934/", "./treasured-sound-1945/"],
+    #                 labels=["Manipulation", "Manip-coop - Size Penalty", "Manip-coop - Curve Penalty", "Coop - Size Penalty", "Coop - Curve Penalty"],
+    #                 num_epochs=3300)
+
+    make_graphics_part2()
 
 if __name__=="__main__":
     make_plots()
