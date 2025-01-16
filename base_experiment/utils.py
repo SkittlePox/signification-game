@@ -323,6 +323,7 @@ def speaker_penalty_curve_fn(speaker_actions: jnp.array):
         P0, P1, P2 = spline_params[0:2], spline_params[2:4], spline_params[4:6]
         # Vector from P0 to P2
         P0_P2 = P2 - P0
+        # line_length = jnp.linalg.norm(P0_P2)
         
         # Vector from P0 to P1
         P0_P1 = P1 - P0
