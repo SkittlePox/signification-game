@@ -303,7 +303,8 @@ def create_unitary_channel_map(list1, list2, key):  # NOTE: This simply doesn't 
 @jax.vmap
 def speaker_penalty_whitesum_fn(images: jnp.array):
     # More white in the image corresponds to a higher penalty. Bounded between 0 and 1.
-    return jnp.sum(images) / (images.shape[0] * images.shape[1])
+    # return jnp.sum(images) / (images.shape[0] * images.shape[1])  # For MNIST
+    return (jnp.sum(images) - (images.shape[0] * images.shape[1] * 0.6)) / (images.shape[0] * images.shape[1])  # For Cifar
 
 @jax.vmap
 def speaker_penalty_curve_fn(speaker_actions: jnp.array):
