@@ -32,6 +32,15 @@ def download_probe_data(run_id, directory, which_speakers=[0]):
     probe_entropy_df = pd.DataFrame(probe_entropy)
     probe_entropy_df.to_csv(os.path.join(directory, f"probe_entropy_all_speakers.csv"), index=False)
 
+def download_pr_data(run_id, directory, referents=list(range(10))):
+    os.makedirs(directory, exist_ok=True)
+    api = wandb.Api()
+    run = api.run(run_id)
+    history = run.scan_history()
+    for sp_num in referents:
+        probe_entropy = [row[f"inference/all listeners referent {sp_num}"] for row in tqdm(history, desc="Downloading probe data")]
+        probe_entropy_df = pd.DataFrame(probe_entropy)
+        probe_entropy_df.to_csv(os.path.join(directory, f"inference_pr_referent_{sp_num}.csv"), index=False)
 
 def download_reward_data(run_id, directory):
     os.makedirs(directory, exist_ok=True)
@@ -222,10 +231,12 @@ def make_graphics_part2():
     # download_speaker_examples(run_id="signification-team/signification-game/jgbklnk8", directory="./sweet-shape-2348/", tom_examples_only=True)   # speaker_selection=[11, 0, 12, 2, 2, 12, 0, 14, 2, 12]
     # download_speaker_examples(run_id="signification-team/signification-game/p1jvmtsq", directory="./worldly-lion-2349/", tom_examples_only=True)    # has larger speaker l2 norm
     # download_speaker_examples(run_id="signification-team/signification-game/1xty9ob3", directory="./frosty-silence-2354/", tom_examples_only=True)    # has larger speaker l2 norm and 3000 epochs
+    # download_speaker_examples(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/", tom_examples_only=True)    # has larger speaker l2 norm and 3000 epochs and more intense penalty
     # No Penalty runs
     # download_speaker_examples(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/", tom_examples_only=True)
-    # Whitesum runs (still running)
-
+    # Whitesum runs
+    # download_speaker_examples(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/", tom_examples_only=True)    # has larger speaker l2 norm and 3000 epochs and new whitesum penalty
+    
     # Gut runs
     # download_speaker_examples(run_id="signification-team/signification-game/6vtdcxr5", directory="./dazzling-meadow-2352/", tom_examples_only=False)
 
@@ -238,13 +249,14 @@ def make_graphics_part2():
     # download_reward_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
     # download_reward_data(run_id="signification-team/signification-game/6vtdcxr5", directory="./dazzling-meadow-2352/")
 
-    ## Make evolution graphics
-    # directories = ["./frosty-silence-2354/", "./dark-cosmos-2353/", "./dazzling-meadow-2352/"]
+    # download_pr_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
+
+    # Make evolution graphics
+    # directories = ["./frosty-silence-2354/", "./dark-cosmos-2353/", "./dazzling-meadow-2352/", "./tough-cloud-2359/", "./glad-dew-2358/"][-2:-1]
     # speaker_selections = [[12, 8, 12, 2, 2, 12, 0, 14, 2, 12],
-    #                       [12, 8, 12, 2, 2, 12, 0, 14, 2, 12],
     #                       [12, 8, 12, 2, 2, 12, 0, 14, 2, 12]]
     # name_prefixes = ["tom_", "tom_", ""]
-    # for directory, speaker_selection, fname_prefix in list(zip(directories, speaker_selections, name_prefixes))[-1:]:
+    # for directory, speaker_selection, fname_prefix in list(zip(directories, speaker_selections, name_prefixes)):
     #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, start_epoch=149, count=20, interval_epoch=140)
     #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, start_epoch=149, count=20, epoch_span=2800, x_stretch=100.0, method="1/x")
     #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, start_epoch=149, count=20, epoch_span=2800, x_stretch=0.0, method="1/x")
@@ -264,12 +276,75 @@ def make_graphics_part2():
     #     num_epochs=2800,
     #     epoch_start=0)
     
-    make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/"),
-        labels=("Instinctual", "Inferential"),
-        all_speakers_avg=True,
-        num_epochs=2800,
-        epoch_start=0)
+    # make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/"),
+    #     labels=("Instinctual", "Inferential"),
+    #     all_speakers_avg=True,
+    #     num_epochs=2800,
+    #     epoch_start=0)
 
+    make_pr_plot(directory="./dark-cosmos-2353/",
+        referent_labels=("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider"),
+        num_epochs=1000,
+        epoch_start=0,
+        log_scale=True)
+
+
+def make_pr_plot(directory, referent_labels, num_epochs=None, epoch_start=0, log_scale=False):
+    datas = [pd.read_csv(os.path.join(directory, f"inference_pr_referent_{ref_num}.csv")) for ref_num in range(len(referent_labels))]
+    datas = [np.log(data) for data in datas]
+    sns.set_theme(style="darkgrid")
+
+    # Plot the data with larger font
+    fig, ax = plt.subplots(figsize=(6, 6))
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
+
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
+
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, data in enumerate(datas):
+        if num_epochs is not None:
+            data = data.head(num_epochs)
+            data = data.tail(len(data)-epoch_start)
+        ax.plot(data, label=referent_labels[i], color=sns.color_palette("husl", len(referent_labels))[i], linewidth=2, alpha=0.5)
+        # ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+        
+        # else:
+        #     marker_style = dict(
+        #         marker=7,  # Change to preferred marker shape
+        #         markersize=12,  # Marker size
+        #         markerfacecolor="black",  # Marker face color
+        #         markeredgecolor="black",  # Marker edge color
+        #         markeredgewidth=1.5  # Marker edge width
+        #     )
+
+        #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    plt.legend(fontsize=16)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:4]
+    plt.savefig(os.path.join("./joint-plots/", f"inference_prs_for_all_referents_{uuidstr}.png"))
+
+    config = {
+        "directories": directory,
+        "labels": referent_labels,
+        "num_epochs": num_epochs,
+    }
+
+    with open(f'./joint-plots/config_{uuidstr}.json', 'w') as f:
+        json.dump(config, f)
+
+    print(f'./joint-plots/config_{uuidstr}.json')
 
 def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv")) for directory in directories]
