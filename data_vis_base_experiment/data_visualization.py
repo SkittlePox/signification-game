@@ -6,6 +6,7 @@ from PIL import Image
 from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FixedLocator
 import seaborn as sns
 import json
 
@@ -32,15 +33,19 @@ def download_probe_data(run_id, directory, which_speakers=[0]):
     probe_entropy_df = pd.DataFrame(probe_entropy)
     probe_entropy_df.to_csv(os.path.join(directory, f"probe_entropy_all_speakers.csv"), index=False)
 
-def download_pr_data(run_id, directory, referents=list(range(10))):
+def download_pr_data(run_id, directory, referents=list(range(10)), listeners=()):
     os.makedirs(directory, exist_ok=True)
     api = wandb.Api()
     run = api.run(run_id)
     history = run.scan_history()
-    for sp_num in referents:
-        probe_entropy = [row[f"inference/all listeners referent {sp_num}"] for row in tqdm(history, desc="Downloading probe data")]
+    for ref_num in referents:
+        probe_entropy = [row[f"inference/all listeners referent {ref_num}"] for row in tqdm(history, desc="Downloading probe data")]
         probe_entropy_df = pd.DataFrame(probe_entropy)
-        probe_entropy_df.to_csv(os.path.join(directory, f"inference_pr_referent_{sp_num}.csv"), index=False)
+        probe_entropy_df.to_csv(os.path.join(directory, f"inference_pr_referent_{ref_num}.csv"), index=False)
+        for lis_num in listeners:
+            probe_entropy = [row[f"inference/listener {lis_num} referent {ref_num}"] for row in tqdm(history, desc="Downloading probe data")]
+            probe_entropy_df = pd.DataFrame(probe_entropy)
+            probe_entropy_df.to_csv(os.path.join(directory, f"inference_pr_listener_{lis_num}_referent_{ref_num}.csv"), index=False)
 
 def download_reward_data(run_id, directory):
     os.makedirs(directory, exist_ok=True)
@@ -249,7 +254,7 @@ def make_graphics_part2():
     # download_reward_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
     # download_reward_data(run_id="signification-team/signification-game/6vtdcxr5", directory="./dazzling-meadow-2352/")
 
-    # download_pr_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
+    # download_pr_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/", listeners=(7,))
 
     # Make evolution graphics
     # directories = ["./frosty-silence-2354/", "./dark-cosmos-2353/", "./dazzling-meadow-2352/", "./tough-cloud-2359/", "./glad-dew-2358/"][-2:-1]
@@ -284,18 +289,27 @@ def make_graphics_part2():
 
     make_pr_plot(directory="./dark-cosmos-2353/",
         referent_labels=("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider"),
-        num_epochs=1000,
+        referent_nums=list(range(10)),
+        num_epochs=300,
         epoch_start=0,
+        agent_num=7,
         log_scale=True)
 
 
-def make_pr_plot(directory, referent_labels, num_epochs=None, epoch_start=0, log_scale=False):
-    datas = [pd.read_csv(os.path.join(directory, f"inference_pr_referent_{ref_num}.csv")) for ref_num in range(len(referent_labels))]
-    datas = [np.log(data) for data in datas]
+def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epoch_start=0, agent_num=None, log_scale=False):
+    if agent_num:
+        datas = [pd.read_csv(os.path.join(directory, f"inference_pr_listener_{agent_num}_referent_{ref_num}.csv")) for ref_num in referent_nums]
+    else:
+        datas = [pd.read_csv(os.path.join(directory, f"inference_pr_referent_{ref_num}.csv")) for ref_num in referent_nums]
+    
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
     fig, ax = plt.subplots(figsize=(6, 6))
+    if log_scale:
+        ax.set_yscale("log")
+        ax.yaxis.set_major_locator(FixedLocator(np.arange(0, 1, 0.2)**2))
+        ax.yaxis.set_major_locator(FixedLocator(np.arange(0, 1, 0.2)))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -311,8 +325,8 @@ def make_pr_plot(directory, referent_labels, num_epochs=None, epoch_start=0, log
         if num_epochs is not None:
             data = data.head(num_epochs)
             data = data.tail(len(data)-epoch_start)
-        ax.plot(data, label=referent_labels[i], color=sns.color_palette("husl", len(referent_labels))[i], linewidth=2, alpha=0.5)
-        # ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+        ax.plot(data.rolling(window=100).mean(), label=referent_labels[i], color=sns.color_palette("husl", len(referent_labels))[i], linewidth=2, alpha=0.5)
+        # ax.plot(, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
         
         # else:
         #     marker_style = dict(
@@ -333,7 +347,10 @@ def make_pr_plot(directory, referent_labels, num_epochs=None, epoch_start=0, log
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:4]
-    plt.savefig(os.path.join("./joint-plots/", f"inference_prs_for_all_referents_{uuidstr}.png"))
+    if agent_num:
+        plt.savefig(os.path.join("./joint-plots/", f"inference_prs_for_listener_{agent_num}_all_referents_{uuidstr}.png"))    
+    else:
+        plt.savefig(os.path.join("./joint-plots/", f"inference_prs_for_all_referents_{uuidstr}.png"))
 
     config = {
         "directories": directory,
