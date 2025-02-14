@@ -92,4 +92,4 @@ Reward for speaker_3: 1.0
 ```
 
 ## Running the full experiment
-`kaggle datasets download -d misrakahmed/vegetable-image-dataset`
+Run `ippo_ff.py` with desired parameters. See `/batch_scripts/slurm_script.sh` for examples.
