@@ -227,6 +227,19 @@ def make_graphics_part1():
         make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x")
         make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x")
 
+    # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
+    # Manip-coop negative curvature: 1973, manip-coop size penalty: 1975
+    download_probe_data(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
+    download_probe_data(run_id="signification-team/signification-game/wjtjyd8u", directory="./whole-firefly-1973/")
+    download_probe_data(run_id="signification-team/signification-game/0in3o71n", directory="./cool-armadillo-1975/")
+
+    download_probe_data(run_id="signification-team/signification-game/2vy8mbfi", directory="./treasured-sound-1945/") # Coop - Curve penalty
+    download_probe_data(run_id="signification-team/signification-game/dlezjmad", directory="./true-forest-1934/") # Coop - Size penalty
+
+    make_probe_plot(directories=["./drawn-shape-1950/", "./cool-armadillo-1975/", "./whole-firefly-1973/", "./true-forest-1934/", "./treasured-sound-1945/"],
+                    labels=["Manipulation", "Manip-coop - Size Penalty", "Manip-coop - Curve Penalty", "Coop - Size Penalty", "Coop - Curve Penalty"],
+                    num_epochs=3300)
+
 
 def make_graphics_part2():
     # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
@@ -300,6 +313,21 @@ def make_graphics_part2():
         epoch_start=0,
         agent_num=7,
         log_scale=True)
+
+
+def remake_graphics_part1():
+    # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
+
+    ### Re-runs of 1950: 2363-2367
+    manipulation_runs = ["./comic-rain-2363/", "./rosy-field-2364/", "./dainty-surf-2364/", "./jolly-waterfall-2366/", "./blooming-donkey-2367/"]
+    # download_probe_data(run_id="signification-team/signification-game/rnucselq", directory="./comic-rain-2363/")
+    # download_probe_data(run_id="signification-team/signification-game/s69h3sh7", directory="./rosy-field-2364/")
+    # download_probe_data(run_id="signification-team/signification-game/yf15il82", directory="./dainty-surf-2364/")
+    # download_probe_data(run_id="signification-team/signification-game/xqzzhed0", directory="./jolly-waterfall-2366/")
+    # download_probe_data(run_id="signification-team/signification-game/uilb1k7z", directory="./blooming-donkey-2367/")
+
+    make_avg_probe_plot([manipulation_runs], ["Manipulation"], num_epochs=3300, rolling_window=100)
+
 
 
 def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epoch_start=0, agent_num=None, log_scale=False):
@@ -487,23 +515,80 @@ def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_e
 
     print(f'./joint-plots/config_{uuidstr}.json')
 
-def make_plots():
-    # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
 
-    # Manip-coop negative curvature: 1973, manip-coop size penalty: 1975
+def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None):
+    entropies = []
+    cis = []
+    for directories in directorybunch:
+        # directories = ["/users/bspiegel/signification-game/data_vis_base_experiment/"+d[2:] for d in directories]  # Useful for debug
+        data_for_group = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv" if not all_speakers_avg else "probe_entropy_all_speakers.csv")) for directory in directories]
+        merged_datas = pd.concat(data_for_group, axis=1, keys=range(len(data_for_group)))
+        mean_entropy = merged_datas.mean(axis=1)
+        ci_entropy = 1.96 * merged_datas.sem(axis=1)
+        if rolling_window:
+            mean_entropy = mean_entropy.rolling(window=rolling_window, center=True).mean()
+            ci_entropy = ci_entropy.rolling(window=rolling_window, center=True).mean()
+        entropies.append(mean_entropy)
+        cis.append(ci_entropy)
+    
+    sns.set_theme(style="darkgrid")
 
-    download_probe_data(run_id="signification-team/signification-game/avnly640", directory="./drawn-shape-1950/")
-    download_probe_data(run_id="signification-team/signification-game/wjtjyd8u", directory="./whole-firefly-1973/")
-    download_probe_data(run_id="signification-team/signification-game/0in3o71n", directory="./cool-armadillo-1975/")
+    # Plot the data with larger font
+    fig, ax = plt.subplots(figsize=(6, 6))
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
-    download_probe_data(run_id="signification-team/signification-game/2vy8mbfi", directory="./treasured-sound-1945/") # Coop - Curve penalty
-    download_probe_data(run_id="signification-team/signification-game/dlezjmad", directory="./true-forest-1934/") # Coop - Size penalty
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
 
-    make_probe_plot(directories=["./drawn-shape-1950/", "./cool-armadillo-1975/", "./whole-firefly-1973/", "./true-forest-1934/", "./treasured-sound-1945/"],
-                    labels=["Manipulation", "Manip-coop - Size Penalty", "Manip-coop - Curve Penalty", "Coop - Size Penalty", "Coop - Curve Penalty"],
-                    num_epochs=3300)
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, (entropy, ci) in enumerate(zip(entropies, cis)):
+        if num_epochs is not None:
+            entropy = entropy.head(num_epochs)
+            entropy = entropy.tail(len(entropy)-epoch_start)
+            ci = ci.head(num_epochs)
+            ci = ci.tail(len(ci)-epoch_start)
+        # if len(markers_on) > 0:
+        #     marker_style = dict(
+        #         marker=7,  # Change to preferred marker shape
+        #         markersize=12,  # Marker size
+        #         markerfacecolor="black",  # Marker face color
+        #         markeredgecolor="black",  # Marker edge color
+        #         markeredgewidth=1.5  # Marker edge width
+        #     )
+
+        #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
+
+        ax.plot(entropy, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+        ax.fill_between(list(range(len(ci))), entropy-ci, entropy+ci, color=sns.color_palette("Set1")[i], alpha=0.15)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    # plt.legend(fontsize=16)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:4]
+    plt.savefig(os.path.join("./joint-plots/", f"probe_entropy_speaker_{sp_num}_{uuidstr}.png" if not all_speakers_avg else f"probe_entropy_all_speakers_{uuidstr}.png"))
+
+    config = {
+        "directories": directories,
+        "labels": labels,
+        "num_epochs": num_epochs,
+        "sp_num": sp_num
+    }
+
+    with open(f'./joint-plots/config_{uuidstr}.json', 'w') as f:
+        json.dump(config, f)
+
+    print(f'./joint-plots/config_{uuidstr}.json')
 
 
 if __name__=="__main__":
-    make_graphics_part2()
+    remake_graphics_part1()
     
