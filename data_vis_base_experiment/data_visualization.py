@@ -61,7 +61,7 @@ def download_reward_data(run_id, directory):
     probe_entropy_df.to_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv"), index=False)
 
 
-def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=28, method="uniform", fname_prefix="", speaker_selection=None, one_sign=None, vertical=True, **kwargs):
+def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=28, method="uniform", fname_prefix="", speaker_selection=None, referent_selection=None, one_sign=None, vertical=True, **kwargs):
     height_dx = image_dim + 2   # Assuming 2px border
     image_dir = os.path.join(directory, "media/images/env/")
     files = os.listdir(image_dir)
@@ -143,10 +143,10 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=2
         for i, f in enumerate(image_files):
             img = Image.open(os.path.join(image_dir, f))
             img_array = np.array(img)
-            local_height_dx = height_dx+2 if i == len(image_files) - 1 else height_dx
+            local_height_dx = height_dx if i == len(image_files) - 1 else height_dx
             row_imgs = []
-            for ii, j in enumerate(speaker_selection):
-                local_width_dx = height_dx+2 if ii == len(speaker_selection) - 1 else height_dx
+            for ii, j in zip(referent_selection, speaker_selection):
+                local_width_dx = height_dx+2 if ii == referent_selection[-1] else height_dx
                 row_imgs.append(img_array[height_dx*j:height_dx*j+local_height_dx, height_dx*ii:height_dx*ii+local_width_dx])
             row_img = np.concatenate(row_imgs, axis=1)            
             images.append(row_img)
@@ -257,14 +257,18 @@ def make_graphics_part2():
     # download_pr_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/", listeners=(7,))
 
     # Make evolution graphics
-    # directories = ["./frosty-silence-2354/", "./dark-cosmos-2353/", "./dazzling-meadow-2352/", "./tough-cloud-2359/", "./glad-dew-2358/"][-2:-1]
+    # directories = ["./dark-cosmos-2353/", "./dazzling-meadow-2352/", "./tough-cloud-2359/", "./glad-dew-2358/"]
     # speaker_selections = [[12, 8, 12, 2, 2, 12, 0, 14, 2, 12],
     #                       [12, 8, 12, 2, 2, 12, 0, 14, 2, 12]]
-    # name_prefixes = ["tom_", "tom_", ""]
-    # for directory, speaker_selection, fname_prefix in list(zip(directories, speaker_selections, name_prefixes)):
-    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, start_epoch=149, count=20, interval_epoch=140)
-    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, start_epoch=149, count=20, epoch_span=2800, x_stretch=100.0, method="1/x")
-    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, start_epoch=149, count=20, epoch_span=2800, x_stretch=0.0, method="1/x")
+    
+    # speaker_selection = [12, 8, 12, 2, 2, 12, 0, 14, 2, 12]
+    # abbreviated_speaker_selection = [12, 2, 12, 2, 12]
+    # abbreviated_referent_selection = [0, 4, 5, 8, 9]
+    # name_prefixes = ["tom_", "", "tom_", "tom_"]
+    # for directory, fname_prefix in list(zip(directories, name_prefixes))[1:]:
+    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, interval_epoch=180)
+    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=0.0, method="1/x")
         # make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", one_sign=(5, 12), vertical=False, start_epoch=149, count=20, interval_epoch=75)
         # make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", one_sign=(5, 12), vertical=False, start_epoch=149, count=10, epoch_span=1800, x_stretch=200.0, method="1/x")
         # make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", one_sign=(5, 12), vertical=False, start_epoch=149, count=10, epoch_span=1800, x_stretch=0.0, method="1/x")
@@ -287,10 +291,12 @@ def make_graphics_part2():
     #     num_epochs=2800,
     #     epoch_start=0)
 
+    # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider") # list(range(10))
+
     make_pr_plot(directory="./dark-cosmos-2353/",
-        referent_labels=("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider"),
-        referent_nums=list(range(10)),
-        num_epochs=300,
+        referent_labels=("Snail", "Dolphin", "Palm Tree", "Rocket", "Spider"),
+        referent_nums=(7, 4, 5, 6, 9),
+        num_epochs=3000,
         epoch_start=0,
         agent_num=7,
         log_scale=True)
@@ -305,9 +311,12 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(6, 6))
+    plt.yscale("log", base=np.e)
+    plt.xscale("log")
+    fig, ax = plt.subplots(figsize=(5, 6))
+    ax.set_xscale("log")
     if log_scale:
-        ax.set_yscale("log")
+        # ax.set_yscale("log")
         ax.yaxis.set_major_locator(FixedLocator(np.arange(0, 1, 0.2)**2))
         ax.yaxis.set_major_locator(FixedLocator(np.arange(0, 1, 0.2)))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
@@ -325,7 +334,7 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
         if num_epochs is not None:
             data = data.head(num_epochs)
             data = data.tail(len(data)-epoch_start)
-        ax.plot(data.rolling(window=100).mean(), label=referent_labels[i], color=sns.color_palette("husl", len(referent_labels))[i], linewidth=2, alpha=0.5)
+        ax.plot(data.rolling(window=100).mean(), label=referent_labels[i], color=sns.color_palette("husl", len(referent_labels))[i], linewidth=2, alpha=0.9)
         # ax.plot(, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
         
         # else:
@@ -342,8 +351,8 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
     # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
     # ax.set_xlabel('Epoch', fontsize=16)
     # ax.set_ylabel('Entropy', fontsize=16)
-    ax.tick_params(axis='both', which='major', labelsize=18)
-    plt.legend(fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    plt.legend(fontsize=16, loc=1)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:4]
@@ -368,7 +377,7 @@ def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, marker
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 2))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -425,7 +434,7 @@ def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_e
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 2))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -452,14 +461,15 @@ def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_e
 
             ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
         else:
-            ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.15)
-            ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+            # ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.15)
+            # ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+            ax.plot(data, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
 
     # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
     # ax.set_xlabel('Epoch', fontsize=16)
     # ax.set_ylabel('Entropy', fontsize=16)
     ax.tick_params(axis='both', which='major', labelsize=18)
-    plt.legend(fontsize=16)
+    # plt.legend(fontsize=16)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:4]
