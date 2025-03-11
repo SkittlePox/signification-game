@@ -17,7 +17,7 @@
 "ENV_NUM_DATAPOINTS": 5000
 
 "ENV_KWARGS":
-  ${ENV_KWARGS}:  # This doesn't look right
+  # ${ENV_KWARGS}:  # This doesn't look right
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR
   "speaker_action_transform": "splines_weight"
   "speaker_action_dim": 21  # This must be a multiple of 6 for "splines", 7 for "splines_weight"

@@ -1,0 +1,5 @@
+# @package _global_
+"ENV_KWARGS":
+  "num_speakers": 5  # best to have num_speakers = num_listeners
+  "num_listeners": 5
+  "num_channels": 5
