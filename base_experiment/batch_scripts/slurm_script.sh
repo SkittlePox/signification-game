@@ -14,7 +14,7 @@
 #SBATCH -e job_outputs/siggame_job_%j.e
 #SBATCH --mail-type=END
 #SBATCH --mail-user=benjamin_spiegel@brown.edu
-#SBATCH --array=51
+#SBATCH --array=56-60
 
 echo $LD_LIBRARY_PATH
 unset LD_LIBRARY_PATH
@@ -50,11 +50,18 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part1b-R7c - Squeeze - ManipCoop 600 - larger negative whitesum penalty + autocenter" ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=360 ENV_KWARGS.sigmoid_stretch=0.009 ENV_KWARGS.center_listener_obs=True ENV_KWARGS.speaker_whitesum_penalty_coef=-0.02 ENV_KWARGS.speaker_curve_penalty_coef=0.0 ENV_KWARGS.reward_parity_fn="1.0 at 600" SPEAKER_TRAIN_SCHEDULE="off then on at 200" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 200 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 WANDB_MODE=online
 
 
-#### Re-running basic experiments
+#### Re-running basic experiments from Part 1
 # Rerun of 1950
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part1a-R3 - Asymmetric no penalties quicker speaker onset - Zero listener rewards" +dataset=mnist +num_agents=five ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=400 ENV_KWARGS.sigmoid_stretch=0.007 ENV_KWARGS.sigmoid_height=0.6 ENV_KWARGS.speaker_assignment_method="arange" ENV_KWARGS.reward_parity_fn=manip ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_curve_penalty_coef=0.0 SPEAKER_TRAIN_SCHEDULE="off then on at 300" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 300 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 L2_REG_COEF_LISTENER=1e-5 L2_REG_COEF_SPEAKER=1e-5 WANDB_MODE="online" JAX_RANDOM_SEED=$SLURM_ARRAY_TASK_ID
 # Rerun of 1975
-python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part1b-R7b - Squeeze - ManipCoop 600 - larger negative whitesum penalty" +dataset=mnist +num_agents=five ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=360 ENV_KWARGS.sigmoid_stretch=0.009 ENV_KWARGS.center_listener_obs=False ENV_KWARGS.speaker_whitesum_penalty_coef=-0.02 ENV_KWARGS.speaker_curve_penalty_coef=0.0 "ENV_KWARGS.reward_parity_fn=1.0 at 600" SPEAKER_TRAIN_SCHEDULE="off then on at 200" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 200 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 WANDB_MODE=online JAX_RANDOM_SEED=$SLURM_ARRAY_TASK_ID
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part1b-R7b - Squeeze - ManipCoop 600 - larger negative whitesum penalty" +dataset=mnist +num_agents=five ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=360 ENV_KWARGS.sigmoid_stretch=0.009 ENV_KWARGS.center_listener_obs=False ENV_KWARGS.speaker_whitesum_penalty_coef=-0.02 ENV_KWARGS.speaker_curve_penalty_coef=0.0 "ENV_KWARGS.reward_parity_fn=1.0 at 600" SPEAKER_TRAIN_SCHEDULE="off then on at 200" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 200 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 WANDB_MODE=online JAX_RANDOM_SEED=$SLURM_ARRAY_TASK_ID
+# Rerun of 1973
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part1b-R6d - Squeeze - ManipCoop 700 - negative curvature penalty" +dataset=mnist +num_agents=five ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=360 ENV_KWARGS.sigmoid_stretch=0.009 ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_curve_penalty_coef=-0.05 "ENV_KWARGS.reward_parity_fn=1.0 at 600" SPEAKER_TRAIN_SCHEDULE="off then on at 200" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 200 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 WANDB_MODE=online JAX_RANDOM_SEED=$SLURM_ARRAY_TASK_ID
+# Rerun of 1934
+# python3 -u ippo_ff.py WANDB_NOTES="Post-Hiatus-R10c - Improving 2930 - More annealing - negative tiny whitesum penalty" +dataset=mnist +num_agents=five ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=498 ENV_KWARGS.sigmoid_stretch=0.007 ENV_KWARGS.speaker_whitesum_penalty_coef=-0.01 SPEAKER_TRAIN_SCHEDULE="off then on at 300" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 300 anneal to 2e-5 at 2000" SPEAKER_LR_SCHEDULE=2e-4 L2_REG_COEF_LISTENER=1e-5 L2_REG_COEF_SPEAKER=1e-5 WANDB_MODE=online JAX_RANDOM_SEED=$SLURM_ARRAY_TASK_ID
+# Rerun of 1945
+python3 -u ippo_ff.py WANDB_NOTES="Post-Hiatus-R12d - Negative Smaller Curve penalty" +dataset=mnist +num_agents=five ENV_KWARGS.channel_ratio_fn=sigmoid-custom ENV_KWARGS.sigmoid_offset=498 ENV_KWARGS.sigmoid_stretch=0.007 ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_curve_penalty_coef=-0.05 ENV_KWARGS.center_listener_obs=False ENV_KWARGS.speaker_action_dim=12 SPEAKER_TRAIN_SCHEDULE="off then on at 300" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-6 at 300 anneal to 2e-5 at 1500" SPEAKER_LR_SCHEDULE=2e-4 L2_REG_COEF_LISTENER=1e-5 L2_REG_COEF_SPEAKER=1e-5 WANDB_MODE=online JAX_RANDOM_SEED=$SLURM_ARRAY_TASK_ID
+
 
 #### For testing listener train state loading. Doing this with MNIST
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R8b - mnist - listeners epoch 100 with 5000 datapoints" +dataset=mnist ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.agent_inferential_mode_fn=gut ENV_KWARGS.channel_ratio_fn="0.0" LISTENER_N_SAMPLES=50 ENV_KWARGS.speaker_n_samples=50 SPEAKER_N_SEARCH=5 ENV_KWARGS.reward_parity_fn=coop SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=100 WANDB_MODE=online PICKLE_FINAL_AGENTS=True

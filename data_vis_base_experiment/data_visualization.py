@@ -318,6 +318,11 @@ def make_graphics_part2():
 def remake_graphics_part1():
     # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
 
+    # 1975 - Manip-coop size. 2368-2372
+    # 1973 - Manip-coop curve. 2373-2377
+    # 1934 - Coop size. 2378-2382
+    # 1945 - Coop curve. 2383-2387
+
     ### Re-runs of 1950: 2363-2367
     manipulation_runs = ["./comic-rain-2363/", "./rosy-field-2364/", "./dainty-surf-2364/", "./jolly-waterfall-2366/", "./blooming-donkey-2367/"]
     # download_probe_data(run_id="signification-team/signification-game/rnucselq", directory="./comic-rain-2363/")
@@ -326,7 +331,51 @@ def remake_graphics_part1():
     # download_probe_data(run_id="signification-team/signification-game/xqzzhed0", directory="./jolly-waterfall-2366/")
     # download_probe_data(run_id="signification-team/signification-game/uilb1k7z", directory="./blooming-donkey-2367/")
 
-    make_avg_probe_plot([manipulation_runs], ["Manipulation"], num_epochs=3300, rolling_window=100)
+    ### Re-runs of 1975: 2368-2372
+    manip_coop_size_runs = ["./lilac-pond-2368/", "./dauntless-pine-2369/", "./different-flower-2370/", "./glowing-bird-2371/", "./olive-fog-2372/"]
+    # download_probe_data(run_id="signification-team/signification-game/p2nna36h", directory="./lilac-pond-2368/")
+    # download_probe_data(run_id="signification-team/signification-game/jvpihsmi", directory="./dauntless-pine-2369/")
+    # download_probe_data(run_id="signification-team/signification-game/24uekkvx", directory="./different-flower-2370/")
+    # download_probe_data(run_id="signification-team/signification-game/tjaw0n1s", directory="./glowing-bird-2371/")
+    # download_probe_data(run_id="signification-team/signification-game/rsyjg7o0", directory="./olive-fog-2372/")
+
+    ### Re-runs of 1973: 2373-2377
+    manip_coop_curve_runs = ["./proud-violet-2373/", "./worthy-lake-2373/", "./good-elevator-2375/", "./light-pond-2376/", "./twilight-capybara-2377/"]
+    # download_probe_data(run_id="signification-team/signification-game/ou6fhk9c", directory="./proud-violet-2373/")
+    # download_probe_data(run_id="signification-team/signification-game/takhyi9a", directory="./worthy-lake-2373/")
+    # download_probe_data(run_id="signification-team/signification-game/pa66d5fw", directory="./good-elevator-2375/")
+    # download_probe_data(run_id="signification-team/signification-game/pb176dbx", directory="./light-pond-2376/")
+    # download_probe_data(run_id="signification-team/signification-game/7wfskzt7", directory="./twilight-capybara-2377/")
+
+    ### Re-runs of 1934: 2378-2382
+    coop_size_runs = ["./kind-terrain-2378/", "./grateful-vortex-2379/", "./twilight-sound-2379/", "./robust-planet-2381/", "./spring-silence-2382/"]
+    # download_probe_data(run_id="signification-team/signification-game/81vlracz", directory="./kind-terrain-2378/")
+    # download_probe_data(run_id="signification-team/signification-game/5yblw5tr", directory="./grateful-vortex-2379/")
+    # download_probe_data(run_id="signification-team/signification-game/da2jf77x", directory="./twilight-sound-2379/")
+    # download_probe_data(run_id="signification-team/signification-game/hty54uqe", directory="./robust-planet-2381/")
+    # download_probe_data(run_id="signification-team/signification-game/uo75i1aw", directory="./spring-silence-2382/")
+
+    ### Re-runs of 1945: 2383-2387
+    coop_curve_runs = ["./polished-wave-2383/", "./eager-thunder-2384/", "./grateful-fire-2385/", "./rich-bee-2386/", "./hearty-grass-2387/"]
+    # download_probe_data(run_id="signification-team/signification-game/ubzkvnrm", directory="./polished-wave-2383/")
+    # download_probe_data(run_id="signification-team/signification-game/5lud7k0f", directory="./eager-thunder-2384/")
+    # download_probe_data(run_id="signification-team/signification-game/aieg7rt5", directory="./grateful-fire-2385/")
+    # download_probe_data(run_id="signification-team/signification-game/61kerwgm", directory="./rich-bee-2386/")
+    # download_probe_data(run_id="signification-team/signification-game/qkg1mtca", directory="./hearty-grass-2387/")
+
+
+    make_avg_probe_plot([manipulation_runs,
+                         manip_coop_size_runs,
+                         manip_coop_curve_runs,
+                         coop_size_runs,
+                         coop_curve_runs],
+                         ["Manipulation",
+                           "Manip→Coop - Size Penalty",
+                           "Manip→Coop - Curve Penalty",
+                           "Coop - Size Penalty",
+                           "Coop - Curve Penalty"],
+                             num_epochs=3300, rolling_window=100)
+
 
 
 
@@ -524,7 +573,7 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
         data_for_group = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv" if not all_speakers_avg else "probe_entropy_all_speakers.csv")) for directory in directories]
         merged_datas = pd.concat(data_for_group, axis=1, keys=range(len(data_for_group)))
         mean_entropy = merged_datas.mean(axis=1)
-        ci_entropy = 1.96 * merged_datas.sem(axis=1)
+        ci_entropy = 2.776 * merged_datas.sem(axis=1)
         if rolling_window:
             mean_entropy = mean_entropy.rolling(window=rolling_window, center=True).mean()
             ci_entropy = ci_entropy.rolling(window=rolling_window, center=True).mean()
@@ -570,7 +619,11 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
     # ax.set_xlabel('Epoch', fontsize=16)
     # ax.set_ylabel('Entropy', fontsize=16)
     ax.tick_params(axis='both', which='major', labelsize=18)
-    # plt.legend(fontsize=16)
+    plt.legend(fontsize=16, loc='upper left')
+
+    # Get current y limits and extend upper bound by 20%
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(ymin, ymax * 1.2)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:4]
