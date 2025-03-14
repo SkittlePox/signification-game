@@ -7,6 +7,7 @@ from tqdm import tqdm
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator
+import matplotlib.animation as animation
 import seaborn as sns
 import json
 
@@ -293,10 +294,10 @@ def make_graphics_part2():
     #     epoch_start=150,
     #     markers_on=np.array([150, 260, 685, 1040, 1470, 1720])-150)
 
-    make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/"),
-        labels=("Behaviorist", "Inferential"),
-        num_epochs=2800,
-        epoch_start=0)
+    # make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/"),
+    #     labels=("Behaviorist", "Inferential"),
+    #     num_epochs=2800,
+    #     epoch_start=0)
     
     # make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/"),
     #     labels=("Instinctual", "Inferential"),
@@ -313,6 +314,8 @@ def make_graphics_part2():
     #     epoch_start=0,
     #     agent_num=7,
     #     log_scale=True)
+
+    make_animation(directory="./dark-cosmos-2353/", label="Inferential")
 
 
 def remake_graphics_part1():
@@ -403,6 +406,59 @@ def remake_graphics_part1():
                              rolling_window=100, t_val=1.833)
 
 
+def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32):
+    height_dx = image_dim + 2   # Assuming 2px border
+
+    FPS=20
+    
+    # Load reward data
+    reward_data = pd.read_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv"))
+
+    # Load image data
+    image_dir = os.path.join(directory, "media/images/env/")
+    files = os.listdir(image_dir)
+    fname_template = fname_prefix+"speaker_examples_"
+
+    sorted_files = sorted([f for f in files if f.startswith(fname_template)],
+                         key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
+    sorted_files = [os.path.join(image_dir, f) for f in sorted_files]
+    
+    # Grab only every 5th reward datapoint
+    reward_data = reward_data.iloc[::5]
+    
+    print(len(reward_data))
+    print(len(sorted_files))
+
+    # Initialize figure
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    img_ax = axes[0]
+    reward_ax = axes[1]
+    reward_ax.set_xlim(0, 600)
+    reward_ax.set_ylim(-0.1, 1.0)
+    reward_ax.set_title("Reward Curve")
+    reward_ax.set_xlabel("Time Step")
+    reward_ax.set_ylabel("Reward")
+    line, = reward_ax.plot([], [], lw=2)
+
+    def update(frame):
+        # Load and update image
+        img = plt.imread(sorted_files[frame])
+        img_ax.clear()
+        img_ax.imshow(img)
+        img_ax.axis("off")
+        img_ax.set_title(f"Action at Step {frame}")
+        
+        # Update reward curve
+        line.set_data(range(frame + 1), reward_data[:frame + 1])
+        return img_ax, line
+    
+    # print(animation.writers.list())
+    
+    ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
+
+    ani.save("./joint-plots/vid.mp4", writer="ffmpeg", fps=FPS)
+
+    print("Saved file")
 
 
 def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epoch_start=0, agent_num=None, log_scale=False):

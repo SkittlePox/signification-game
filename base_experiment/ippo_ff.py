@@ -418,6 +418,9 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
 
     #### Calculate P(r_i|s)
     log_prss = log_psrs + log_pRs_weighted - jnp.log(num_classes) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
+    ## Ablating P_R(r_i) the above line becomes
+    # log_prss = log_psrs
+
     log_prss -= jax.nn.logsumexp(log_prss)
     prss = jnp.exp(log_prss)
 
