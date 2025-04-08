@@ -263,10 +263,12 @@ def make_graphics_part2():
     # download_probe_data(run_id="signification-team/signification-game/1xty9ob3", directory="./frosty-silence-2354/")
     # download_probe_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
     # download_probe_data(run_id="signification-team/signification-game/6vtdcxr5", directory="./dazzling-meadow-2352/")
+    download_probe_data(run_id="signification-team/signification-game/kytkioqx", directory="./dazzling-puddle-2413/")
 
     # download_reward_data(run_id="signification-team/signification-game/1xty9ob3", directory="./frosty-silence-2354/")
     # download_reward_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
     # download_reward_data(run_id="signification-team/signification-game/6vtdcxr5", directory="./dazzling-meadow-2352/")
+    # download_reward_data(run_id="signification-team/signification-game/kytkioqx", directory="./dazzling-puddle-2413/")
 
     # download_pr_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/", listeners=(7,))
 
@@ -294,16 +296,16 @@ def make_graphics_part2():
     #     epoch_start=150,
     #     markers_on=np.array([150, 260, 685, 1040, 1470, 1720])-150)
 
-    # make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/"),
-    #     labels=("Behaviorist", "Inferential"),
+    # make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
+    #     labels=("Behaviorist", "Inferential", "Inferential - no P_R"),
     #     num_epochs=2800,
     #     epoch_start=0)
     
-    # make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/"),
-    #     labels=("Instinctual", "Inferential"),
-    #     all_speakers_avg=True,
-    #     num_epochs=2800,
-    #     epoch_start=0)
+    make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
+        labels=("Behaviorist", "Inferential", "Inferential - no P_R"),
+        all_speakers_avg=True,
+        num_epochs=2800,
+        epoch_start=0)
 
     # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider") # list(range(10))
 
@@ -315,7 +317,7 @@ def make_graphics_part2():
     #     agent_num=7,
     #     log_scale=True)
 
-    make_animation(directory="./dark-cosmos-2353/", label="Inferential")
+    # make_animation(directory="./dark-cosmos-2353/", label="Inferential")
 
 
 def remake_graphics_part1():
@@ -511,7 +513,7 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
     # ax.set_xlabel('Epoch', fontsize=16)
     # ax.set_ylabel('Entropy', fontsize=16)
     ax.tick_params(axis='both', which='major', labelsize=14)
-    plt.legend(fontsize=16, loc=1)
+    plt.legend(fontsize=15, loc=1)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:4]
@@ -536,7 +538,7 @@ def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, marker
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(5, 2))
+    fig, ax = plt.subplots(figsize=(5, 2.25))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -570,7 +572,7 @@ def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, marker
     # ax.set_xlabel('Epoch', fontsize=16)
     # ax.set_ylabel('Entropy', fontsize=16)
     ax.tick_params(axis='both', which='major', labelsize=18)
-    plt.legend(fontsize=16)
+    plt.legend(fontsize=15)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:4]
