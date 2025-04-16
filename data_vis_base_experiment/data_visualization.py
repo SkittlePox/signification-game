@@ -263,7 +263,7 @@ def make_graphics_part2():
     # download_probe_data(run_id="signification-team/signification-game/1xty9ob3", directory="./frosty-silence-2354/")
     # download_probe_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
     # download_probe_data(run_id="signification-team/signification-game/6vtdcxr5", directory="./dazzling-meadow-2352/")
-    download_probe_data(run_id="signification-team/signification-game/kytkioqx", directory="./dazzling-puddle-2413/")
+    # download_probe_data(run_id="signification-team/signification-game/kytkioqx", directory="./dazzling-puddle-2413/")
 
     # download_reward_data(run_id="signification-team/signification-game/1xty9ob3", directory="./frosty-silence-2354/")
     # download_reward_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/")
@@ -296,16 +296,16 @@ def make_graphics_part2():
     #     epoch_start=150,
     #     markers_on=np.array([150, 260, 685, 1040, 1470, 1720])-150)
 
-    # make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
-    #     labels=("Behaviorist", "Inferential", "Inferential - no P_R"),
-    #     num_epochs=2800,
-    #     epoch_start=0)
-    
-    make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
-        labels=("Behaviorist", "Inferential", "Inferential - no P_R"),
-        all_speakers_avg=True,
+    make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
+        labels=("Behaviorist", "Inferential", "Inferential - no P_ref"),
         num_epochs=2800,
         epoch_start=0)
+    
+    # make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
+    #     labels=("Behaviorist", "Inferential", "Inferential - no P_ref"),
+    #     all_speakers_avg=True,
+    #     num_epochs=2800,
+    #     epoch_start=0)
 
     # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider") # list(range(10))
 
@@ -408,13 +408,25 @@ def remake_graphics_part1():
                              rolling_window=100, t_val=1.833)
 
 
-def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32):
+def make_graphics_post_conference():
+    # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
+    download_probe_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
+    download_reward_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
+
+    # make_animation(directory="./dazzling-puddle-2413/", label="Inferential - No P_ref", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+
+    make_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+
+def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
     height_dx = image_dim + 2   # Assuming 2px border
 
     FPS=20
     
     # Load reward data
     reward_data = pd.read_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv"))
+
+    # Load probe data
+    probe_data = pd.read_csv(os.path.join(directory, f"probe_entropy_all_speakers.csv"))
 
     # Load image data
     image_dir = os.path.join(directory, "media/images/env/")
@@ -427,38 +439,60 @@ def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefi
     
     # Grab only every 5th reward datapoint
     reward_data = reward_data.iloc[::5]
+    probe_data = probe_data.iloc[::5]
     
     print(len(reward_data))
     print(len(sorted_files))
 
     # Initialize figure
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    img_ax = axes[0]
-    reward_ax = axes[1]
+    fig, axes = plt.subplots(3, 1, figsize=(4, 5.5))
+    probe_ax = axes[0]
+    probe_ax.set_xlim(0, 600)
+    probe_ax.set_ylim(0.0, 1.0)
+    probe_ax.set_title("Symbolicity")
+    probe_ax.set_xlabel("Epoch")
+    img_ax = axes[1]
+    reward_ax = axes[2]
     reward_ax.set_xlim(0, 600)
     reward_ax.set_ylim(-0.1, 1.0)
-    reward_ax.set_title("Reward Curve")
-    reward_ax.set_xlabel("Time Step")
-    reward_ax.set_ylabel("Reward")
-    line, = reward_ax.plot([], [], lw=2)
+    reward_ax.set_title("Communication Success")
+    reward_ax.set_xlabel("Epoch")
+    # reward_ax.set_ylabel("Reward")
+    reward_line, = reward_ax.plot([], [], lw=2)
+    probe_line, = probe_ax.plot([], [], lw=2)
 
     def update(frame):
         # Load and update image
-        img = plt.imread(sorted_files[frame])
+        # img = plt.imread(sorted_files[frame])
+
+        ##### Crop img here if you want.
+        img = Image.open(sorted_files[frame])
+        img_array = np.array(img)
+        # local_height_dx = height_dx if i == len(image_files) - 1 else height_dx
+        row_imgs = []
+        for ii, j in zip(referent_selection, speaker_selection):
+            local_width_dx = height_dx #if ii == referent_selection[-1] else height_dx
+            row_imgs.append(img_array[height_dx*j:height_dx*j+height_dx, height_dx*ii:height_dx*ii+local_width_dx])
+        row_img = np.concatenate(row_imgs, axis=1)
+        ###########
+
         img_ax.clear()
-        img_ax.imshow(img)
+        img_ax.imshow(row_img)
         img_ax.axis("off")
-        img_ax.set_title(f"Action at Step {frame}")
+        img_ax.set_title(f"Signals at Epoch {frame}")
+        # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
+        img_ax.text(-8, 45, " ".join(("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Tree ", "Rocket", "Snail ", "Snake", "Spider")), size="xx-small")
         
         # Update reward curve
-        line.set_data(range(frame + 1), reward_data[:frame + 1])
-        return img_ax, line
+        reward_line.set_data(range(frame + 1), reward_data[:frame + 1])
+        probe_line.set_data(range(frame + 1), probe_data[:frame + 1])
+        return probe_line, img_ax, reward_line
     
     # print(animation.writers.list())
     
     ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
 
-    ani.save("./joint-plots/vid.mp4", writer="ffmpeg", fps=FPS)
+    ani.save(f"./joint-plots/vid_{directory.split('-')[-1][:-1]}.mp4", writer="ffmpeg", fps=FPS)
 
     print("Saved file")
 
@@ -727,5 +761,5 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
 
 
 if __name__=="__main__":
-    make_graphics_part2()
+    make_graphics_post_conference()
     
