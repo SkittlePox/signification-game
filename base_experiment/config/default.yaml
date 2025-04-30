@@ -49,7 +49,7 @@
 "MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
 
 "PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8" # for cifar10 # "probe-5k-20k-20e-sgd-bedc" # for mnist
-"PROBE_NUM_EXAMPLES": 512 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 6 # 500 # This must be less than or equal to "NUM_STEPS"
 "PROBE_MODEL": "cnn"
 "PROBE_OPTIMIZER": "adam"
 
@@ -57,9 +57,9 @@
 "ENV_DATASET": 'cifar100'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
-  "num_speakers": 10  # best to have num_speakers = num_listeners
-  "num_listeners": 10
-  "num_channels": 10
+  "num_speakers": 5  # best to have num_speakers = num_listeners
+  "num_listeners": 5
+  "num_channels": 5
   "num_classes": 10
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10
   "speaker_reward_success": 1.0
@@ -85,7 +85,7 @@
   "sigmoid_stilt": 0.0
 
 # WandB Params
-"WANDB_MODE": "disabled"
+"WANDB_MODE": "online"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5

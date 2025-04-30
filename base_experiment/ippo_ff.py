@@ -825,6 +825,13 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
 def wandb_callback(metrics):
     (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
+    def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
+        masked_speaker_reward = speaker_reward * speaker_alive
+
+        referent_mask = jnp.where(speaker_obs == referent, 1, 0)
+        return jnp.sum(speaker_reward * referent_mask) / (1 + jnp.sum(referent_mask * speaker_alive))
+
+
     num_speakers = trimmed_transition_batch.speaker_alive.shape[-1]
     num_listeners = trimmed_transition_batch.listener_alive.shape[-1]
 
@@ -880,6 +887,9 @@ def wandb_callback(metrics):
     mean_speaker_rewards = jnp.mean(trimmed_transition_batch.speaker_reward, axis=0)
     metric_dict.update({f"reward/mean reward/speaker {i}": mean_speaker_rewards[i].item() for i in range(len(mean_speaker_rewards))})
     metric_dict.update({"reward/mean reward/all speakers": jnp.mean(mean_speaker_rewards).item()})
+
+    per_referent_speaker_rewards = jax.vmap(calc_per_referent_speaker_reward, in_axes=(0, None, None, None))(jnp.arange(num_classes, dtype=int), trimmed_transition_batch.speaker_reward, trimmed_transition_batch.speaker_obs, trimmed_transition_batch.speaker_alive)
+    metric_dict.update({f"reward/mean reward/all speakers referent {i}": per_referent_speaker_rewards[i].item() for i in range(num_classes)})
 
     mean_listener_rewards = jnp.mean(trimmed_transition_batch.listener_reward, axis=0)
     metric_dict.update({f"reward/mean reward/listener {i}": mean_listener_rewards[i].item() for i in range(len(mean_listener_rewards))})
@@ -957,6 +967,7 @@ def wandb_callback(metrics):
     wandb.log(metric_dict)
 
 def make_train(config):
+
     env = define_env(config)
     env = SimpSigGameLogWrapper(env)
 
