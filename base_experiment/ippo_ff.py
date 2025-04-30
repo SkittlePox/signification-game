@@ -829,7 +829,14 @@ def wandb_callback(metrics):
         masked_speaker_reward = speaker_reward * speaker_alive
 
         referent_mask = jnp.where(speaker_obs == referent, 1, 0)
-        return jnp.sum(speaker_reward * referent_mask) / (1 + jnp.sum(referent_mask * speaker_alive))
+        return jnp.sum(masked_speaker_reward * referent_mask) / (1 + jnp.sum(referent_mask * speaker_alive))
+    
+    def calc_per_referent_speaker_success(referent, speaker_reward, speaker_obs, speaker_alive):
+        masked_speaker_reward = speaker_reward * speaker_alive
+        masked_speaker_success = jnp.where(masked_speaker_reward > 0.0, 1, 0) + jnp.where(masked_speaker_reward < 0.0, 0, 0)
+
+        referent_mask = jnp.where(speaker_obs == referent, 1, 0)
+        return jnp.sum(masked_speaker_success * referent_mask) / (1 + jnp.sum(referent_mask * speaker_alive))
 
 
     num_speakers = trimmed_transition_batch.speaker_alive.shape[-1]
@@ -890,6 +897,9 @@ def wandb_callback(metrics):
 
     per_referent_speaker_rewards = jax.vmap(calc_per_referent_speaker_reward, in_axes=(0, None, None, None))(jnp.arange(num_classes, dtype=int), trimmed_transition_batch.speaker_reward, trimmed_transition_batch.speaker_obs, trimmed_transition_batch.speaker_alive)
     metric_dict.update({f"reward/mean reward/all speakers referent {i}": per_referent_speaker_rewards[i].item() for i in range(num_classes)})
+
+    per_referent_speaker_success = jax.vmap(calc_per_referent_speaker_success, in_axes=(0, None, None, None))(jnp.arange(num_classes, dtype=int), trimmed_transition_batch.speaker_reward, trimmed_transition_batch.speaker_obs, trimmed_transition_batch.speaker_alive)
+    metric_dict.update({f"success/average success/all speakers referent {i}": per_referent_speaker_rewards[i].item() for i in range(num_classes)})
 
     mean_listener_rewards = jnp.mean(trimmed_transition_batch.listener_reward, axis=0)
     metric_dict.update({f"reward/mean reward/listener {i}": mean_listener_rewards[i].item() for i in range(len(mean_listener_rewards))})
