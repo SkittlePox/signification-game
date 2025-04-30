@@ -900,6 +900,7 @@ def wandb_callback(metrics):
 
     per_referent_speaker_success = jax.vmap(calc_per_referent_speaker_success, in_axes=(0, None, None, None))(jnp.arange(num_classes, dtype=int), trimmed_transition_batch.speaker_reward, trimmed_transition_batch.speaker_obs, trimmed_transition_batch.speaker_alive)
     metric_dict.update({f"success/average success/all speakers referent {i}": per_referent_speaker_rewards[i].item() for i in range(num_classes)})
+    metric_dict.update({f"success/average success/all speakers": jnp.mean(per_referent_speaker_rewards)})
 
     mean_listener_rewards = jnp.mean(trimmed_transition_batch.listener_reward, axis=0)
     metric_dict.update({f"reward/mean reward/listener {i}": mean_listener_rewards[i].item() for i in range(len(mean_listener_rewards))})
