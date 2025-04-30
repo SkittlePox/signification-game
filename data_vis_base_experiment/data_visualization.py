@@ -410,12 +410,18 @@ def remake_graphics_part1():
 
 def make_graphics_post_conference():
     # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
-    download_probe_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
-    download_reward_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
+    # download_probe_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
+    # download_reward_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
 
     # make_animation(directory="./dazzling-puddle-2413/", label="Inferential - No P_ref", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
 
-    make_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_animation(directory="./frosty-silence-2354/", label="Inferential - Size Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_simple_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_simple_animation(directory="./frosty-silence-2354/", label="Inferential - Size Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+
+    make_multi_animation(directories=("./dazzling-meadow-2352/", "./frosty-silence-2354/"), labels=("Behavioral", "Inferential (ours)"), speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # frosty-silence-2354
 
 def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
     height_dx = image_dim + 2   # Assuming 2px border
@@ -481,7 +487,7 @@ def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefi
         img_ax.axis("off")
         img_ax.set_title(f"Signals at Epoch {frame}")
         # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
-        img_ax.text(-8, 45, " ".join(("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Tree ", "Rocket", "Snail ", "Snake", "Spider")), size="xx-small")
+        img_ax.text(-2, 45, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
         
         # Update reward curve
         reward_line.set_data(range(frame + 1), reward_data[:frame + 1])
@@ -493,6 +499,155 @@ def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefi
     ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
 
     ani.save(f"./joint-plots/vid_{directory.split('-')[-1][:-1]}.mp4", writer="ffmpeg", fps=FPS)
+
+    print("Saved file")
+
+
+def make_multi_animation(directories, labels, num_epochs=2800, epoch_start=0, fname_prefixes=["", "tom_"], image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
+    height_dx = image_dim + 2   # Assuming 2px border
+
+    FPS=20
+    
+    # Load reward data
+    reward_datas = [pd.read_csv(os.path.join(directory, "reward_for_speaker_images_all_listeners.csv")) for directory in directories]
+
+    # Load probe data
+    probe_datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_all_speakers.csv")) for directory in directories]
+
+    # Load image data
+    image_dirs = [os.path.join(directory, "media/images/env/") for directory in directories]
+    
+    files_list = [os.listdir(image_dir) for image_dir in image_dirs]
+    fname_templates = [fname_prefix+"speaker_examples_" for fname_prefix in fname_prefixes]
+
+    sorted_files_list = [sorted([os.path.join(image_dir, f) for f in files if f.startswith(fname_template)],
+                         key=lambda x: int(x.split(fname_template)[1].split('_')[0])) for files, image_dir, fname_template in zip(files_list, image_dirs, fname_templates)]
+    
+    
+    # Grab only every 5th reward datapoint
+    reward_datas = [reward_data.iloc[::5] for reward_data in reward_datas]
+    probe_datas = [probe_data.iloc[::5] for probe_data in probe_datas]
+    
+    # print(len(reward_data))
+    # print(len(sorted_files))
+
+    # Initialize figure
+    fig, axes = plt.subplots(3, 1, figsize=(4, 6.5))
+    probe_ax = axes[0]
+    probe_ax.set_xlim(0, 600)
+    probe_ax.set_ylim(0.0, 1.0)
+    probe_ax.set_title("Symbolicity")
+    probe_ax.set_xlabel("Epoch")
+    img_ax = axes[1]
+    reward_ax = axes[2]
+    reward_ax.set_xlim(0, 600)
+    reward_ax.set_ylim(-0.1, 1.0)
+    reward_ax.set_title("Communication Success")
+    reward_ax.set_xlabel("Epoch")
+    # reward_ax.set_ylabel("Reward")
+
+    reward_lines = [reward_ax.plot([], [], lw=2, label=label) for label in labels]
+    probe_lines = [probe_ax.plot([], [], lw=2, label=label) for label in labels]
+
+    probe_ax.legend(loc="upper right", fontsize="medium")
+    reward_ax.legend(loc="lower right", fontsize="medium")
+
+    def update(frame):
+        # Load and update image
+        # img = plt.imread(sorted_files[frame])
+
+        ##### Crop img here if you want.
+        full_row_imgs = []
+        for sorted_files in sorted_files_list:
+            img = Image.open(sorted_files[frame])
+            img_array = np.array(img)
+            # local_height_dx = height_dx if i == len(image_files) - 1 else height_dx
+            row_imgs = []
+            for ii, j in zip(referent_selection, speaker_selection):
+                local_width_dx = height_dx #if ii == referent_selection[-1] else height_dx
+                row_imgs.append(img_array[height_dx*j:height_dx*j+height_dx, height_dx*ii:height_dx*ii+local_width_dx])
+            row_img = np.concatenate(row_imgs, axis=1)
+            full_row_imgs.append(row_img)
+        ###########
+
+        row_img = np.concatenate(full_row_imgs, axis=0)
+
+        img_ax.clear()
+        img_ax.imshow(row_img)
+        img_ax.axis("off")
+        img_ax.set_title(f"Signals at Epoch {frame}")
+
+        img_ax.text(-2, 80, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
+        img_ax.text(-52, 20, "Behaviorist", size="xx-small")
+        img_ax.text(-50, 53, "Inferential", size="xx-small")
+
+        # Update reward curve
+        for reward_line, reward_data in zip(reward_lines, reward_datas):
+            reward_line[0].set_data(range(frame + 1), reward_data[:frame + 1])
+        
+        for probe_line, probe_data in zip(probe_lines, probe_datas):
+            probe_line[0].set_data(range(frame + 1), probe_data[:frame + 1])
+        
+        return [line[0] for line in reward_lines + probe_lines] + [img_ax]
+    
+    # print(animation.writers.list())
+    
+    ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
+
+    save_suffix = "_".join([d.split('-')[-1][:4] for d in directories])
+    ani.save(f"./joint-plots/vid_multi_{save_suffix}.mp4", writer="ffmpeg", fps=FPS)
+
+    print("Saved file")
+
+
+def make_simple_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
+    height_dx = image_dim + 2   # Assuming 2px border
+
+    FPS=20
+    
+    # Load image data
+    image_dir = os.path.join(directory, "media/images/env/")
+    files = os.listdir(image_dir)
+    fname_template = fname_prefix+"speaker_examples_"
+
+    sorted_files = sorted([f for f in files if f.startswith(fname_template)],
+                         key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
+    sorted_files = [os.path.join(image_dir, f) for f in sorted_files]
+    
+
+    # Initialize figure
+    fig, axe = plt.subplots(figsize=(4, 2))
+    img_ax = axe
+
+    def update(frame):
+        # Load and update image
+        # img = plt.imread(sorted_files[frame])
+
+        ##### Crop img here if you want.
+        img = Image.open(sorted_files[frame])
+        img_array = np.array(img)
+        # local_height_dx = height_dx if i == len(image_files) - 1 else height_dx
+        row_imgs = []
+        for ii, j in zip(referent_selection, speaker_selection):
+            local_width_dx = height_dx #if ii == referent_selection[-1] else height_dx
+            row_imgs.append(img_array[height_dx*j:height_dx*j+height_dx, height_dx*ii:height_dx*ii+local_width_dx])
+        row_img = np.concatenate(row_imgs, axis=1)
+        ###########
+
+        img_ax.clear()
+        img_ax.imshow(row_img)
+        img_ax.axis("off")
+        img_ax.set_title(f"Signals at Epoch {frame}")
+        # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
+        img_ax.text(-2, 45, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
+
+        return img_ax
+    
+    # print(animation.writers.list())
+    
+    ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
+
+    ani.save(f"./joint-plots/vid_simple_{directory.split('-')[-1][:-1]}.mp4", writer="ffmpeg", fps=FPS)
 
     print("Saved file")
 
