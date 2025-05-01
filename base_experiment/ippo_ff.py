@@ -840,6 +840,10 @@ def wandb_callback(metrics):
         masked_speaker_reward = speaker_reward * speaker_alive
         masked_speaker_success = jnp.where(masked_speaker_reward > 0.0, 1, 0) + jnp.where(masked_speaker_reward < 0.0, 0, 0)
         return jnp.sum(masked_speaker_success) / (1 + jnp.sum(speaker_alive))
+    
+    def calc_per_referent_listener_classification_rate(referent, listener_action, listener_obs_source):
+        referent_mask = jnp.where(listener_action == referent, 1, 0)
+        return jnp.sum(referent_mask * listener_obs_source) / (1 + jnp.sum(listener_obs_source))
 
     num_speakers = trimmed_transition_batch.speaker_alive.shape[-1]
     num_listeners = trimmed_transition_batch.listener_alive.shape[-1]
@@ -912,13 +916,16 @@ def wandb_callback(metrics):
     metric_dict.update({f"reward/mean reward by image source/env images listener {i}": mean_listener_rewards_for_env_images[i].item() for i in range(len(mean_listener_rewards_for_env_images))})
     metric_dict.update({"reward/mean reward by image source/env images all listeners": jnp.mean(mean_listener_rewards_for_env_images).item()})
 
-    #### Success logging
-
+    #### Communication Success logging
     per_referent_speaker_success = jax.vmap(calc_per_referent_speaker_success, in_axes=(0, None, None, None))(jnp.arange(num_classes, dtype=int), trimmed_transition_batch.speaker_reward, trimmed_transition_batch.speaker_obs, trimmed_transition_batch.speaker_alive)
     metric_dict.update({f"success/average success/all speakers referent {i}": per_referent_speaker_success[i].item() for i in range(num_classes)})
 
     average_speaker_success = calc_overall_speaker_success(trimmed_transition_batch.speaker_reward, trimmed_transition_batch.speaker_alive)
     metric_dict.update({"success/average success/all speakers": average_speaker_success.item()})
+
+    #### Referent Classification Rate logging
+    per_referent_classification_rate = jax.vmap(calc_per_referent_listener_classification_rate, in_axes=(0, None, None))(jnp.arange(num_classes, dtype=int), trimmed_transition_batch.listener_action, trimmed_transition_batch.listener_obs_source)
+    metric_dict.update({f"classification rate/all listeners referent {i}": per_referent_classification_rate[i].item() for i in range(num_classes)})
     
     #### Agent action log probs logging
     mean_speaker_log_probs = jnp.mean(trimmed_transition_batch.speaker_log_prob, axis=0)
