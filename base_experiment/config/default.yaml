@@ -75,7 +75,7 @@
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "coop"  # "1.0 at 300", "coop", "manip"
-  "agent_inferential_mode_fn": "gut" # Default is "gut" or 0.0, same as lr schedule syntax e.g. "0.23 anneal to 1.0 at 10"
+  "agent_inferential_mode_fn": "1.0" # Default is "gut" or 0.0, same as lr schedule syntax e.g. "0.23 anneal to 1.0 at 10"
   "channel_ratio_fn": 0.7  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "mandate_unitary_channel_map": True
@@ -85,7 +85,7 @@
   "sigmoid_stilt": 0.0
 
 # WandB Params
-"WANDB_MODE": "online"
+"WANDB_MODE": "disabled"
 "ENTITY": "signification-team"
 "PROJECT": "signification-game"
 "SPEAKER_EXAMPLE_LOGGING_ITER": 5
