@@ -36,6 +36,7 @@ class Transition(NamedTuple):
     speaker_reward: jnp.ndarray
     speaker_value: jnp.ndarray
     speaker_log_prob: jnp.ndarray
+    speaker_log_q: jnp.ndarray
     speaker_obs: jnp.ndarray
     speaker_alive: jnp.ndarray
     listener_action: jnp.ndarray
@@ -54,6 +55,7 @@ class HalfTransition(NamedTuple):
     reward: jnp.ndarray
     value: jnp.ndarray
     log_prob: jnp.ndarray
+    log_q: jnp.ndarray
     obs: jnp.ndarray
     alive: jnp.ndarray
 
@@ -442,6 +444,7 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
     __rng, speaker_dropout_key, speaker_noise_key = jax.random.split(__rng, 3)
     __rng, numer_key, denom_key = jax.random.split(__rng, 3)
     __rng, pi_sample_key = jax.random.split(__rng)
+    __rng, psr_sample_key = jax.random.split(__rng)
 
     ######### Search for the signal with the highest P(r|s)
 
@@ -468,16 +471,24 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
     psr = jnp.exp(numerators-denominators)
 
     ###### Select signal with the highest P(s|r)
-    # Nuke the (max_speaker_n_search - speaker_n_search) last referents
+    # First nuke the (max_speaker_n_search - speaker_n_search) last referents
     mask = jnp.where(jnp.arange(max_speaker_n_search) < speaker_n_search, 1, 0)
     masked_psr = jax.lax.select(mask, psr, jnp.ones_like(psr)*-jnp.inf)
-    maxindex = jnp.argmax(masked_psr)
 
-    maxaction = search_signal_param_samples[maxindex]
+    # For a softmax selection of P(s|r):
+    log_q_dist = jax.nn.log_softmax(masked_psr * 1.0)  # beta=1.0 or higher for sharper
+    sample_idx = jax.random.categorical(psr_sample_key, log_q_dist)
+    maxaction = search_signal_param_samples[sample_idx]
+    log_q = log_q_dist[sample_idx]
+
+    # For an argmax selection instead:
+    # sample_idx = jnp.argmax(masked_psr)
+    # maxaction = search_signal_param_samples[sample_idx]
+    # log_q = log_prob
     
     log_prob = search_signal_gut_policy.log_prob(maxaction)
 
-    return maxaction, log_prob.reshape(-1,), values[maxindex].reshape(-1,)
+    return maxaction, log_prob.reshape(-1,), values[sample_idx].reshape(-1,), log_q.reshape(-1,)
 
 def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
     speaker_obs = jnp.tile(jnp.arange(config["ENV_KWARGS"]["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
@@ -625,20 +636,22 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
         log_and_value_mask = jnp.expand_dims(mask, axis=1)
         speaker_action_mask = jnp.expand_dims(log_and_value_mask, axis=1) * jnp.ones_like(naive_speaker_actions)
         
-        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, num_classes, speaker_action_dim)
+        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values, full_tom_speaker_log_qs = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, num_classes, speaker_action_dim)
         tom_speaker_actions = jax.lax.select(speaker_action_mask == 1, full_tom_speaker_actions, naive_speaker_actions)
         tom_speaker_log_probs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_probs, naive_speaker_log_probs)
         tom_speaker_values = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_values, naive_speaker_values)
-        return (tom_speaker_actions, tom_speaker_log_probs, tom_speaker_values)
+        tom_speaker_log_qs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_qs, naive_speaker_log_probs)
+        return (tom_speaker_actions, tom_speaker_log_probs, tom_speaker_values, tom_speaker_log_qs)
     # Choose the right ones
-    speaker_actions, speaker_log_probs, speaker_values = jax.lax.cond(
+    speaker_actions, speaker_log_probs, speaker_values, speaker_log_qs = jax.lax.cond(
         requested_num_tom_speakers == 0,
-        lambda _: (naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values),
+        lambda _: (naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values, naive_speaker_log_probs),
         lambda _: calc_tom_speaker_actions(),
         None)
     speaker_actions = speaker_actions.reshape((1, -1, speaker_action_dim))
     speaker_log_probs = speaker_log_probs.reshape((1, -1))
     speaker_values = speaker_values.reshape((1, -1))
+    speaker_log_qs = speaker_log_qs.reshape((1, -1))
 
     ##### STEP ENV
     next_rng, rng = jax.random.split(rng)
@@ -659,6 +672,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
         speaker_reward,
         speaker_values,
         speaker_log_probs,
+        speaker_log_qs,
         speaker_obs,
         speaker_alive,
         listener_actions,
@@ -753,13 +767,16 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
 def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_tx, clip_eps, l2_reg_coef_speaker, vf_coef, ent_coef_speaker):
     __rng, trans_batch_i, advantages_i, targets_i, speaker_params_i, speaker_opt_state_i = runner_state
 
-    def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
+    def _loss_fn(params, _obs, _actions, values, log_probs, log_q, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
         dropout_key, noise_key = jax.random.split(__rng)
         _i_policy, _i_value = speaker_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
         _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -1e8, 1e8)
         log_probs = jnp.clip(log_probs, -1e8, 1e8)
+
+        # CALCULATE IMPORTANCE WEIGHT
+        importance_weight = jnp.exp(log_probs - log_q)
 
         # CALCULATE VALUE LOSS
         values = jnp.clip(values, -1e3, 1e3)
@@ -776,8 +793,8 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         # CALCULATE ACTOR LOSS
         ratio = jnp.exp(_i_log_prob - log_probs)
         gae_for_i = jnp.clip((advantages - advantages.mean()) / (advantages.std() + 1e-8), -10, 10)
-        loss_actor1 = ratio * gae_for_i * alive
-        loss_actor2 = (
+        loss_actor1 = importance_weight * ratio * gae_for_i * alive
+        loss_actor2 = importance_weight * (
                 jnp.clip(
                     ratio,
                     1.0 - clip_eps,
@@ -809,6 +826,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         trans_batch_i.action, 
         trans_batch_i.value,
         trans_batch_i.log_prob,
+        trans_batch_i.log_q,
         advantages_i,
         targets_i,
         trans_batch_i.alive
@@ -1133,6 +1151,7 @@ def make_train(config):
                 speaker_reward=jnp.squeeze(transition_batch.speaker_reward[2:, ...]),
                 speaker_value=jnp.squeeze(transition_batch.speaker_value[1:-1, ...]),
                 speaker_log_prob=jnp.squeeze(transition_batch.speaker_log_prob[1:-1, ...]),
+                speaker_log_q=jnp.squeeze(transition_batch.speaker_log_q[1:-1, ...]),
                 speaker_obs=jnp.squeeze(transition_batch.speaker_obs[1:-1, ...]),
                 speaker_alive=jnp.squeeze(transition_batch.speaker_alive[2:, ...]),
                 listener_action=jnp.squeeze(transition_batch.listener_action[1:-1, ...]),
@@ -1179,6 +1198,7 @@ def make_train(config):
                 reward=trimmed_transition_batch.listener_reward.reshape((num_listener_minibatches, -1) + trimmed_transition_batch.listener_reward.shape[1:]),
                 value=trimmed_transition_batch.listener_value.reshape((num_listener_minibatches, -1) + trimmed_transition_batch.listener_value.shape[1:]),
                 log_prob=trimmed_transition_batch.listener_log_prob.reshape((num_listener_minibatches, -1) + trimmed_transition_batch.listener_log_prob.shape[1:]),
+                log_q=trimmed_transition_batch.listener_log_prob.reshape((num_listener_minibatches, -1) + trimmed_transition_batch.listener_log_prob.shape[1:]),
                 obs=trimmed_transition_batch.listener_obs.reshape((num_listener_minibatches, -1) + trimmed_transition_batch.listener_obs.shape[1:]),
                 alive=trimmed_transition_batch.listener_alive.reshape((num_listener_minibatches, -1) + trimmed_transition_batch.listener_alive.shape[1:]),
                 # channel_map=trimmed_transition_batch.channel_map.reshape((num_listener_minibatches, -1) + trimmed_transition_batch.channel_map.shape[1:])
@@ -1209,6 +1229,7 @@ def make_train(config):
                 reward=trimmed_transition_batch.speaker_reward.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_reward.shape[1:]),
                 value=trimmed_transition_batch.speaker_value.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_value.shape[1:]),
                 log_prob=trimmed_transition_batch.speaker_log_prob.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_log_prob.shape[1:]),
+                log_q=trimmed_transition_batch.speaker_log_q.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_log_q.shape[1:]),
                 obs=trimmed_transition_batch.speaker_obs.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_obs.shape[1:]),
                 alive=trimmed_transition_batch.speaker_alive.reshape((num_speaker_minibatches, -1) + trimmed_transition_batch.speaker_alive.shape[1:]),
             )
