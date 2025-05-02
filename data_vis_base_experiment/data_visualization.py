@@ -57,9 +57,23 @@ def download_reward_data(run_id, directory):
     #     probe_entropy = [row[f"probe/entropy/speaker {sp_num} average"] for row in tqdm(history, desc="Downloading probe data")]
     #     probe_entropy_df = pd.DataFrame(probe_entropy)
     #     probe_entropy_df.to_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv"), index=False)
-    probe_entropy = [row[f"reward/mean reward by image source/speaker images all listeners"] for row in tqdm(history, desc="Downloading probe data")]
-    probe_entropy_df = pd.DataFrame(probe_entropy)
-    probe_entropy_df.to_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv"), index=False)
+    rewards = [row[f"reward/mean reward by image source/speaker images all listeners"] for row in tqdm(history, desc="Downloading reward data")]
+    rewards_df = pd.DataFrame(rewards)
+    rewards_df.to_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv"), index=False)
+
+
+def download_communication_success_data(run_id, directory, referents=list(range(10))):
+    os.makedirs(directory, exist_ok=True)
+    api = wandb.Api()
+    run = api.run(run_id)
+    history = run.scan_history()
+    # for ref_num in referents:
+    #     success_data = [row[f"success/average success/all speakers referent {ref_num}"] for row in tqdm(history, desc=f"Downloading communication success data for referent {ref_num}")]
+    #     success_data_df = pd.DataFrame(success_data)
+    #     success_data_df.to_csv(os.path.join(directory, f"success_rate_referent_{ref_num}.csv"), index=False)
+    success_data = [row[f"success/average success/all speakers"] for row in tqdm(history, desc="Downloading average communication success data")]
+    success_data_df = pd.DataFrame(success_data)
+    success_data_df.to_csv(os.path.join(directory, f"success_rate_all_referents.csv"), index=False)
 
 
 def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=28, method="uniform", fname_prefix="", speaker_selection=None, referent_selection=None, one_sign=None, vertical=True, **kwargs):
@@ -296,10 +310,10 @@ def make_graphics_part2():
     #     epoch_start=150,
     #     markers_on=np.array([150, 260, 685, 1040, 1470, 1720])-150)
 
-    make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
-        labels=("Behaviorist", "Inferential", "Inferential - no P_ref"),
-        num_epochs=2800,
-        epoch_start=0)
+    # make_reward_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
+    #     labels=("Behaviorist", "Inferential", "Inferential - no P_ref"),
+    #     num_epochs=2800,
+    #     epoch_start=0)
     
     # make_probe_plot(directories=("./dazzling-meadow-2352/", "./dark-cosmos-2353/", "./dazzling-puddle-2413/"),
     #     labels=("Behaviorist", "Inferential", "Inferential - no P_ref"),
@@ -318,6 +332,35 @@ def make_graphics_part2():
     #     log_scale=True)
 
     # make_animation(directory="./dark-cosmos-2353/", label="Inferential")
+
+    # download_communication_success_data(run_id="signification-team/signification-game/q2jk11i4", directory="./youthful-dust-2425/")
+    # download_communication_success_data(run_id="signification-team/signification-game/zsbo8nlx", directory="./resilient-violet-2427/")
+    # download_communication_success_data(run_id="signification-team/signification-game/7qvg2jqt", directory="./absurd-pyramid-2428/")
+
+    # download_probe_data(run_id="signification-team/signification-game/q2jk11i4", directory="./youthful-dust-2425/")
+    # download_probe_data(run_id="signification-team/signification-game/zsbo8nlx", directory="./resilient-violet-2427/")
+    # download_probe_data(run_id="signification-team/signification-game/7qvg2jqt", directory="./absurd-pyramid-2428/")
+
+    # make_com_success_plot(directories=("./youthful-dust-2425/", "./resilient-violet-2427/", "./absurd-pyramid-2428/"),
+    #     labels=("Behaviorist", "Inferential", "Inf. - P_ref"),
+    #     num_epochs=2800,
+    #     epoch_start=0)
+
+    # make_probe_plot(directories=("./youthful-dust-2425/", "./resilient-violet-2427/", "./absurd-pyramid-2428/"),
+    #     labels=("Behaviorist", "Inferential", "Inf. - P_ref"),
+    #     all_speakers_avg=True,
+    #     num_epochs=2800,
+    #     epoch_start=0)
+
+    download_pr_data(run_id="signification-team/signification-game/zsbo8nlx", directory="./resilient-violet-2427/", listeners=(7,))
+
+    make_pr_plot(directory="./resilient-violet-2427/",
+        referent_labels=("Snail", "Dolphin", "Palm Tree", "Rocket", "Spider"),
+        referent_nums=(7, 4, 5, 6, 9),
+        num_epochs=3000,
+        epoch_start=0,
+        agent_num=7,
+        log_scale=True)
 
 
 def remake_graphics_part1():
@@ -778,6 +821,61 @@ def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, marker
 
     print(f'./joint-plots/config_{uuidstr}.json')
 
+def make_com_success_plot(directories, labels, num_epochs=None, epoch_start=0, markers_on=[]):
+    datas = [pd.read_csv(os.path.join(directory, f"success_rate_all_referents.csv")) for directory in directories]
+    sns.set_theme(style="darkgrid")
+
+    # Plot the data with larger font
+    fig, ax = plt.subplots(figsize=(5, 2.25))
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
+
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
+
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, data in enumerate(datas):
+        if num_epochs is not None:
+            data = data.head(num_epochs)
+            data = data.tail(len(data)-epoch_start)
+        ax.plot(data, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+        # ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+        
+        # else:
+        #     marker_style = dict(
+        #         marker=7,  # Change to preferred marker shape
+        #         markersize=12,  # Marker size
+        #         markerfacecolor="black",  # Marker face color
+        #         markeredgecolor="black",  # Marker edge color
+        #         markeredgewidth=1.5  # Marker edge width
+        #     )
+
+        #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    plt.legend(fontsize=15)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:4]
+    plt.savefig(os.path.join("./joint-plots/", f"success_rate_all_referents_{uuidstr}.png"))
+
+    config = {
+        "directories": directories,
+        "labels": labels,
+        "num_epochs": num_epochs,
+    }
+
+    with open(f'./joint-plots/config_{uuidstr}.json', 'w') as f:
+        json.dump(config, f)
+
+    print(f'./joint-plots/config_{uuidstr}.json')
 
 def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv" if not all_speakers_avg else "probe_entropy_all_speakers.csv")) for directory in directories]
@@ -812,8 +910,8 @@ def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_e
             ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
         else:
             # ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.15)
-            # ax.plot(data.rolling(window=100).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
-            ax.plot(data, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+            ax.plot(data.rolling(window=50).mean(), label=labels[i], color=sns.color_palette("Set1")[i], linewidth=4, alpha=0.5)
+            # ax.plot(data, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
 
     # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
     # ax.set_xlabel('Epoch', fontsize=16)
@@ -916,5 +1014,5 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
 
 
 if __name__=="__main__":
-    make_graphics_post_conference()
+    make_graphics_part2()
     
