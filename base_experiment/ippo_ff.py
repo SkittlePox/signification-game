@@ -435,7 +435,7 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
     return pictogram_action.reshape(-1,), log_prob_tom_pi, values.reshape(-1,), jnp.exp(log_pRs)
 
-def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=5, max_speaker_n_search=10, num_classes=10, speaker_action_dim=12):
+def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=5, max_speaker_n_search=10, num_classes=10, speaker_action_dim=12, action_selection_beta=1.0):
     # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
     # In terms of logits exp(l_i(s)) = f_i(s)
     # P(s|r_i) p= exp( l_i(s) - log sum exp(l_j(s)) for j != i )
@@ -475,18 +475,18 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
     mask = jnp.where(jnp.arange(max_speaker_n_search) < speaker_n_search, 1, 0)
     masked_psr = jax.lax.select(mask, psr, jnp.ones_like(psr)*-jnp.inf)
 
-    # For a softmax selection of P(s|r):
-    log_q_dist = jax.nn.log_softmax(masked_psr * 1.0)  # beta=1.0 or higher for sharper
+    ## For a softmax selection of P(s|r):
+    log_q_dist = jax.nn.log_softmax(masked_psr * action_selection_beta)  # beta param higher for sharper (1.0 seems work best)
     sample_idx = jax.random.categorical(psr_sample_key, log_q_dist)
     maxaction = search_signal_param_samples[sample_idx]
-    log_q = log_q_dist[sample_idx]
+    # log_q = log_q_dist[sample_idx]
 
-    # For an argmax selection instead:
+    ## For an argmax selection instead:
     # sample_idx = jnp.argmax(masked_psr)
     # maxaction = search_signal_param_samples[sample_idx]
-    # log_q = log_prob
     
     log_prob = search_signal_gut_policy.log_prob(maxaction)
+    log_q = log_prob
 
     return maxaction, log_prob.reshape(-1,), values[sample_idx].reshape(-1,), log_q.reshape(-1,)
 
@@ -598,6 +598,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
     speaker_action_dim = env_kwargs["speaker_action_dim"]
 
     max_speaker_n_search = config["MAX_SPEAKER_N_SEARCH"]
+    speaker_action_selection_beta = config["SPEAKER_ACTION_SELECTION_BETA"]
 
     ##### COLLECT ACTIONS FROM AGENTS
     rng, l_rng, r_rng, t_rng = jax.random.split(rng, 4)
@@ -609,7 +610,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
     naive_listener_actions, naive_listener_log_probs, naive_listener_values = jax.vmap(execute_individual_listener, in_axes=(0, None, 0, 0))(listener_rngs, listener_apply_fn, batched_listener_params, listener_obs)
     # Collect tom actions
     def calc_tom_listener_actions():
-        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values, full_tom_listener_pRs = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight)
+        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values, full_tom_listener_pRs = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight, speaker_action_selection_beta)
         tom_listener_actions = jax.lax.select(listener_obs_source == 1, full_tom_listener_actions, naive_listener_actions)
         tom_listener_log_probs = jax.lax.select(listener_obs_source == 1, full_tom_listener_log_probs, naive_listener_log_probs)
         tom_listener_values = jax.lax.select(listener_obs_source == 1, full_tom_listener_values, naive_listener_values)
