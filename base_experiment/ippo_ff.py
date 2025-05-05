@@ -374,7 +374,7 @@ def execute_individual_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _spe
 
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
 
-def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _listener_obs_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, listener_pr_weight=1.5):  # obs is an image
+def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _listener_obs_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, listener_pr_weight=1.0):  # obs is an image
     # P(r_i|s) p= P(s|r_i)P(r_i)P_R(r_i)
     # P_R(r_i) = 1 / int_S f_i(s)p(s) ds + epsilon
     #   or in logits l_i terms: 1 / int_S exp(l_i(s)) p(s) ds + epsilon
@@ -418,10 +418,8 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     log_pRs = -(jax.nn.logsumexp(listener_assessments.logits, axis=0) - jnp.log(listener_n_samples))    # These should technically be multiplied by p(s) before summing (i.e. multiplying by log_prob), but assuming random uniform dist I'm just dividing by n_samples
     log_pRs_weighted = log_pRs * listener_pr_weight        # NOTE: This will definitely need to be tuned. Between 0.1 and 2.0 I'm guessing. Maybe need a sweep later.
 
-    #### Calculate P(r_i|s)
-    log_prss = log_psrs + log_pRs_weighted - jnp.log(num_classes) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
-    ## Ablating P_R(r_i) the above line becomes
-    # log_prss = log_psrs
+    #### Calculate P(r_i|s) and account for ablation of Pr term
+    log_prss = jax.lax.select(listener_pr_weight == 0.0, log_psrs, log_psrs + log_pRs_weighted - jnp.log(num_classes)) # Assuming uniform random referent distribution means I can divide by num_classes. Using log rules
 
     log_prss -= jax.nn.logsumexp(log_prss)
     prss = jnp.exp(log_prss)
@@ -610,7 +608,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
     naive_listener_actions, naive_listener_log_probs, naive_listener_values = jax.vmap(execute_individual_listener, in_axes=(0, None, 0, 0))(listener_rngs, listener_apply_fn, batched_listener_params, listener_obs)
     # Collect tom actions
     def calc_tom_listener_actions():
-        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values, full_tom_listener_pRs = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight, speaker_action_selection_beta)
+        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values, full_tom_listener_pRs = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight)
         tom_listener_actions = jax.lax.select(listener_obs_source == 1, full_tom_listener_actions, naive_listener_actions)
         tom_listener_log_probs = jax.lax.select(listener_obs_source == 1, full_tom_listener_log_probs, naive_listener_log_probs)
         tom_listener_values = jax.lax.select(listener_obs_source == 1, full_tom_listener_values, naive_listener_values)
@@ -637,7 +635,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
         log_and_value_mask = jnp.expand_dims(mask, axis=1)
         speaker_action_mask = jnp.expand_dims(log_and_value_mask, axis=1) * jnp.ones_like(naive_speaker_actions)
         
-        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values, full_tom_speaker_log_qs = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, num_classes, speaker_action_dim)
+        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values, full_tom_speaker_log_qs = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, num_classes, speaker_action_dim, speaker_action_selection_beta)
         tom_speaker_actions = jax.lax.select(speaker_action_mask == 1, full_tom_speaker_actions, naive_speaker_actions)
         tom_speaker_log_probs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_probs, naive_speaker_log_probs)
         tom_speaker_values = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_values, naive_speaker_values)
