@@ -67,10 +67,10 @@ def download_communication_success_data(run_id, directory, referents=list(range(
     api = wandb.Api()
     run = api.run(run_id)
     history = run.scan_history()
-    # for ref_num in referents:
-    #     success_data = [row[f"success/average success/all speakers referent {ref_num}"] for row in tqdm(history, desc=f"Downloading communication success data for referent {ref_num}")]
-    #     success_data_df = pd.DataFrame(success_data)
-    #     success_data_df.to_csv(os.path.join(directory, f"success_rate_referent_{ref_num}.csv"), index=False)
+    for ref_num in referents:
+        success_data = [row[f"success/average success/all speakers referent {ref_num}"] for row in tqdm(history, desc=f"Downloading communication success data for referent {ref_num}")]
+        success_data_df = pd.DataFrame(success_data)
+        success_data_df.to_csv(os.path.join(directory, f"success_rate_referent_{ref_num}.csv"), index=False)
     success_data = [row[f"success/average success/all speakers"] for row in tqdm(history, desc="Downloading average communication success data")]
     success_data_df = pd.DataFrame(success_data)
     success_data_df.to_csv(os.path.join(directory, f"success_rate_all_referents.csv"), index=False)
@@ -463,8 +463,90 @@ def make_graphics_post_conference():
     # make_simple_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
     # make_simple_animation(directory="./frosty-silence-2354/", label="Inferential - Size Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
 
-    make_multi_animation(directories=("./dazzling-meadow-2352/", "./frosty-silence-2354/"), labels=("Behavioral", "Inferential (ours)"), speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_multi_animation(directories=("./dazzling-meadow-2352/", "./frosty-silence-2354/"), labels=("Behavioral", "Inferential (ours)"), speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
     # frosty-silence-2354
+
+    ### 10 runs of behaviorist signaling with learning listeners
+    behaviorist_live_listeners_runs = ["./rebel-commander-2489/",
+                                        "./galactic-wars-2488/",
+                                        "./civilized-senate-2487/",
+                                        "./grievous-lightsaber-2486/",
+                                        "./clone-tauntaun-2485/",
+                                        "./holographic-ewok-2483/",
+                                        "./hokey-speeder-2484/",
+                                        "./light-fleet-2482/",
+                                        "./elegant-jawa-2481/",
+                                        "./tusken-xwing-2480/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/y7j9deuh", directory="./rebel-commander-2489/")
+    # download_communication_success_data(run_id="signification-team/signification-game/v0oq5oam", directory="./galactic-wars-2488/")
+    # download_communication_success_data(run_id="signification-team/signification-game/868c3dyx", directory="./civilized-senate-2487/")
+    # download_communication_success_data(run_id="signification-team/signification-game/98cwvh50", directory="./grievous-lightsaber-2486/")
+    # download_communication_success_data(run_id="signification-team/signification-game/9eo8wgbw", directory="./clone-tauntaun-2485/")
+    # download_communication_success_data(run_id="signification-team/signification-game/eklqwb39", directory="./holographic-ewok-2483/")
+    # download_communication_success_data(run_id="signification-team/signification-game/lqgebg27", directory="./hokey-speeder-2484/")
+    # download_communication_success_data(run_id="signification-team/signification-game/r5o8a7b4", directory="./light-fleet-2482/")
+    # download_communication_success_data(run_id="signification-team/signification-game/jnk99r1l", directory="./elegant-jawa-2481/")
+    # download_communication_success_data(run_id="signification-team/signification-game/vhpgwje5", directory="./tusken-xwing-2480/")
+
+    ### 10 runs of behaviorist signaling with dead listeners
+    behaviorist_dead_listeners_runs = ["./galactic-parsec-2479/",
+                                        "./star-nexu-2478/",
+                                        "./mythical-transport-2475/",
+                                        "./carbonite-womprat-2477/",
+                                        "./ancient-admiral-2475/",
+                                        "./legendary-bothan-2474/",
+                                        "./star-master-2473/",
+                                        "./ancient-tie-fighter-2472/",
+                                        "./light-lightsaber-2471/",
+                                        "./legendary-fleet-2470/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/iiaca3fq", directory="./galactic-parsec-2479/")
+    # download_communication_success_data(run_id="signification-team/signification-game/6onfwmva", directory="./star-nexu-2478/")
+    # download_communication_success_data(run_id="signification-team/signification-game/45p6kcc7", directory="./mythical-transport-2475/")
+    # download_communication_success_data(run_id="signification-team/signification-game/8xsirdyn", directory="./carbonite-womprat-2477/")
+    # download_communication_success_data(run_id="signification-team/signification-game/hs4kyj2p", directory="./ancient-admiral-2475/")
+    # download_communication_success_data(run_id="signification-team/signification-game/qroyfszz", directory="./legendary-bothan-2474/")
+    # download_communication_success_data(run_id="signification-team/signification-game/6n03k6b8", directory="./star-master-2473/")
+    # download_communication_success_data(run_id="signification-team/signification-game/olfmgnvp", directory="./ancient-tie-fighter-2472/")
+    # download_communication_success_data(run_id="signification-team/signification-game/1blbrljs", directory="./light-lightsaber-2471/")
+    # download_communication_success_data(run_id="signification-team/signification-game/pd6jy740", directory="./legendary-fleet-2470/")
+
+
+    ### 10 runs of inferential signaling, no penalties
+    inferential_no_penalty_runs = ["./elegant-admiral-2499/",
+                                    "./legendary-commander-2498/",
+                                    "./imperial-senate-2497/",
+                                    "./old-tauntaun-2496/",
+                                    "./carbonite-astromech-2495/",
+                                    "./tusken-tie-fighter-2494/",
+                                    "./scruffy-looking-federation-2493/",
+                                    "./dark-cantina-2492-2472/",
+                                    "./old-nerf-herder-2490/",
+                                    "./scruffy-looking-cantina-2490/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/bt0q4jzl", directory="./elegant-admiral-2499/")
+    # download_communication_success_data(run_id="signification-team/signification-game/a1v8p68r", directory="./legendary-commander-2498/")
+    # download_communication_success_data(run_id="signification-team/signification-game/jpc5mdyq", directory="./imperial-senate-2497/")
+    # download_communication_success_data(run_id="signification-team/signification-game/re7rmsli", directory="./old-tauntaun-2496/")
+    # download_communication_success_data(run_id="signification-team/signification-game/cfo76mkt", directory="./carbonite-astromech-2495/")
+    # download_communication_success_data(run_id="signification-team/signification-game/ajoth1qz", directory="./tusken-tie-fighter-2494/")
+    # download_communication_success_data(run_id="signification-team/signification-game/iu4zqx64", directory="./scruffy-looking-federation-2493/")
+    # download_communication_success_data(run_id="signification-team/signification-game/9ljsehh6", directory="./dark-cantina-2492-2472/")
+    # download_communication_success_data(run_id="signification-team/signification-game/8a606df1", directory="./old-nerf-herder-2490/")
+    # download_communication_success_data(run_id="signification-team/signification-game/gb21hgmt", directory="./scruffy-looking-cantina-2490/")
+
+    # make_avg_com_success_plot([behaviorist_live_listeners_runs,
+    #                     behaviorist_dead_listeners_runs,
+    #                     inferential_no_penalty_runs],
+    #                     ["Behaviorist",
+    #                     "Behaviorist - Canalized",
+    #                     "Inferential",],
+    #                     all_speakers_avg=True,
+    #                     rolling_window=25, t_val=1.833)
+    
+    make_avg_com_success_across_referents_plot([
+                        behaviorist_dead_listeners_runs,],
+                        [
+                        "Behaviorist - Canalized"],
+                        rolling_window=25, t_val=1.833)
 
 def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
     height_dx = image_dim + 2   # Assuming 2px border
@@ -877,6 +959,173 @@ def make_com_success_plot(directories, labels, num_epochs=None, epoch_start=0, m
 
     print(f'./joint-plots/config_{uuidstr}.json')
 
+def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262):
+    entropies = []
+    cis = []
+    for directories in directorybunch:
+        # directories = ["/users/bspiegel/signification-game/data_vis_base_experiment/"+d[2:] for d in directories]  # Useful for debug
+        data_for_group = [pd.read_csv(os.path.join(directory, f"success_rate_referent_{ref_num}.csv" if not all_speakers_avg else "success_rate_all_referents.csv")) for directory in directories]
+        merged_datas = pd.concat(data_for_group, axis=1, keys=range(len(data_for_group)))
+        mean_entropy = merged_datas.mean(axis=1)
+        ci_entropy = t_val * merged_datas.sem(axis=1)
+        if rolling_window:
+            mean_entropy = mean_entropy.rolling(window=rolling_window, center=True).mean()
+            ci_entropy = ci_entropy.rolling(window=rolling_window, center=True).mean()
+        entropies.append(mean_entropy)
+        cis.append(ci_entropy)
+    
+    sns.set_theme(style="darkgrid")
+
+    # Plot the data with larger font
+    fig, ax = plt.subplots(figsize=(6, 6))
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
+
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
+
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, (entropy, ci) in enumerate(zip(entropies, cis)):
+        if num_epochs is not None:
+            entropy = entropy.head(num_epochs)
+            entropy = entropy.tail(len(entropy)-epoch_start)
+            ci = ci.head(num_epochs)
+            ci = ci.tail(len(ci)-epoch_start)
+        # if len(markers_on) > 0:
+        #     marker_style = dict(
+        #         marker=7,  # Change to preferred marker shape
+        #         markersize=12,  # Marker size
+        #         markerfacecolor="black",  # Marker face color
+        #         markeredgecolor="black",  # Marker edge color
+        #         markeredgewidth=1.5  # Marker edge width
+        #     )
+
+        #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
+
+        ax.plot(entropy, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+        ax.fill_between(list(range(len(ci))), entropy-ci, entropy+ci, color=sns.color_palette("Set1")[i], alpha=0.15)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    plt.legend(fontsize=16, loc='upper left')
+
+    # Get current y limits and extend upper bound by 20%
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(ymin, ymax * 1.2)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:4]
+    plt.savefig(os.path.join("./joint-plots/", f"avg_success_rate_referent_{ref_num}_{uuidstr}.png" if not all_speakers_avg else f"avg_success_rate_all_referents_{uuidstr}.png"))
+
+    config = {
+        "directories": directories,
+        "labels": labels,
+        "num_epochs": num_epochs,
+        "ref_num": ref_num
+    }
+
+    with open(f'./joint-plots/config_{uuidstr}.json', 'w') as f:
+        json.dump(config, f)
+
+    print(f'./joint-plots/config_{uuidstr}.json')
+
+def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262):
+    entropies = []
+    cis = []
+    for ref_num in ref_nums:
+        for directories in directorybunch:
+            # directories = ["/users/bspiegel/signification-game/data_vis_base_experiment/"+d[2:] for d in directories]  # Useful for debug
+            data_for_group = [pd.read_csv(os.path.join(directory, f"success_rate_referent_{ref_num}.csv")) for directory in directories]
+            merged_datas = pd.concat(data_for_group, axis=1, keys=range(len(data_for_group)))
+            mean_entropy = merged_datas.mean(axis=1)
+            ci_entropy = t_val * merged_datas.sem(axis=1)
+            if rolling_window:
+                mean_entropy = mean_entropy.rolling(window=rolling_window, center=True).mean()
+                ci_entropy = ci_entropy.rolling(window=rolling_window, center=True).mean()
+            entropies.append(mean_entropy)
+            cis.append(ci_entropy)
+    
+    sns.set_theme(style="darkgrid")
+
+    # Plot the data with larger font
+    fig, ax = plt.subplots(figsize=(6, 6))
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
+
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
+
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, (entropy, ci) in enumerate(zip(entropies, cis)):
+        if num_epochs is not None:
+            entropy = entropy.head(num_epochs)
+            entropy = entropy.tail(len(entropy)-epoch_start)
+            ci = ci.head(num_epochs)
+            ci = ci.tail(len(ci)-epoch_start)
+        # if len(markers_on) > 0:
+        #     marker_style = dict(
+        #         marker=7,  # Change to preferred marker shape
+        #         markersize=12,  # Marker size
+        #         markerfacecolor="black",  # Marker face color
+        #         markeredgecolor="black",  # Marker edge color
+        #         markeredgewidth=1.5  # Marker edge width
+        #     )
+
+        #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
+
+        ax.plot(entropy, label=f"{labels[i//len(ref_nums)]} referent {i}", color=sns.color_palette("tab10")[i % len(ref_nums)], linewidth=2, alpha=0.5)
+        ax.fill_between(list(range(len(ci))), entropy-ci, entropy+ci, color=sns.color_palette("tab10")[i % len(ref_nums)], alpha=0.15)
+
+        last_x = entropy.index[-1]
+        last_y = entropy.iloc[len(entropy) - 1 - rolling_window // 2]
+        print(last_x)
+        print(last_y)
+        ax.annotate(f'Referent {i}: {last_y:.2f}',
+                    xy=(last_x, last_y),
+                    xytext=(10, 0),  # 10 pixels to the right
+                    textcoords='offset points',
+                    va='center',
+                    ha='left',
+                    color=sns.color_palette("tab10")[i % len(ref_nums)],
+                    annotation_clip=False)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    # ax.legend()
+    # plt.legend(fontsize=16, loc='upper left')
+
+    # Get current y limits and extend upper bound by 20%
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(ymin, ymax * 1.2)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:4]
+    plt.savefig(os.path.join("./joint-plots/", f"avg_success_rate_across_referents_{uuidstr}.png"))
+
+    config = {
+        "directories": directories,
+        "labels": labels,
+        "num_epochs": num_epochs,
+        "ref_nums": ref_nums
+    }
+
+    with open(f'./joint-plots/config_{uuidstr}.json', 'w') as f:
+        json.dump(config, f)
+
+    print(f'./joint-plots/config_{uuidstr}.json')
+
 def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv" if not all_speakers_avg else "probe_entropy_all_speakers.csv")) for directory in directories]
     sns.set_theme(style="darkgrid")
@@ -934,7 +1183,6 @@ def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_e
         json.dump(config, f)
 
     print(f'./joint-plots/config_{uuidstr}.json')
-
 
 def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262):
     entropies = []
@@ -1014,5 +1262,5 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
 
 
 if __name__=="__main__":
-    make_graphics_part2()
+    make_graphics_post_conference()
     
