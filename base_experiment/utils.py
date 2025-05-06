@@ -617,7 +617,7 @@ def get_speaker_action_transform(fn_name, image_dim):
             all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
 
             # Update the canvas
-            canvas = jnp.ones((image_dim, image_dim)) * 0.2 # This is the background color!
+            canvas = jnp.ones((image_dim, image_dim)) * 0.1 # This is the background color! For nearly all experiments it has been 0.2. For a larger sig gap go for 0.1
             canvas = canvas.at[all_x_indices, all_y_indices].add(W)
             return canvas
 

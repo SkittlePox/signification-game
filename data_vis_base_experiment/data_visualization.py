@@ -533,20 +533,44 @@ def make_graphics_post_conference():
     # download_communication_success_data(run_id="signification-team/signification-game/8a606df1", directory="./old-nerf-herder-2490/")
     # download_communication_success_data(run_id="signification-team/signification-game/gb21hgmt", directory="./scruffy-looking-cantina-2490/")
 
-    # make_avg_com_success_plot([behaviorist_live_listeners_runs,
-    #                     behaviorist_dead_listeners_runs,
-    #                     inferential_no_penalty_runs],
-    #                     ["Behaviorist",
-    #                     "Behaviorist - Canalized",
-    #                     "Inferential",],
-    #                     all_speakers_avg=True,
-    #                     rolling_window=25, t_val=1.833)
-    
-    make_avg_com_success_across_referents_plot([
-                        behaviorist_dead_listeners_runs,],
-                        [
-                        "Behaviorist - Canalized"],
+    ### 10 runs of inferential signaling, no penalties, ablated Pr
+    inferential_no_penalty_runs_ablated_Pr = ["./imperial-fleet-2509/",
+                                                "./civilized-destroyer-2508/",
+                                                "./scruffy-looking-bothan-2507/",
+                                                "./dark-parsec-2506/",
+                                                "./sith-trooper-2505/",
+                                                "./imperial-bantha-2504/",
+                                                "./jedi-tie-fighter-2503/",
+                                                "./clone-commander-2502/",
+                                                "./stellar-wookie-2501/",
+                                                "./grievous-federation-2500/"]
+    download_communication_success_data(run_id="signification-team/signification-game/2av1uafm", directory="./imperial-fleet-2509/")
+    download_communication_success_data(run_id="signification-team/signification-game/zktrb6u0", directory="./civilized-destroyer-2508/")
+    download_communication_success_data(run_id="signification-team/signification-game/0hfwxcpx", directory="./scruffy-looking-bothan-2507/")
+    download_communication_success_data(run_id="signification-team/signification-game/ur8zsdoz", directory="./dark-parsec-2506/")
+    download_communication_success_data(run_id="signification-team/signification-game/5xs4xgfs", directory="./sith-trooper-2505/")
+    download_communication_success_data(run_id="signification-team/signification-game/ujg58y2l", directory="./imperial-bantha-2504/")
+    download_communication_success_data(run_id="signification-team/signification-game/pk1atmym", directory="./jedi-tie-fighter-2503/")
+    download_communication_success_data(run_id="signification-team/signification-game/2v3b0xon", directory="./clone-commander-2502/")
+    download_communication_success_data(run_id="signification-team/signification-game/xqd4ts0g", directory="./stellar-wookie-2501/")
+    download_communication_success_data(run_id="signification-team/signification-game/w5jjgghi", directory="./grievous-federation-2500/")
+
+    make_avg_com_success_plot([behaviorist_live_listeners_runs,
+                        behaviorist_dead_listeners_runs,
+                        inferential_no_penalty_runs,
+                        inferential_no_penalty_runs_ablated_Pr],
+                        ["Behaviorist",
+                        "Behaviorist (Canalized)",
+                        "Inferential",
+                        "Inferential - P_ref"],
+                        all_speakers_avg=True,
                         rolling_window=25, t_val=1.833)
+    
+    # make_avg_com_success_across_referents_plot([
+    #                     behaviorist_dead_listeners_runs,],
+    #                     [
+    #                     "Behaviorist - Canalized"],
+    #                     rolling_window=25, t_val=1.833)
 
 def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
     height_dx = image_dim + 2   # Assuming 2px border
