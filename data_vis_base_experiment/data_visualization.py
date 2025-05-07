@@ -104,7 +104,7 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=2
         indices = range(start_index, mid_index, interval_index) if count > 0 else []
         image_files = [sorted_files[i] for i in indices if i < len(sorted_files)]
         
-        graphic_name = f"{fname_template}{start_epoch}s_{interval_epoch}i_{count}c_{str(uuid.uuid4())[:6]}"
+        graphic_name = f"{fname_template}{start_epoch}s_{interval_epoch}i_{count}c_{str(uuid.uuid4())[:5]}"
 
     elif method == "1/x":
         start_epoch = kwargs["start_epoch"]
@@ -135,7 +135,7 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=2
 
         # print(indices)
         image_files = [sorted_files[i] for i in indices if i < len(sorted_files)]
-        graphic_name = f"{fname_template}{start_epoch}s_{epoch_span}s_{x_stretch}x_{count}c_{str(uuid.uuid4())[:6]}"
+        graphic_name = f"{fname_template}{start_epoch}s_{epoch_span}s_{x_stretch}x_{count}c_{str(uuid.uuid4())[:5]}"
 
     # Read and concatenate images
     if speaker_selection == None and one_sign == None:   # TODO: eventually merge these two branches
@@ -454,215 +454,6 @@ def remake_graphics_part1():
                              rolling_window=100, t_val=1.833)
 
 
-def make_graphics_post_conference():
-    # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
-    # download_probe_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
-    # download_reward_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
-
-    # make_animation(directory="./dazzling-puddle-2413/", label="Inferential - No P_ref", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
-
-    # make_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
-    # make_animation(directory="./frosty-silence-2354/", label="Inferential - Size Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
-    # make_simple_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
-    # make_simple_animation(directory="./frosty-silence-2354/", label="Inferential - Size Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
-
-    # make_multi_animation(directories=("./dazzling-meadow-2352/", "./frosty-silence-2354/"), labels=("Behavioral", "Inferential (ours)"), speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
-    # frosty-silence-2354
-
-    ### 10 runs of behaviorist signaling with learning listeners - canvas 0.2
-    behaviorist_live_listeners_runs = ["./rebel-commander-2489/",
-                                        "./galactic-wars-2488/",
-                                        "./civilized-senate-2487/",
-                                        "./grievous-lightsaber-2486/",
-                                        "./clone-tauntaun-2485/",
-                                        "./holographic-ewok-2483/",
-                                        "./hokey-speeder-2484/",
-                                        "./light-fleet-2482/",
-                                        "./elegant-jawa-2481/",
-                                        "./tusken-xwing-2480/"]
-    # download_communication_success_data(run_id="signification-team/signification-game/y7j9deuh", directory="./rebel-commander-2489/")
-    # download_communication_success_data(run_id="signification-team/signification-game/v0oq5oam", directory="./galactic-wars-2488/")
-    # download_communication_success_data(run_id="signification-team/signification-game/868c3dyx", directory="./civilized-senate-2487/")
-    # download_communication_success_data(run_id="signification-team/signification-game/98cwvh50", directory="./grievous-lightsaber-2486/")
-    # download_communication_success_data(run_id="signification-team/signification-game/9eo8wgbw", directory="./clone-tauntaun-2485/")
-    # download_communication_success_data(run_id="signification-team/signification-game/eklqwb39", directory="./holographic-ewok-2483/")
-    # download_communication_success_data(run_id="signification-team/signification-game/lqgebg27", directory="./hokey-speeder-2484/")
-    # download_communication_success_data(run_id="signification-team/signification-game/r5o8a7b4", directory="./light-fleet-2482/")
-    # download_communication_success_data(run_id="signification-team/signification-game/jnk99r1l", directory="./elegant-jawa-2481/")
-    # download_communication_success_data(run_id="signification-team/signification-game/vhpgwje5", directory="./tusken-xwing-2480/")
-
-    ### 10 runs of behaviorist signaling with dead listeners - canvas 0.2
-    behaviorist_dead_listeners_runs = ["./galactic-parsec-2479/",
-                                        "./star-nexu-2478/",
-                                        "./mythical-transport-2475/",
-                                        "./carbonite-womprat-2477/",
-                                        "./ancient-admiral-2475/",
-                                        "./legendary-bothan-2474/",
-                                        "./star-master-2473/",
-                                        "./ancient-tie-fighter-2472/",
-                                        "./light-lightsaber-2471/",
-                                        "./legendary-fleet-2470/"]
-    # download_communication_success_data(run_id="signification-team/signification-game/iiaca3fq", directory="./galactic-parsec-2479/")
-    # download_communication_success_data(run_id="signification-team/signification-game/6onfwmva", directory="./star-nexu-2478/")
-    # download_communication_success_data(run_id="signification-team/signification-game/45p6kcc7", directory="./mythical-transport-2475/")
-    # download_communication_success_data(run_id="signification-team/signification-game/8xsirdyn", directory="./carbonite-womprat-2477/")
-    # download_communication_success_data(run_id="signification-team/signification-game/hs4kyj2p", directory="./ancient-admiral-2475/")
-    # download_communication_success_data(run_id="signification-team/signification-game/qroyfszz", directory="./legendary-bothan-2474/")
-    # download_communication_success_data(run_id="signification-team/signification-game/6n03k6b8", directory="./star-master-2473/")
-    # download_communication_success_data(run_id="signification-team/signification-game/olfmgnvp", directory="./ancient-tie-fighter-2472/")
-    # download_communication_success_data(run_id="signification-team/signification-game/1blbrljs", directory="./light-lightsaber-2471/")
-    # download_communication_success_data(run_id="signification-team/signification-game/pd6jy740", directory="./legendary-fleet-2470/")
-
-
-    ### 10 runs of inferential signaling, no penalties - canvas 0.2
-    inferential_no_penalty_runs = ["./elegant-admiral-2499/",
-                                    "./legendary-commander-2498/",
-                                    "./imperial-senate-2497/",
-                                    "./old-tauntaun-2496/",
-                                    "./carbonite-astromech-2495/",
-                                    "./tusken-tie-fighter-2494/",
-                                    "./scruffy-looking-federation-2493/",
-                                    "./dark-cantina-2492-2472/",
-                                    "./old-nerf-herder-2490/",
-                                    "./scruffy-looking-cantina-2490/"]
-    # download_communication_success_data(run_id="signification-team/signification-game/bt0q4jzl", directory="./elegant-admiral-2499/")
-    # download_communication_success_data(run_id="signification-team/signification-game/a1v8p68r", directory="./legendary-commander-2498/")
-    # download_communication_success_data(run_id="signification-team/signification-game/jpc5mdyq", directory="./imperial-senate-2497/")
-    # download_communication_success_data(run_id="signification-team/signification-game/re7rmsli", directory="./old-tauntaun-2496/")
-    # download_communication_success_data(run_id="signification-team/signification-game/cfo76mkt", directory="./carbonite-astromech-2495/")
-    # download_communication_success_data(run_id="signification-team/signification-game/ajoth1qz", directory="./tusken-tie-fighter-2494/")
-    # download_communication_success_data(run_id="signification-team/signification-game/iu4zqx64", directory="./scruffy-looking-federation-2493/")
-    # download_communication_success_data(run_id="signification-team/signification-game/9ljsehh6", directory="./dark-cantina-2492-2472/")
-    # download_communication_success_data(run_id="signification-team/signification-game/8a606df1", directory="./old-nerf-herder-2490/")
-    # download_communication_success_data(run_id="signification-team/signification-game/gb21hgmt", directory="./scruffy-looking-cantina-2490/")
-
-    ### 10 runs of inferential signaling, no penalties, ablated Pr - canvas 0.2
-    inferential_no_penalty_runs_ablated_Pr = ["./imperial-fleet-2509/",
-                                                "./civilized-destroyer-2508/",
-                                                "./scruffy-looking-bothan-2507/",
-                                                "./dark-parsec-2506/",
-                                                "./sith-trooper-2505/",
-                                                "./imperial-bantha-2504/",
-                                                "./jedi-tie-fighter-2503/",
-                                                "./clone-commander-2502/",
-                                                "./stellar-wookie-2501/",
-                                                "./grievous-federation-2500/"]
-    # download_communication_success_data(run_id="signification-team/signification-game/2av1uafm", directory="./imperial-fleet-2509/")
-    # download_communication_success_data(run_id="signification-team/signification-game/zktrb6u0", directory="./civilized-destroyer-2508/")
-    # download_communication_success_data(run_id="signification-team/signification-game/0hfwxcpx", directory="./scruffy-looking-bothan-2507/")
-    # download_communication_success_data(run_id="signification-team/signification-game/ur8zsdoz", directory="./dark-parsec-2506/")
-    # download_communication_success_data(run_id="signification-team/signification-game/5xs4xgfs", directory="./sith-trooper-2505/")
-    # download_communication_success_data(run_id="signification-team/signification-game/ujg58y2l", directory="./imperial-bantha-2504/")
-    # download_communication_success_data(run_id="signification-team/signification-game/pk1atmym", directory="./jedi-tie-fighter-2503/")
-    # download_communication_success_data(run_id="signification-team/signification-game/2v3b0xon", directory="./clone-commander-2502/")
-    # download_communication_success_data(run_id="signification-team/signification-game/xqd4ts0g", directory="./stellar-wookie-2501/")
-    # download_communication_success_data(run_id="signification-team/signification-game/w5jjgghi", directory="./grievous-federation-2500/")
-
-    # make_avg_com_success_plot([behaviorist_live_listeners_runs,
-    #                     behaviorist_dead_listeners_runs,
-    #                     inferential_no_penalty_runs,
-    #                     inferential_no_penalty_runs_ablated_Pr],
-    #                     ["Behaviorist",
-    #                     "Behaviorist (Canalized)",
-    #                     "Inferential",
-    #                     "Inferential - P_ref"],
-    #                     all_speakers_avg=True,
-    #                     rolling_window=25, t_val=1.833)
-    
-    # make_avg_com_success_across_referents_plot([
-    #                     behaviorist_dead_listeners_runs,],
-    #                     [
-    #                     "Behaviorist - Canalized"],
-    #                     rolling_window=25, t_val=1.833)
-
-
-    #######################################################
-    ################## Canvas 0.1 below ###################
-    #######################################################
-
-    ### 10 runs of behaviorist signaling with learning listeners - canvas 0.1
-    behaviorist_live_listeners_runs = ["./ethereal-butterfly-2559/",
-                                        "./glorious-sea-2558/",
-                                        "./lunar-forest-2557/",
-                                        "./ancient-meadow-2556/",
-                                        "./silvery-oath-2555/",
-                                        "./youthful-morning-2554/",
-                                        "./deep-galaxy-2553/",
-                                        "./dry-donkey-2552/",
-                                        "./copper-capybara-2551/",
-                                        "./denim-dawn-2550/"]
-    # download_communication_success_data(run_id="signification-team/signification-game/ea55y73e", directory="./ethereal-butterfly-2559/")
-    # download_communication_success_data(run_id="signification-team/signification-game/q3wt7y7c", directory="./glorious-sea-2558/")
-    # download_communication_success_data(run_id="signification-team/signification-game/bml99nmq", directory="./lunar-forest-2557/")
-    # download_communication_success_data(run_id="signification-team/signification-game/hc9r6xxu", directory="./ancient-meadow-2556/")
-    # download_communication_success_data(run_id="signification-team/signification-game/fxocf59g", directory="./silvery-oath-2555/")
-    # download_communication_success_data(run_id="signification-team/signification-game/49hznmxu", directory="./youthful-morning-2554/")
-    # download_communication_success_data(run_id="signification-team/signification-game/9tfe32h3", directory="./deep-galaxy-2553/")
-    # download_communication_success_data(run_id="signification-team/signification-game/qj06v9n1", directory="./dry-donkey-2552/")
-    # download_communication_success_data(run_id="signification-team/signification-game/szlcbp8n", directory="./copper-capybara-2551/")
-    # download_communication_success_data(run_id="signification-team/signification-game/atqxv560", directory="./denim-dawn-2550/")
-
-    ### 10 runs of behaviorist signaling with dead listeners - canvas 0.1
-    behaviorist_dead_listeners_runs = ["./still-pond-2549/",
-                                        "./pretty-firebrand-2548/",
-                                        "./divine-snowflake-2547/",
-                                        "./lively-cloud-2546/",
-                                        "./lilac-frog-2545/",
-                                        "./woven-galaxy-2534/",
-                                        "./colorful-blaze-2533/",
-                                        "./autumn-cosmos-2530/",
-                                        "./lilac-music-2529/",
-                                        "./zesty-dust-2528/"]
-    # download_communication_success_data(run_id="signification-team/signification-game/3bjaz4re", directory="./still-pond-2549/")
-    # download_communication_success_data(run_id="signification-team/signification-game/4it1pfsc", directory="./pretty-firebrand-2548/")
-    # download_communication_success_data(run_id="signification-team/signification-game/508e2i0e", directory="./divine-snowflake-2547/")
-    # download_communication_success_data(run_id="signification-team/signification-game/6lm3h4x1", directory="./lively-cloud-2546/")
-    # download_communication_success_data(run_id="signification-team/signification-game/ji0vg89o", directory="./lilac-frog-2545/")
-    # download_communication_success_data(run_id="signification-team/signification-game/4hxwrpiw", directory="./woven-galaxy-2534/")
-    # download_communication_success_data(run_id="signification-team/signification-game/0t3ev7nx", directory="./colorful-blaze-2533/")
-    # download_communication_success_data(run_id="signification-team/signification-game/lwt9wjtl", directory="./autumn-cosmos-2530/")
-    # download_communication_success_data(run_id="signification-team/signification-game/pqz71686", directory="./lilac-music-2529/")
-    # download_communication_success_data(run_id="signification-team/signification-game/9csiykvn", directory="./zesty-dust-2528/")
-
-
-    ### 10 runs of inferential signaling, no penalties - canvas 0.1
-    inferential_no_penalty_runs = ["./fancy-monkey-2544/",
-                                    "./lucky-sky-2543/",
-                                    "./royal-blaze-2542/",
-                                    "./visionary-butterfly-2541/",
-                                    "./smart-resonance-2540/",
-                                    "./cosmic-thunder-2539/",
-                                    "./smooth-dew-2538/",
-                                    "./dainty-waterfall-2537/",
-                                    "./youthful-star-2536/",
-                                    "./dutiful-planet-2535/"]
-    # download_communication_success_data(run_id="signification-team/signification-game/wet3y5g6", directory="./fancy-monkey-2544/")
-    # download_communication_success_data(run_id="signification-team/signification-game/d5hqyufc", directory="./lucky-sky-2543/")
-    # download_communication_success_data(run_id="signification-team/signification-game/xyceym5k", directory="./royal-blaze-2542/")
-    # download_communication_success_data(run_id="signification-team/signification-game/al94zbi7", directory="./visionary-butterfly-2541/")
-    # download_communication_success_data(run_id="signification-team/signification-game/mjylwu94", directory="./smart-resonance-2540/")
-    # download_communication_success_data(run_id="signification-team/signification-game/h6h7nq1p", directory="./cosmic-thunder-2539/")
-    # download_communication_success_data(run_id="signification-team/signification-game/5taxgi5l", directory="./smooth-dew-2538/")
-    # download_communication_success_data(run_id="signification-team/signification-game/g8sgtojm", directory="./dainty-waterfall-2537/")
-    # download_communication_success_data(run_id="signification-team/signification-game/cll0cq9m", directory="./youthful-star-2536/")
-    # download_communication_success_data(run_id="signification-team/signification-game/sgk40864", directory="./dutiful-planet-2535/")
-
-
-    # make_avg_com_success_plot([behaviorist_live_listeners_runs,
-    #                     behaviorist_dead_listeners_runs,
-    #                     inferential_no_penalty_runs],
-    #                     ["Behaviorist",
-    #                     "Behaviorist (Canalized)",
-    #                     "Inferential"],
-    #                     all_speakers_avg=True,
-    #                     rolling_window=25, t_val=1.833)
-
-    make_avg_com_success_across_referents_plot([
-                        behaviorist_dead_listeners_runs,],
-                        [
-                        "Behaviorist (Canalized)"],
-                        rolling_window=25, t_val=1.833)
-
 def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
     height_dx = image_dim + 2   # Assuming 2px border
 
@@ -945,7 +736,7 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
     plt.legend(fontsize=15, loc=1)
     
     fig.tight_layout()
-    uuidstr = str(uuid.uuid4())[:4]
+    uuidstr = str(uuid.uuid4())[:5]
     if agent_num:
         plt.savefig(os.path.join("../joint-plots/", f"inference_prs_for_listener_{agent_num}_all_referents_{uuidstr}.png"))    
     else:
@@ -957,10 +748,10 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
         "num_epochs": num_epochs,
     }
 
-    with open(f'../joint-plots/config_{uuidstr}.json', 'w') as f:
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/config_{uuidstr}.json')
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
 
 def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv")) for directory in directories]
@@ -1004,7 +795,7 @@ def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, marker
     plt.legend(fontsize=15)
     
     fig.tight_layout()
-    uuidstr = str(uuid.uuid4())[:4]
+    uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../joint-plots/", f"reward_for_speaker_images_all_listeners_{uuidstr}.png"))
 
     config = {
@@ -1013,10 +804,10 @@ def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, marker
         "num_epochs": num_epochs,
     }
 
-    with open(f'../joint-plots/config_{uuidstr}.json', 'w') as f:
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/config_{uuidstr}.json')
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
 
 def make_com_success_plot(directories, labels, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"success_rate_all_referents.csv")) for directory in directories]
@@ -1060,7 +851,7 @@ def make_com_success_plot(directories, labels, num_epochs=None, epoch_start=0, m
     plt.legend(fontsize=15)
     
     fig.tight_layout()
-    uuidstr = str(uuid.uuid4())[:4]
+    uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../joint-plots/", f"success_rate_all_referents_{uuidstr}.png"))
 
     config = {
@@ -1069,10 +860,10 @@ def make_com_success_plot(directories, labels, num_epochs=None, epoch_start=0, m
         "num_epochs": num_epochs,
     }
 
-    with open(f'../joint-plots/config_{uuidstr}.json', 'w') as f:
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/config_{uuidstr}.json')
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
 
 def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262):
     entropies = []
@@ -1135,7 +926,7 @@ def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_av
     ax.set_ylim(ymin, ymax * 1.2)
     
     fig.tight_layout()
-    uuidstr = str(uuid.uuid4())[:4]
+    uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../joint-plots/", f"avg_success_rate_referent_{ref_num}_{uuidstr}.png" if not all_speakers_avg else f"avg_success_rate_all_referents_{uuidstr}.png"))
 
     config = {
@@ -1145,10 +936,10 @@ def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_av
         "ref_num": ref_num
     }
 
-    with open(f'../joint-plots/config_{uuidstr}.json', 'w') as f:
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/config_{uuidstr}.json')
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
 
 def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262):
     entropies = []
@@ -1226,7 +1017,7 @@ def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=
     ax.set_ylim(ymin, ymax * 1.2)
     
     fig.tight_layout()
-    uuidstr = str(uuid.uuid4())[:4]
+    uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../joint-plots/", f"avg_success_rate_across_referents_{uuidstr}.png"))
 
     config = {
@@ -1236,10 +1027,10 @@ def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=
         "ref_nums": ref_nums
     }
 
-    with open(f'../joint-plots/config_{uuidstr}.json', 'w') as f:
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/config_{uuidstr}.json')
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
 
 def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv" if not all_speakers_avg else "probe_entropy_all_speakers.csv")) for directory in directories]
@@ -1284,7 +1075,7 @@ def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_e
     # plt.legend(fontsize=16)
     
     fig.tight_layout()
-    uuidstr = str(uuid.uuid4())[:4]
+    uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../joint-plots/", f"probe_entropy_speaker_{sp_num}_{uuidstr}.png" if not all_speakers_avg else f"probe_entropy_all_speakers_{uuidstr}.png"))
 
     config = {
@@ -1294,10 +1085,10 @@ def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_e
         "sp_num": sp_num
     }
 
-    with open(f'../joint-plots/config_{uuidstr}.json', 'w') as f:
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/config_{uuidstr}.json')
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
 
 def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262):
     entropies = []
@@ -1360,7 +1151,7 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
     ax.set_ylim(ymin, ymax * 1.2)
     
     fig.tight_layout()
-    uuidstr = str(uuid.uuid4())[:4]
+    uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../joint-plots/", f"probe_entropy_speaker_{sp_num}_{uuidstr}.png" if not all_speakers_avg else f"probe_entropy_all_speakers_{uuidstr}.png"))
 
     config = {
@@ -1370,10 +1161,244 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
         "sp_num": sp_num
     }
 
-    with open(f'../joint-plots/config_{uuidstr}.json', 'w') as f:
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/config_{uuidstr}.json')
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
+
+
+def make_graphics_post_conference():
+    # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
+    # download_probe_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
+    # download_reward_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
+
+    # make_animation(directory="./dazzling-puddle-2413/", label="Inferential - No P_ref", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+
+    # make_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_animation(directory="./frosty-silence-2354/", label="Inferential - Size Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_simple_animation(directory="./glad-dew-2358/", label="Inferential - Curve Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # make_simple_animation(directory="./frosty-silence-2354/", label="Inferential - Size Penalty", speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+
+    # make_multi_animation(directories=("./dazzling-meadow-2352/", "./frosty-silence-2354/"), labels=("Behavioral", "Inferential (ours)"), speaker_selection=[12, 8, 12, 2, 2, 12, 0, 14, 2, 12])
+    # frosty-silence-2354
+
+    ### 10 runs of behaviorist signaling with learning listeners - canvas 0.2
+    behaviorist_live_listeners_runs = ["./rebel-commander-2489/",
+                                        "./galactic-wars-2488/",
+                                        "./civilized-senate-2487/",
+                                        "./grievous-lightsaber-2486/",
+                                        "./clone-tauntaun-2485/",
+                                        "./holographic-ewok-2483/",
+                                        "./hokey-speeder-2484/",
+                                        "./light-fleet-2482/",
+                                        "./elegant-jawa-2481/",
+                                        "./tusken-xwing-2480/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/y7j9deuh", directory="./rebel-commander-2489/")
+    # download_communication_success_data(run_id="signification-team/signification-game/v0oq5oam", directory="./galactic-wars-2488/")
+    # download_communication_success_data(run_id="signification-team/signification-game/868c3dyx", directory="./civilized-senate-2487/")
+    # download_communication_success_data(run_id="signification-team/signification-game/98cwvh50", directory="./grievous-lightsaber-2486/")
+    # download_communication_success_data(run_id="signification-team/signification-game/9eo8wgbw", directory="./clone-tauntaun-2485/")
+    # download_communication_success_data(run_id="signification-team/signification-game/eklqwb39", directory="./holographic-ewok-2483/")
+    # download_communication_success_data(run_id="signification-team/signification-game/lqgebg27", directory="./hokey-speeder-2484/")
+    # download_communication_success_data(run_id="signification-team/signification-game/r5o8a7b4", directory="./light-fleet-2482/")
+    # download_communication_success_data(run_id="signification-team/signification-game/jnk99r1l", directory="./elegant-jawa-2481/")
+    # download_communication_success_data(run_id="signification-team/signification-game/vhpgwje5", directory="./tusken-xwing-2480/")
+
+    ### 10 runs of behaviorist signaling with dead listeners - canvas 0.2
+    behaviorist_dead_listeners_runs = ["./galactic-parsec-2479/",
+                                        "./star-nexu-2478/",
+                                        "./mythical-transport-2475/",
+                                        "./carbonite-womprat-2477/",
+                                        "./ancient-admiral-2475/",
+                                        "./legendary-bothan-2474/",
+                                        "./star-master-2473/",
+                                        "./ancient-tie-fighter-2472/",
+                                        "./light-lightsaber-2471/",
+                                        "./legendary-fleet-2470/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/iiaca3fq", directory="./galactic-parsec-2479/")
+    # download_communication_success_data(run_id="signification-team/signification-game/6onfwmva", directory="./star-nexu-2478/")
+    # download_communication_success_data(run_id="signification-team/signification-game/45p6kcc7", directory="./mythical-transport-2475/")
+    # download_communication_success_data(run_id="signification-team/signification-game/8xsirdyn", directory="./carbonite-womprat-2477/")
+    # download_communication_success_data(run_id="signification-team/signification-game/hs4kyj2p", directory="./ancient-admiral-2475/")
+    # download_communication_success_data(run_id="signification-team/signification-game/qroyfszz", directory="./legendary-bothan-2474/")
+    # download_communication_success_data(run_id="signification-team/signification-game/6n03k6b8", directory="./star-master-2473/")
+    # download_communication_success_data(run_id="signification-team/signification-game/olfmgnvp", directory="./ancient-tie-fighter-2472/")
+    # download_communication_success_data(run_id="signification-team/signification-game/1blbrljs", directory="./light-lightsaber-2471/")
+    # download_communication_success_data(run_id="signification-team/signification-game/pd6jy740", directory="./legendary-fleet-2470/")
+
+
+    ### 10 runs of inferential signaling, no penalties - canvas 0.2
+    inferential_no_penalty_runs = ["./elegant-admiral-2499/",
+                                    "./legendary-commander-2498/",
+                                    "./imperial-senate-2497/",
+                                    "./old-tauntaun-2496/",
+                                    "./carbonite-astromech-2495/",
+                                    "./tusken-tie-fighter-2494/",
+                                    "./scruffy-looking-federation-2493/",
+                                    "./dark-cantina-2492-2472/",
+                                    "./old-nerf-herder-2490/",
+                                    "./scruffy-looking-cantina-2490/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/bt0q4jzl", directory="./elegant-admiral-2499/")
+    # download_communication_success_data(run_id="signification-team/signification-game/a1v8p68r", directory="./legendary-commander-2498/")
+    # download_communication_success_data(run_id="signification-team/signification-game/jpc5mdyq", directory="./imperial-senate-2497/")
+    # download_communication_success_data(run_id="signification-team/signification-game/re7rmsli", directory="./old-tauntaun-2496/")
+    # download_communication_success_data(run_id="signification-team/signification-game/cfo76mkt", directory="./carbonite-astromech-2495/")
+    # download_communication_success_data(run_id="signification-team/signification-game/ajoth1qz", directory="./tusken-tie-fighter-2494/")
+    # download_communication_success_data(run_id="signification-team/signification-game/iu4zqx64", directory="./scruffy-looking-federation-2493/")
+    # download_communication_success_data(run_id="signification-team/signification-game/9ljsehh6", directory="./dark-cantina-2492-2472/")
+    # download_communication_success_data(run_id="signification-team/signification-game/8a606df1", directory="./old-nerf-herder-2490/")
+    # download_communication_success_data(run_id="signification-team/signification-game/gb21hgmt", directory="./scruffy-looking-cantina-2490/")
+
+    ### 10 runs of inferential signaling, no penalties, ablated Pr - canvas 0.2
+    inferential_no_penalty_runs_ablated_Pr = ["./imperial-fleet-2509/",
+                                                "./civilized-destroyer-2508/",
+                                                "./scruffy-looking-bothan-2507/",
+                                                "./dark-parsec-2506/",
+                                                "./sith-trooper-2505/",
+                                                "./imperial-bantha-2504/",
+                                                "./jedi-tie-fighter-2503/",
+                                                "./clone-commander-2502/",
+                                                "./stellar-wookie-2501/",
+                                                "./grievous-federation-2500/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/2av1uafm", directory="./imperial-fleet-2509/")
+    # download_communication_success_data(run_id="signification-team/signification-game/zktrb6u0", directory="./civilized-destroyer-2508/")
+    # download_communication_success_data(run_id="signification-team/signification-game/0hfwxcpx", directory="./scruffy-looking-bothan-2507/")
+    # download_communication_success_data(run_id="signification-team/signification-game/ur8zsdoz", directory="./dark-parsec-2506/")
+    # download_communication_success_data(run_id="signification-team/signification-game/5xs4xgfs", directory="./sith-trooper-2505/")
+    # download_communication_success_data(run_id="signification-team/signification-game/ujg58y2l", directory="./imperial-bantha-2504/")
+    # download_communication_success_data(run_id="signification-team/signification-game/pk1atmym", directory="./jedi-tie-fighter-2503/")
+    # download_communication_success_data(run_id="signification-team/signification-game/2v3b0xon", directory="./clone-commander-2502/")
+    # download_communication_success_data(run_id="signification-team/signification-game/xqd4ts0g", directory="./stellar-wookie-2501/")
+    # download_communication_success_data(run_id="signification-team/signification-game/w5jjgghi", directory="./grievous-federation-2500/")
+
+    # make_avg_com_success_plot([behaviorist_live_listeners_runs,
+    #                     behaviorist_dead_listeners_runs,
+    #                     inferential_no_penalty_runs,
+    #                     inferential_no_penalty_runs_ablated_Pr],
+    #                     ["Behaviorist",
+    #                     "Behaviorist (Canalized)",
+    #                     "Inferential",
+    #                     "Inferential - P_ref"],
+    #                     all_speakers_avg=True,
+    #                     rolling_window=25, t_val=1.833)
+    
+    # make_avg_com_success_across_referents_plot([
+    #                     behaviorist_dead_listeners_runs,],
+    #                     [
+    #                     "Behaviorist - Canalized"],
+    #                     rolling_window=25, t_val=1.833)
+
+
+    #######################################################
+    ################## Canvas 0.1 below ###################
+    #######################################################
+
+    ### 10 runs of behaviorist signaling with learning listeners - canvas 0.1
+    behaviorist_live_listeners_runs = ["./ethereal-butterfly-2559/",
+                                        "./glorious-sea-2558/",
+                                        "./lunar-forest-2557/",
+                                        "./ancient-meadow-2556/",
+                                        "./silvery-oath-2555/",
+                                        "./youthful-morning-2554/",
+                                        "./deep-galaxy-2553/",
+                                        "./dry-donkey-2552/",
+                                        "./copper-capybara-2551/",
+                                        "./denim-dawn-2550/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/ea55y73e", directory="./ethereal-butterfly-2559/")
+    # download_communication_success_data(run_id="signification-team/signification-game/q3wt7y7c", directory="./glorious-sea-2558/")
+    # download_communication_success_data(run_id="signification-team/signification-game/bml99nmq", directory="./lunar-forest-2557/")
+    # download_communication_success_data(run_id="signification-team/signification-game/hc9r6xxu", directory="./ancient-meadow-2556/")
+    # download_communication_success_data(run_id="signification-team/signification-game/fxocf59g", directory="./silvery-oath-2555/")
+    # download_communication_success_data(run_id="signification-team/signification-game/49hznmxu", directory="./youthful-morning-2554/")
+    # download_communication_success_data(run_id="signification-team/signification-game/9tfe32h3", directory="./deep-galaxy-2553/")
+    # download_communication_success_data(run_id="signification-team/signification-game/qj06v9n1", directory="./dry-donkey-2552/")
+    # download_communication_success_data(run_id="signification-team/signification-game/szlcbp8n", directory="./copper-capybara-2551/")
+    # download_communication_success_data(run_id="signification-team/signification-game/atqxv560", directory="./denim-dawn-2550/")
+
+    ### 10 runs of behaviorist signaling with dead listeners - canvas 0.1
+    behaviorist_dead_listeners_runs = ["./still-pond-2549/",
+                                        "./pretty-firebrand-2548/",
+                                        "./divine-snowflake-2547/",
+                                        "./lively-cloud-2546/",
+                                        "./lilac-frog-2545/",
+                                        "./woven-galaxy-2534/",
+                                        "./colorful-blaze-2533/",
+                                        "./autumn-cosmos-2530/",
+                                        "./lilac-music-2529/",
+                                        "./zesty-dust-2528/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/3bjaz4re", directory="./still-pond-2549/")
+    # download_communication_success_data(run_id="signification-team/signification-game/4it1pfsc", directory="./pretty-firebrand-2548/")
+    # download_communication_success_data(run_id="signification-team/signification-game/508e2i0e", directory="./divine-snowflake-2547/")
+    # download_communication_success_data(run_id="signification-team/signification-game/6lm3h4x1", directory="./lively-cloud-2546/")
+    # download_communication_success_data(run_id="signification-team/signification-game/ji0vg89o", directory="./lilac-frog-2545/")
+    # download_communication_success_data(run_id="signification-team/signification-game/4hxwrpiw", directory="./woven-galaxy-2534/")
+    # download_communication_success_data(run_id="signification-team/signification-game/0t3ev7nx", directory="./colorful-blaze-2533/")
+    # download_communication_success_data(run_id="signification-team/signification-game/lwt9wjtl", directory="./autumn-cosmos-2530/")
+    # download_communication_success_data(run_id="signification-team/signification-game/pqz71686", directory="./lilac-music-2529/")
+    # download_communication_success_data(run_id="signification-team/signification-game/9csiykvn", directory="./zesty-dust-2528/")
+
+
+    ### 10 runs of inferential signaling, no penalties - canvas 0.1
+    inferential_no_penalty_runs = ["./fancy-monkey-2544/",
+                                    "./lucky-sky-2543/",
+                                    "./royal-blaze-2542/",
+                                    "./visionary-butterfly-2541/",
+                                    "./smart-resonance-2540/",
+                                    "./cosmic-thunder-2539/",
+                                    "./smooth-dew-2538/",
+                                    "./dainty-waterfall-2537/",
+                                    "./youthful-star-2536/",
+                                    "./dutiful-planet-2535/"]
+    # download_communication_success_data(run_id="signification-team/signification-game/wet3y5g6", directory="./fancy-monkey-2544/")
+    # download_communication_success_data(run_id="signification-team/signification-game/d5hqyufc", directory="./lucky-sky-2543/")
+    # download_communication_success_data(run_id="signification-team/signification-game/xyceym5k", directory="./royal-blaze-2542/")
+    # download_communication_success_data(run_id="signification-team/signification-game/al94zbi7", directory="./visionary-butterfly-2541/")
+    # download_communication_success_data(run_id="signification-team/signification-game/mjylwu94", directory="./smart-resonance-2540/")
+    # download_communication_success_data(run_id="signification-team/signification-game/h6h7nq1p", directory="./cosmic-thunder-2539/")
+    # download_communication_success_data(run_id="signification-team/signification-game/5taxgi5l", directory="./smooth-dew-2538/")
+    # download_communication_success_data(run_id="signification-team/signification-game/g8sgtojm", directory="./dainty-waterfall-2537/")
+    # download_communication_success_data(run_id="signification-team/signification-game/cll0cq9m", directory="./youthful-star-2536/")
+    # download_communication_success_data(run_id="signification-team/signification-game/sgk40864", directory="./dutiful-planet-2535/")
+
+    ### 10 runs of inferential signaling, no penalties, ablated Pr - canvas 0.1
+    inferential_no_penalty_runs_ablated_Pr = ["./ruby-butterfly-2569/",
+                                                "./earthy-universe-2568/",
+                                                "./swift-cherry-2567/",
+                                                "./honest-aardvark-2566/",
+                                                "./stoic-cherry-2565/",
+                                                "./mild-aardvark-2564/",
+                                                "./logical-river-2563/",
+                                                "./super-thunder-2562/",
+                                                "./fast-armadillo-2561/",
+                                                "./zany-smoke-2560/"]
+    download_communication_success_data(run_id="signification-team/signification-game/2mhk24u0", directory="./ruby-butterfly-2569/")
+    download_communication_success_data(run_id="signification-team/signification-game/xyb3o3yf", directory="./earthy-universe-2568/")
+    download_communication_success_data(run_id="signification-team/signification-game/z4vgrcn7", directory="./swift-cherry-2567/")
+    download_communication_success_data(run_id="signification-team/signification-game/sxkv8ypd", directory="./honest-aardvark-2566/")
+    download_communication_success_data(run_id="signification-team/signification-game/p6xuay4v", directory="./stoic-cherry-2565/")
+    download_communication_success_data(run_id="signification-team/signification-game/6f5wc6k4", directory="./mild-aardvark-2564/")
+    download_communication_success_data(run_id="signification-team/signification-game/gkxs9f51", directory="./logical-river-2563/")
+    download_communication_success_data(run_id="signification-team/signification-game/jlp9jzod", directory="./super-thunder-2562/")
+    download_communication_success_data(run_id="signification-team/signification-game/50te50qt", directory="./fast-armadillo-2561/")
+    download_communication_success_data(run_id="signification-team/signification-game/ulve0qoh", directory="./zany-smoke-2560/")
+
+
+    make_avg_com_success_plot([behaviorist_live_listeners_runs,
+                        behaviorist_dead_listeners_runs,
+                        inferential_no_penalty_runs,
+                        inferential_no_penalty_runs_ablated_Pr],
+                        ["Behaviorist",
+                        "Behaviorist (Canalized)",
+                        "Inferential",
+                        "Inferential - P_ref"],
+                        all_speakers_avg=True,
+                        rolling_window=25, t_val=1.833)
+
+    # make_avg_com_success_across_referents_plot([
+    #                     behaviorist_dead_listeners_runs,],
+    #                     [
+    #                     "Behaviorist (Canalized)"],
+    #                     rolling_window=25, t_val=1.833)
 
 
 if __name__=="__main__":
