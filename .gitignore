@@ -11,3 +11,4 @@
 *.o
 scratchpad.txt
 *.mp4
+**/runs/
