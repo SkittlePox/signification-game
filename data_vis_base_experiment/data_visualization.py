@@ -753,7 +753,7 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
 
     print(f'../joint-plots/configs/config_{uuidstr}.json')
 
-def make_avg_pr_across_referents_plot(directorybunch, labels, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262, y_offsets=list(np.zeros(10))):
+def make_avg_pr_across_referents_plot(directorybunch, labels, referent_names, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262, y_offsets=list(np.zeros(10))):
     entropies = []
     cis = []
     for ref_num in ref_nums:
@@ -811,7 +811,8 @@ def make_avg_pr_across_referents_plot(directorybunch, labels, ref_nums=list(rang
         last_y = entropy.iloc[rolling_window // 2 + 1]
         # print(last_x)
         # print(last_y)
-        ax.annotate(f'P_ref({i})= {last_y:.2f}',
+
+        ax.annotate(f'{referent_names[i]}: {last_y:.2f}',
                     xy=(last_x, last_y),
                     xytext=(-10, y_offsets[i]),  # 10 pixels to the left
                     textcoords='offset points',
@@ -1038,7 +1039,7 @@ def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_av
 
     print(f'../joint-plots/configs/config_{uuidstr}.json')
 
-def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262, y_offsets=list(np.zeros(10))):
+def make_avg_com_success_across_referents_plot(directorybunch, labels, referent_names, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262, y_offsets=list(np.zeros(10))):
     entropies = []
     cis = []
     for ref_num in ref_nums:
@@ -1093,7 +1094,7 @@ def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=
         last_y = entropy.iloc[len(entropy) - 1 - rolling_window // 2]
         # print(last_x)
         # print(last_y)
-        ax.annotate(f'Ref. {i}: {last_y:.2f}',
+        ax.annotate(f'{referent_names[i]}: {last_y:.2f}',
                     xy=(last_x, last_y),
                     xytext=(10, y_offsets[i]),  # 10 pixels to the right
                     textcoords='offset points',
@@ -1541,29 +1542,34 @@ def make_graphics_post_conference():
     #                     all_speakers_avg=True,
     #                     rolling_window=25, t_val=1.833)
 
-    # make_avg_com_success_across_referents_plot([
-    #                     behaviorist_dead_listeners_runs,],
-    #                     [
-    #                     "Behaviorist (Canalized)"],
-    #                     rolling_window=25, t_val=1.833, y_offsets=[0, 0, 0, -2, 0, 0, 0, 12, -8, 14])
+    referent_names = ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Tree", "Rocket", "Snail", "Snake", "Spider")
 
-    # make_avg_pr_across_referents_plot([
-    #                     inferential_no_penalty_runs,],
-    #                     [
-    #                     "Inferential",],
-    #                     num_epochs=650,
-    #                     rolling_window=25, t_val=1.833, y_offsets=[-2, 0, 0, 0, 0, 0, 0, 0, 0, -12])
+    make_avg_com_success_across_referents_plot([
+                        behaviorist_dead_listeners_runs,],
+                        [
+                        "Behaviorist (Canalized)"],
+                        referent_names,
+                        rolling_window=25, t_val=1.833, y_offsets=[0, 0, 0, -2, 0, 0, 0, 12, -8, 14])
 
-    make_avg_probe_plot([behaviorist_live_listeners_runs,
-                        behaviorist_dead_listeners_runs,
-                        inferential_no_penalty_runs,
-                        inferential_no_penalty_runs_ablated_Pr],
-                         ["Behaviorist",
-                        "Behaviorist (Canalized)",
-                        "Inferential",
-                        "Inferential - no P_ref"],
-                        all_speakers_avg=True,
-                        rolling_window=100, t_val=1.833)
+
+    make_avg_pr_across_referents_plot([
+                        inferential_no_penalty_runs,],
+                        [
+                        "Inferential",],
+                        referent_names,
+                        num_epochs=650,
+                        rolling_window=25, t_val=1.833, y_offsets=[-2, 0, 0, 0, 0, 0, 0, 0, 0, -12])
+
+    # make_avg_probe_plot([behaviorist_live_listeners_runs,
+    #                     behaviorist_dead_listeners_runs,
+    #                     inferential_no_penalty_runs,
+    #                     inferential_no_penalty_runs_ablated_Pr],
+    #                      ["Behaviorist",
+    #                     "Behaviorist (Canalized)",
+    #                     "Inferential",
+    #                     "Inferential - no P_ref"],
+    #                     all_speakers_avg=True,
+    #                     rolling_window=100, t_val=1.833)
 
 
 if __name__=="__main__":
