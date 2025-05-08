@@ -753,6 +753,103 @@ def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epo
 
     print(f'../joint-plots/configs/config_{uuidstr}.json')
 
+def make_avg_pr_across_referents_plot(directorybunch, labels, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262, y_offsets=list(np.zeros(10))):
+    entropies = []
+    cis = []
+    for ref_num in ref_nums:
+        for directories in directorybunch:
+            # directories = ["/users/bspiegel/signification-game/data_vis_base_experiment/"+d[2:] for d in directories]  # Useful for debug
+            data_for_group = [pd.read_csv(os.path.join(directory, f"inference_pr_referent_{ref_num}.csv")) for directory in directories]
+            merged_datas = pd.concat(data_for_group, axis=1, keys=range(len(data_for_group)))
+            mean_entropy = merged_datas.mean(axis=1)
+            ci_entropy = t_val * merged_datas.sem(axis=1)
+            if rolling_window:
+                mean_entropy = mean_entropy.rolling(window=rolling_window, center=True).mean()
+                ci_entropy = ci_entropy.rolling(window=rolling_window, center=True).mean()
+            entropies.append(mean_entropy)
+            cis.append(ci_entropy)
+    
+    sns.set_theme(style="darkgrid")
+
+    # Plot the data with larger font
+    # plt.yscale("log", base=np.e)
+    # plt.xscale("log")
+    fig, ax = plt.subplots(figsize=(6, 6))
+    # ax.set_yscale("log")
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
+
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
+
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, (entropy, ci) in enumerate(zip(entropies, cis)):
+        if num_epochs is not None:
+            entropy = entropy.head(num_epochs)
+            entropy = entropy.tail(len(entropy)-epoch_start)
+            ci = ci.head(num_epochs)
+            ci = ci.tail(len(ci)-epoch_start)
+        # if len(markers_on) > 0:
+        #     marker_style = dict(
+        #         marker=7,  # Change to preferred marker shape
+        #         markersize=12,  # Marker size
+        #         markerfacecolor="black",  # Marker face color
+        #         markeredgecolor="black",  # Marker edge color
+        #         markeredgewidth=1.5  # Marker edge width
+        #     )
+
+        #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
+
+        ax.plot(entropy, label=f"{labels[i//len(ref_nums)]} referent {i}", color=sns.color_palette("tab10")[i % len(ref_nums)], linewidth=2, alpha=0.5)
+        ax.fill_between(list(range(len(ci))), entropy-ci, entropy+ci, color=sns.color_palette("tab10")[i % len(ref_nums)], alpha=0.15)
+
+        last_x = entropy.index[0]
+        last_y = entropy.iloc[rolling_window // 2 + 1]
+        # print(last_x)
+        # print(last_y)
+        ax.annotate(f'P_ref({i})= {last_y:.2f}',
+                    xy=(last_x, last_y),
+                    xytext=(-10, y_offsets[i]),  # 10 pixels to the left
+                    textcoords='offset points',
+                    va='center',
+                    ha='right',
+                    color=sns.color_palette("tab10")[i % len(ref_nums)],
+                    annotation_clip=False,
+                    fontsize=16)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.yaxis.tick_right()
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    # ax.legend()
+    # plt.legend(fontsize=16, loc='upper left')
+
+    # Get current y limits and extend upper bound by 20%
+    # ymin, ymax = ax.get_ylim()
+    # ax.set_ylim(ymin, ymax * 1.2)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:5]
+    plt.savefig(os.path.join("../joint-plots/", f"avg_inference_prs_across_referents_{uuidstr}.png"))
+
+    config = {
+        "directories": directories,
+        "labels": labels,
+        "num_epochs": num_epochs,
+        "ref_nums": ref_nums
+    }
+
+    with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
+        json.dump(config, f)
+
+    print(f'../joint-plots/configs/config_{uuidstr}.json')
+
+
 def make_reward_plot(directories, labels, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv")) for directory in directories]
     sns.set_theme(style="darkgrid")
@@ -941,7 +1038,7 @@ def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_av
 
     print(f'../joint-plots/configs/config_{uuidstr}.json')
 
-def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262):
+def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262, y_offsets=list(np.zeros(10))):
     entropies = []
     cis = []
     for ref_num in ref_nums:
@@ -996,14 +1093,15 @@ def make_avg_com_success_across_referents_plot(directorybunch, labels, ref_nums=
         last_y = entropy.iloc[len(entropy) - 1 - rolling_window // 2]
         # print(last_x)
         # print(last_y)
-        ax.annotate(f'Referent {i}: {last_y:.2f}',
+        ax.annotate(f'Ref. {i}: {last_y:.2f}',
                     xy=(last_x, last_y),
-                    xytext=(10, 0),  # 10 pixels to the right
+                    xytext=(10, y_offsets[i]),  # 10 pixels to the right
                     textcoords='offset points',
                     va='center',
                     ha='left',
                     color=sns.color_palette("tab10")[i % len(ref_nums)],
-                    annotation_clip=False)
+                    annotation_clip=False,
+                    fontsize=16)
 
     # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
     # ax.set_xlabel('Epoch', fontsize=16)
@@ -1314,6 +1412,16 @@ def make_graphics_post_conference():
     # download_communication_success_data(run_id="signification-team/signification-game/qj06v9n1", directory="./dry-donkey-2552/")
     # download_communication_success_data(run_id="signification-team/signification-game/szlcbp8n", directory="./copper-capybara-2551/")
     # download_communication_success_data(run_id="signification-team/signification-game/atqxv560", directory="./denim-dawn-2550/")
+    # download_probe_data(run_id="signification-team/signification-game/ea55y73e", directory="./ethereal-butterfly-2559/")
+    # download_probe_data(run_id="signification-team/signification-game/q3wt7y7c", directory="./glorious-sea-2558/")
+    # download_probe_data(run_id="signification-team/signification-game/bml99nmq", directory="./lunar-forest-2557/")
+    # download_probe_data(run_id="signification-team/signification-game/hc9r6xxu", directory="./ancient-meadow-2556/")
+    # download_probe_data(run_id="signification-team/signification-game/fxocf59g", directory="./silvery-oath-2555/")
+    # download_probe_data(run_id="signification-team/signification-game/49hznmxu", directory="./youthful-morning-2554/")
+    # download_probe_data(run_id="signification-team/signification-game/9tfe32h3", directory="./deep-galaxy-2553/")
+    # download_probe_data(run_id="signification-team/signification-game/qj06v9n1", directory="./dry-donkey-2552/")
+    # download_probe_data(run_id="signification-team/signification-game/szlcbp8n", directory="./copper-capybara-2551/")
+    # download_probe_data(run_id="signification-team/signification-game/atqxv560", directory="./denim-dawn-2550/")
 
     ### 10 runs of behaviorist signaling with dead listeners - canvas 0.1
     behaviorist_dead_listeners_runs = ["./still-pond-2549/",
@@ -1336,7 +1444,16 @@ def make_graphics_post_conference():
     # download_communication_success_data(run_id="signification-team/signification-game/lwt9wjtl", directory="./autumn-cosmos-2530/")
     # download_communication_success_data(run_id="signification-team/signification-game/pqz71686", directory="./lilac-music-2529/")
     # download_communication_success_data(run_id="signification-team/signification-game/9csiykvn", directory="./zesty-dust-2528/")
-
+    # download_probe_data(run_id="signification-team/signification-game/3bjaz4re", directory="./still-pond-2549/")
+    # download_probe_data(run_id="signification-team/signification-game/4it1pfsc", directory="./pretty-firebrand-2548/")
+    # download_probe_data(run_id="signification-team/signification-game/508e2i0e", directory="./divine-snowflake-2547/")
+    # download_probe_data(run_id="signification-team/signification-game/6lm3h4x1", directory="./lively-cloud-2546/")
+    # download_probe_data(run_id="signification-team/signification-game/ji0vg89o", directory="./lilac-frog-2545/")
+    # download_probe_data(run_id="signification-team/signification-game/4hxwrpiw", directory="./woven-galaxy-2534/")
+    # download_probe_data(run_id="signification-team/signification-game/0t3ev7nx", directory="./colorful-blaze-2533/")
+    # download_probe_data(run_id="signification-team/signification-game/lwt9wjtl", directory="./autumn-cosmos-2530/")
+    # download_probe_data(run_id="signification-team/signification-game/pqz71686", directory="./lilac-music-2529/")
+    # download_probe_data(run_id="signification-team/signification-game/9csiykvn", directory="./zesty-dust-2528/")
 
     ### 10 runs of inferential signaling, no penalties - canvas 0.1
     inferential_no_penalty_runs = ["./fancy-monkey-2544/",
@@ -1359,6 +1476,26 @@ def make_graphics_post_conference():
     # download_communication_success_data(run_id="signification-team/signification-game/g8sgtojm", directory="./dainty-waterfall-2537/")
     # download_communication_success_data(run_id="signification-team/signification-game/cll0cq9m", directory="./youthful-star-2536/")
     # download_communication_success_data(run_id="signification-team/signification-game/sgk40864", directory="./dutiful-planet-2535/")
+    # download_pr_data(run_id="signification-team/signification-game/wet3y5g6", directory="./fancy-monkey-2544/")
+    # download_pr_data(run_id="signification-team/signification-game/d5hqyufc", directory="./lucky-sky-2543/")
+    # download_pr_data(run_id="signification-team/signification-game/xyceym5k", directory="./royal-blaze-2542/")
+    # download_pr_data(run_id="signification-team/signification-game/al94zbi7", directory="./visionary-butterfly-2541/")
+    # download_pr_data(run_id="signification-team/signification-game/mjylwu94", directory="./smart-resonance-2540/")
+    # download_pr_data(run_id="signification-team/signification-game/h6h7nq1p", directory="./cosmic-thunder-2539/")
+    # download_pr_data(run_id="signification-team/signification-game/5taxgi5l", directory="./smooth-dew-2538/")
+    # download_pr_data(run_id="signification-team/signification-game/g8sgtojm", directory="./dainty-waterfall-2537/")
+    # download_pr_data(run_id="signification-team/signification-game/cll0cq9m", directory="./youthful-star-2536/")
+    # download_pr_data(run_id="signification-team/signification-game/sgk40864", directory="./dutiful-planet-2535/")
+    # download_probe_data(run_id="signification-team/signification-game/wet3y5g6", directory="./fancy-monkey-2544/")
+    # download_probe_data(run_id="signification-team/signification-game/d5hqyufc", directory="./lucky-sky-2543/")
+    # download_probe_data(run_id="signification-team/signification-game/xyceym5k", directory="./royal-blaze-2542/")
+    # download_probe_data(run_id="signification-team/signification-game/al94zbi7", directory="./visionary-butterfly-2541/")
+    # download_probe_data(run_id="signification-team/signification-game/mjylwu94", directory="./smart-resonance-2540/")
+    # download_probe_data(run_id="signification-team/signification-game/h6h7nq1p", directory="./cosmic-thunder-2539/")
+    # download_probe_data(run_id="signification-team/signification-game/5taxgi5l", directory="./smooth-dew-2538/")
+    # download_probe_data(run_id="signification-team/signification-game/g8sgtojm", directory="./dainty-waterfall-2537/")
+    # download_probe_data(run_id="signification-team/signification-game/cll0cq9m", directory="./youthful-star-2536/")
+    # download_probe_data(run_id="signification-team/signification-game/sgk40864", directory="./dutiful-planet-2535/")
 
     ### 10 runs of inferential signaling, no penalties, ablated Pr - canvas 0.1
     inferential_no_penalty_runs_ablated_Pr = ["./ruby-butterfly-2569/",
@@ -1371,34 +1508,62 @@ def make_graphics_post_conference():
                                                 "./super-thunder-2562/",
                                                 "./fast-armadillo-2561/",
                                                 "./zany-smoke-2560/"]
-    download_communication_success_data(run_id="signification-team/signification-game/2mhk24u0", directory="./ruby-butterfly-2569/")
-    download_communication_success_data(run_id="signification-team/signification-game/xyb3o3yf", directory="./earthy-universe-2568/")
-    download_communication_success_data(run_id="signification-team/signification-game/z4vgrcn7", directory="./swift-cherry-2567/")
-    download_communication_success_data(run_id="signification-team/signification-game/sxkv8ypd", directory="./honest-aardvark-2566/")
-    download_communication_success_data(run_id="signification-team/signification-game/p6xuay4v", directory="./stoic-cherry-2565/")
-    download_communication_success_data(run_id="signification-team/signification-game/6f5wc6k4", directory="./mild-aardvark-2564/")
-    download_communication_success_data(run_id="signification-team/signification-game/gkxs9f51", directory="./logical-river-2563/")
-    download_communication_success_data(run_id="signification-team/signification-game/jlp9jzod", directory="./super-thunder-2562/")
-    download_communication_success_data(run_id="signification-team/signification-game/50te50qt", directory="./fast-armadillo-2561/")
-    download_communication_success_data(run_id="signification-team/signification-game/ulve0qoh", directory="./zany-smoke-2560/")
+    # download_communication_success_data(run_id="signification-team/signification-game/2mhk24u0", directory="./ruby-butterfly-2569/")
+    # download_communication_success_data(run_id="signification-team/signification-game/xyb3o3yf", directory="./earthy-universe-2568/")
+    # download_communication_success_data(run_id="signification-team/signification-game/z4vgrcn7", directory="./swift-cherry-2567/")
+    # download_communication_success_data(run_id="signification-team/signification-game/sxkv8ypd", directory="./honest-aardvark-2566/")
+    # download_communication_success_data(run_id="signification-team/signification-game/p6xuay4v", directory="./stoic-cherry-2565/")
+    # download_communication_success_data(run_id="signification-team/signification-game/6f5wc6k4", directory="./mild-aardvark-2564/")
+    # download_communication_success_data(run_id="signification-team/signification-game/gkxs9f51", directory="./logical-river-2563/")
+    # download_communication_success_data(run_id="signification-team/signification-game/jlp9jzod", directory="./super-thunder-2562/")
+    # download_communication_success_data(run_id="signification-team/signification-game/50te50qt", directory="./fast-armadillo-2561/")
+    # download_communication_success_data(run_id="signification-team/signification-game/ulve0qoh", directory="./zany-smoke-2560/")
+    # download_probe_data(run_id="signification-team/signification-game/2mhk24u0", directory="./ruby-butterfly-2569/")
+    # download_probe_data(run_id="signification-team/signification-game/xyb3o3yf", directory="./earthy-universe-2568/")
+    # download_probe_data(run_id="signification-team/signification-game/z4vgrcn7", directory="./swift-cherry-2567/")
+    # download_probe_data(run_id="signification-team/signification-game/sxkv8ypd", directory="./honest-aardvark-2566/")
+    # download_probe_data(run_id="signification-team/signification-game/p6xuay4v", directory="./stoic-cherry-2565/")
+    # download_probe_data(run_id="signification-team/signification-game/6f5wc6k4", directory="./mild-aardvark-2564/")
+    # download_probe_data(run_id="signification-team/signification-game/gkxs9f51", directory="./logical-river-2563/")
+    # download_probe_data(run_id="signification-team/signification-game/jlp9jzod", directory="./super-thunder-2562/")
+    # download_probe_data(run_id="signification-team/signification-game/50te50qt", directory="./fast-armadillo-2561/")
+    # download_probe_data(run_id="signification-team/signification-game/ulve0qoh", directory="./zany-smoke-2560/")
 
 
-    make_avg_com_success_plot([behaviorist_live_listeners_runs,
-                        behaviorist_dead_listeners_runs,
-                        inferential_no_penalty_runs,
-                        inferential_no_penalty_runs_ablated_Pr],
-                        ["Behaviorist",
-                        "Behaviorist (Canalized)",
-                        "Inferential",
-                        "Inferential - P_ref"],
-                        all_speakers_avg=True,
-                        rolling_window=25, t_val=1.833)
+    # make_avg_com_success_plot([behaviorist_live_listeners_runs,
+    #                     behaviorist_dead_listeners_runs,
+    #                     inferential_no_penalty_runs,
+    #                     inferential_no_penalty_runs_ablated_Pr],
+    #                     ["Behaviorist",
+    #                     "Behaviorist (Canalized)",
+    #                     "Inferential",
+    #                     "Inferential - no P_ref"],
+    #                     all_speakers_avg=True,
+    #                     rolling_window=25, t_val=1.833)
 
     # make_avg_com_success_across_referents_plot([
     #                     behaviorist_dead_listeners_runs,],
     #                     [
     #                     "Behaviorist (Canalized)"],
-    #                     rolling_window=25, t_val=1.833)
+    #                     rolling_window=25, t_val=1.833, y_offsets=[0, 0, 0, -2, 0, 0, 0, 12, -8, 14])
+
+    # make_avg_pr_across_referents_plot([
+    #                     inferential_no_penalty_runs,],
+    #                     [
+    #                     "Inferential",],
+    #                     num_epochs=650,
+    #                     rolling_window=25, t_val=1.833, y_offsets=[-2, 0, 0, 0, 0, 0, 0, 0, 0, -12])
+
+    make_avg_probe_plot([behaviorist_live_listeners_runs,
+                        behaviorist_dead_listeners_runs,
+                        inferential_no_penalty_runs,
+                        inferential_no_penalty_runs_ablated_Pr],
+                         ["Behaviorist",
+                        "Behaviorist (Canalized)",
+                        "Inferential",
+                        "Inferential - no P_ref"],
+                        all_speakers_avg=True,
+                        rolling_window=100, t_val=1.833)
 
 
 if __name__=="__main__":
