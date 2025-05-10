@@ -92,6 +92,7 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=2
     sorted_files = sorted([f for f in files if f.startswith(fname_template)],
                          key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
     
+    # print(len(sorted_files))
     
     if method == "uniform":
         start_epoch = kwargs["start_epoch"]
@@ -169,6 +170,7 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=2
             row_img = np.concatenate(row_imgs, axis=1)            
             images.append(row_img)
             print(f)
+
 
     combined = np.concatenate(images, axis=0 if vertical else 1)
     combined_image = Image.fromarray(combined)
@@ -774,8 +776,8 @@ def make_avg_pr_across_referents_plot(directorybunch, labels, referent_names, re
     # Plot the data with larger font
     # plt.yscale("log", base=np.e)
     # plt.xscale("log")
-    fig, ax = plt.subplots(figsize=(6, 6))
-    # ax.set_yscale("log")
+    fig, ax = plt.subplots(figsize=(6, 5))
+    # ax.set_xscale("log")
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -981,7 +983,7 @@ def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_av
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 2.5))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -1017,11 +1019,11 @@ def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_av
     # ax.set_xlabel('Epoch', fontsize=16)
     # ax.set_ylabel('Entropy', fontsize=16)
     ax.tick_params(axis='both', which='major', labelsize=18)
-    plt.legend(fontsize=16, loc='upper left')
+    plt.legend(fontsize=15, loc='lower right')
 
     # Get current y limits and extend upper bound by 20%
     ymin, ymax = ax.get_ylim()
-    ax.set_ylim(ymin, ymax * 1.2)
+    # ax.set_ylim(ymin, 1.0)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:5]
@@ -1037,7 +1039,7 @@ def make_avg_com_success_plot(directorybunch, labels, ref_num=0, all_speakers_av
     with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/configs/config_{uuidstr}.json')
+    print(f"avg_success_rate_referent_{ref_num}_{uuidstr}.png" if not all_speakers_avg else f"avg_success_rate_all_referents_{uuidstr}.png")
 
 def make_avg_com_success_across_referents_plot(directorybunch, labels, referent_names, ref_nums=list(range(10)), num_epochs=None, epoch_start=0, markers_on=[], rolling_window=None, t_val=2.262, y_offsets=list(np.zeros(10))):
     entropies = []
@@ -1058,7 +1060,7 @@ def make_avg_com_success_across_referents_plot(directorybunch, labels, referent_
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(6, 5))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -1129,7 +1131,7 @@ def make_avg_com_success_across_referents_plot(directorybunch, labels, referent_
     with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/configs/config_{uuidstr}.json')
+    print(f"avg_success_rate_across_referents_{uuidstr}.png")
 
 def make_probe_plot(directories, labels, sp_num=0, all_speakers_avg=False, num_epochs=None, epoch_start=0, markers_on=[]):
     datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_speaker_{sp_num}.csv" if not all_speakers_avg else "probe_entropy_all_speakers.csv")) for directory in directories]
@@ -1207,7 +1209,7 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(5, 2.5))
     fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
 
     colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
@@ -1243,11 +1245,11 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
     # ax.set_xlabel('Epoch', fontsize=16)
     # ax.set_ylabel('Entropy', fontsize=16)
     ax.tick_params(axis='both', which='major', labelsize=18)
-    plt.legend(fontsize=16, loc='upper left')
+    plt.legend(fontsize=13, loc='upper right', handleheight=0.3)
 
     # Get current y limits and extend upper bound by 20%
     ymin, ymax = ax.get_ylim()
-    ax.set_ylim(ymin, ymax * 1.2)
+    ax.set_ylim(ymin, ymax * 1.75)
     
     fig.tight_layout()
     uuidstr = str(uuid.uuid4())[:5]
@@ -1263,7 +1265,7 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
     with open(f'../joint-plots/configs/config_{uuidstr}.json', 'w') as f:
         json.dump(config, f)
 
-    print(f'../joint-plots/configs/config_{uuidstr}.json')
+    print(f"probe_entropy_speaker_{sp_num}_{uuidstr}.png" if not all_speakers_avg else f"probe_entropy_all_speakers_{uuidstr}.png")
 
 
 def make_graphics_post_conference():
@@ -1423,6 +1425,7 @@ def make_graphics_post_conference():
     # download_probe_data(run_id="signification-team/signification-game/qj06v9n1", directory="./dry-donkey-2552/")
     # download_probe_data(run_id="signification-team/signification-game/szlcbp8n", directory="./copper-capybara-2551/")
     # download_probe_data(run_id="signification-team/signification-game/atqxv560", directory="./denim-dawn-2550/")
+    # download_speaker_examples(run_id="signification-team/signification-game/ea55y73e", directory="./ethereal-butterfly-2559/")
 
     ### 10 runs of behaviorist signaling with dead listeners - canvas 0.1
     behaviorist_dead_listeners_runs = ["./still-pond-2549/",
@@ -1455,6 +1458,7 @@ def make_graphics_post_conference():
     # download_probe_data(run_id="signification-team/signification-game/lwt9wjtl", directory="./autumn-cosmos-2530/")
     # download_probe_data(run_id="signification-team/signification-game/pqz71686", directory="./lilac-music-2529/")
     # download_probe_data(run_id="signification-team/signification-game/9csiykvn", directory="./zesty-dust-2528/")
+    # download_speaker_examples(run_id="signification-team/signification-game/3bjaz4re", directory="./still-pond-2549/")
 
     ### 10 runs of inferential signaling, no penalties - canvas 0.1
     inferential_no_penalty_runs = ["./fancy-monkey-2544/",
@@ -1497,6 +1501,7 @@ def make_graphics_post_conference():
     # download_probe_data(run_id="signification-team/signification-game/g8sgtojm", directory="./dainty-waterfall-2537/")
     # download_probe_data(run_id="signification-team/signification-game/cll0cq9m", directory="./youthful-star-2536/")
     # download_probe_data(run_id="signification-team/signification-game/sgk40864", directory="./dutiful-planet-2535/")
+    # download_speaker_examples(run_id="signification-team/signification-game/mjylwu94", directory="./smart-resonance-2540/", tom_examples_only=True)
 
     ### 10 runs of inferential signaling, no penalties, ablated Pr - canvas 0.1
     inferential_no_penalty_runs_ablated_Pr = ["./ruby-butterfly-2569/",
@@ -1532,44 +1537,56 @@ def make_graphics_post_conference():
 
 
     # make_avg_com_success_plot([behaviorist_live_listeners_runs,
-    #                     behaviorist_dead_listeners_runs,
     #                     inferential_no_penalty_runs,
     #                     inferential_no_penalty_runs_ablated_Pr],
     #                     ["Behaviorist",
-    #                     "Behaviorist (Canalized)",
     #                     "Inferential",
-    #                     "Inferential - no P_ref"],
+    #                     "Inf. no P_ref"],
     #                     all_speakers_avg=True,
     #                     rolling_window=25, t_val=1.833)
 
     referent_names = ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Tree", "Rocket", "Snail", "Snake", "Spider")
 
-    make_avg_com_success_across_referents_plot([
-                        behaviorist_dead_listeners_runs,],
-                        [
-                        "Behaviorist (Canalized)"],
-                        referent_names,
-                        rolling_window=25, t_val=1.833, y_offsets=[0, 0, 0, -2, 0, 0, 0, 12, -8, 14])
+    # make_avg_com_success_across_referents_plot([
+    #                     behaviorist_dead_listeners_runs,],
+    #                     [
+    #                     "Behaviorist (Canalized)"],
+    #                     referent_names,
+    #                     rolling_window=25, t_val=1.833, y_offsets=[0, 0, 0, -6, 0, 0, 0, 12, -12, 14])
 
 
-    make_avg_pr_across_referents_plot([
-                        inferential_no_penalty_runs,],
-                        [
-                        "Inferential",],
-                        referent_names,
-                        num_epochs=650,
-                        rolling_window=25, t_val=1.833, y_offsets=[-2, 0, 0, 0, 0, 0, 0, 0, 0, -12])
+    # make_avg_pr_across_referents_plot([
+    #                     inferential_no_penalty_runs,],
+    #                     [
+    #                     "Inferential",],
+    #                     referent_names,
+    #                     num_epochs=650,
+    #                     rolling_window=25, t_val=1.833, y_offsets=[-2, 0, 0, 0, 0, 0, 0, 0, 0, -12])
 
-    # make_avg_probe_plot([behaviorist_live_listeners_runs,
-    #                     behaviorist_dead_listeners_runs,
-    #                     inferential_no_penalty_runs,
-    #                     inferential_no_penalty_runs_ablated_Pr],
-    #                      ["Behaviorist",
-    #                     "Behaviorist (Canalized)",
-    #                     "Inferential",
-    #                     "Inferential - no P_ref"],
-    #                     all_speakers_avg=True,
-    #                     rolling_window=100, t_val=1.833)
+    make_avg_probe_plot([behaviorist_live_listeners_runs,
+                         behaviorist_dead_listeners_runs,
+                        inferential_no_penalty_runs,
+                        inferential_no_penalty_runs_ablated_Pr],
+                         ["Behaviorist",
+                          "Behaviorist (Canalized)",
+                        "Inferential",
+                        "Inf. no P_ref"],
+                        all_speakers_avg=True,
+                        rolling_window=100, t_val=1.833)
+
+    # speaker_selection = [0, 0, 2, 4, 8, 6, 6, 6, 14, 4]
+    # directories = ["./ethereal-butterfly-2559/", "./still-pond-2549/"]
+    
+    # for directory in directories[-2:]:
+    #     make_speaker_example_graphic(directory, image_dim=32, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, interval_epoch=180)
+    #     make_speaker_example_graphic(directory, image_dim=32, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, image_dim=32, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=0.0, method="1/x")
+        # make_speaker_example_graphic(directory, start_epoch=199, count=10, interval_epoch=300, speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
+        # make_speaker_example_graphic(directory, start_epoch=199, count=20, interval_epoch=150, speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
+        # make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=100.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
+        # make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=100.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
+        # make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
+        # make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
 
 
 if __name__=="__main__":
