@@ -389,6 +389,7 @@ def remake_graphics_part1():
     # download_probe_data(run_id="signification-team/signification-game/wnvdroiz", directory="./lyric-firebrand-2388/")
     # download_probe_data(run_id="signification-team/signification-game/9gd4pq1t", directory="./woven-lion-2391/")
     # download_probe_data(run_id="signification-team/signification-game/spcb6kxy", directory="./rose-shape-2392/")
+    # download_speaker_examples(run_id="signification-team/signification-game/s69h3sh7", directory="./rosy-field-2364/")
 
     ### Re-runs of 1975: 2368-2372, 2393-2397
     manip_coop_size_runs = ["./lilac-pond-2368/", "./dauntless-pine-2369/", "./different-flower-2370/", "./glowing-bird-2371/", "./olive-fog-2372/", "./rural-grass-2393/", "./rosy-bee-2395/", "./treasured-serenity-2394/", "./smart-leaf-2396/", "./gallant-sponge-2397/"]
@@ -428,6 +429,7 @@ def remake_graphics_part1():
     # download_probe_data(run_id="signification-team/signification-game/cxjsd0bv", directory="./fancy-dragon-2405/")
     # download_probe_data(run_id="signification-team/signification-game/7wjq2453", directory="./firm-deluge-2406/")
     # download_probe_data(run_id="signification-team/signification-game/79ljdh2y", directory="./genial-meadow-2407/")
+    # download_speaker_examples(run_id="signification-team/signification-game/81vlracz", directory="./kind-terrain-2378/")
 
     ### Re-runs of 1945: 2383-2387, 2408-2412
     coop_curve_runs = ["./polished-wave-2383/", "./eager-thunder-2384/", "./grateful-fire-2385/", "./rich-bee-2386/", "./hearty-grass-2387/", "./deep-fire-2408/", "./logical-smoke-2409/", "./vocal-yogurt-2410/", "./breezy-plasma-2411/", "./hearty-tree-2412/"]
@@ -441,19 +443,38 @@ def remake_graphics_part1():
     # download_probe_data(run_id="signification-team/signification-game/eeey2myl", directory="./vocal-yogurt-2410/")
     # download_probe_data(run_id="signification-team/signification-game/9hq2r29s", directory="./breezy-plasma-2411/")
     # download_probe_data(run_id="signification-team/signification-game/etmfynm2", directory="./hearty-tree-2412/")
+    # download_speaker_examples(run_id="signification-team/signification-game/ubzkvnrm", directory="./polished-wave-2383/")
 
 
-    make_avg_probe_plot([manipulation_runs,
-                         manip_coop_size_runs,
-                         manip_coop_curve_runs,
-                         coop_size_runs,
-                         coop_curve_runs],
-                         ["Manipulation",
-                           "Manip→Coop - Size Penalty",
-                           "Manip→Coop - Curve Penalty",
-                           "Coop - Size Penalty",
-                           "Coop - Curve Penalty"],
-                             rolling_window=100, t_val=1.833)
+    # make_avg_probe_plot([manipulation_runs,
+    #                      manip_coop_size_runs,
+    #                      manip_coop_curve_runs,
+    #                      coop_size_runs,
+    #                      coop_curve_runs],
+    #                      ["Manipulation",
+    #                        "Manip→Coop - Size Penalty",
+    #                        "Manip→Coop - Curve Penalty",
+    #                        "Coop - Size Penalty",
+    #                        "Coop - Curve Penalty"],
+    #                          rolling_window=100, t_val=1.833)
+
+    make_simple_animation(directory="./comic-rain-2363/", fname_prefix="", image_dim=28, labels=False)
+    # make_simple_animation(directory="./kind-terrain-2378/", fname_prefix="", image_dim=28, labels=False)
+    # make_simple_animation(directory="./polished-wave-2383/", fname_prefix="", image_dim=28, labels=False)
+
+    # speaker_selection = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    # directories = ["./comic-rain-2363/", "./polished-wave-2383/"]
+    
+    # for directory in directories[-2:]:
+    #     make_speaker_example_graphic(directory, image_dim=28, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, interval_epoch=180)
+    #     make_speaker_example_graphic(directory, image_dim=28, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=100.0, method="1/x")
+    #     make_speaker_example_graphic(directory, image_dim=28, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=0.0, method="1/x")
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, interval_epoch=300, speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="", image_dim=28)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, interval_epoch=150, speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="", image_dim=28)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=100.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="", image_dim=28)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=100.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="", image_dim=28)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="", image_dim=28)
+    #     make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="", image_dim=28)
 
 
 def make_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
@@ -542,7 +563,7 @@ def make_multi_animation(directories, labels, num_epochs=2800, epoch_start=0, fn
     FPS=20
     
     # Load reward data
-    reward_datas = [pd.read_csv(os.path.join(directory, "reward_for_speaker_images_all_listeners.csv")) for directory in directories]
+    reward_datas = [pd.read_csv(os.path.join(directory, "success_rate_all_referents.csv")) for directory in directories]
 
     # Load probe data
     probe_datas = [pd.read_csv(os.path.join(directory, f"probe_entropy_all_speakers.csv")) for directory in directories]
@@ -565,15 +586,15 @@ def make_multi_animation(directories, labels, num_epochs=2800, epoch_start=0, fn
     # print(len(sorted_files))
 
     # Initialize figure
-    fig, axes = plt.subplots(3, 1, figsize=(4, 6.5))
+    fig, axes = plt.subplots(3, 1, figsize=(4, 7))
     probe_ax = axes[0]
-    probe_ax.set_xlim(0, 600)
+    probe_ax.set_xlim(0, 3000)
     probe_ax.set_ylim(0.0, 1.0)
     probe_ax.set_title("Symbolicity")
     probe_ax.set_xlabel("Epoch")
     img_ax = axes[1]
     reward_ax = axes[2]
-    reward_ax.set_xlim(0, 600)
+    reward_ax.set_xlim(0, 3000)
     reward_ax.set_ylim(-0.1, 1.0)
     reward_ax.set_title("Communication Success")
     reward_ax.set_xlabel("Epoch")
@@ -608,18 +629,19 @@ def make_multi_animation(directories, labels, num_epochs=2800, epoch_start=0, fn
         img_ax.clear()
         img_ax.imshow(row_img)
         img_ax.axis("off")
-        img_ax.set_title(f"Signals at Epoch {frame}")
+        img_ax.set_title(f"Signals at Epoch {frame*5}")
 
-        img_ax.text(-2, 80, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
+        img_ax.text(-2, 116, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
         img_ax.text(-52, 20, "Behaviorist", size="xx-small")
         img_ax.text(-50, 53, "Inferential", size="xx-small")
+        img_ax.text(-50, 86, "Inf. –P_Ref", size="xx-small")
 
         # Update reward curve
         for reward_line, reward_data in zip(reward_lines, reward_datas):
-            reward_line[0].set_data(range(frame + 1), reward_data[:frame + 1])
+            reward_line[0].set_data(np.array(range(frame + 1)) * 5, reward_data[:frame + 1])
         
         for probe_line, probe_data in zip(probe_lines, probe_datas):
-            probe_line[0].set_data(range(frame + 1), probe_data[:frame + 1])
+            probe_line[0].set_data(np.array(range(frame + 1)) * 5, probe_data[:frame + 1])
         
         return [line[0] for line in reward_lines + probe_lines] + [img_ax]
     
@@ -627,13 +649,15 @@ def make_multi_animation(directories, labels, num_epochs=2800, epoch_start=0, fn
     
     ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
 
+    uuidstr = str(uuid.uuid4())[:5]
+
     save_suffix = "_".join([d.split('-')[-1][:4] for d in directories])
-    ani.save(f"../joint-plots/vid_multi_{save_suffix}.mp4", writer="ffmpeg", fps=FPS)
+    ani.save(f"../joint-plots/vid_multi_{save_suffix}_{uuidstr}.mp4", writer="ffmpeg", fps=FPS)
 
     print("Saved file")
 
 
-def make_simple_animation(directory, label, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
+def make_simple_animation(directory, labels=True, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
     height_dx = image_dim + 2   # Assuming 2px border
 
     FPS=20
@@ -668,11 +692,12 @@ def make_simple_animation(directory, label, num_epochs=2800, epoch_start=0, fnam
         ###########
 
         img_ax.clear()
-        img_ax.imshow(row_img)
+        img_ax.imshow(row_img, cmap="gray")
         img_ax.axis("off")
-        img_ax.set_title(f"Signals at Epoch {frame}")
+        img_ax.set_title(f"Signals at Epoch {frame * 5}")
         # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
-        img_ax.text(-2, 45, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
+        if labels:
+            img_ax.text(-2, 45, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
 
         return img_ax
     
@@ -680,7 +705,9 @@ def make_simple_animation(directory, label, num_epochs=2800, epoch_start=0, fnam
     
     ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
 
-    ani.save(f"../joint-plots/vid_simple_{directory.split('-')[-1][:-1]}.mp4", writer="ffmpeg", fps=FPS)
+    uuidstr = str(uuid.uuid4())[:5]
+
+    ani.save(f"../joint-plots/vid_simple_{directory.split('-')[-1][:-1]}_{uuidstr}.mp4", writer="ffmpeg", fps=FPS)
 
     print("Saved file")
 
@@ -1534,6 +1561,7 @@ def make_graphics_post_conference():
     # download_probe_data(run_id="signification-team/signification-game/jlp9jzod", directory="./super-thunder-2562/")
     # download_probe_data(run_id="signification-team/signification-game/50te50qt", directory="./fast-armadillo-2561/")
     # download_probe_data(run_id="signification-team/signification-game/ulve0qoh", directory="./zany-smoke-2560/")
+    # download_speaker_examples(run_id="signification-team/signification-game/2mhk24u0", directory="./ruby-butterfly-2569/", tom_examples_only=True)
 
 
     # make_avg_com_success_plot([behaviorist_live_listeners_runs,
@@ -1563,18 +1591,18 @@ def make_graphics_post_conference():
     #                     num_epochs=650,
     #                     rolling_window=25, t_val=1.833, y_offsets=[-2, 0, 0, 0, 0, 0, 0, 0, 0, -12])
 
-    make_avg_probe_plot([behaviorist_live_listeners_runs,
-                         behaviorist_dead_listeners_runs,
-                        inferential_no_penalty_runs,
-                        inferential_no_penalty_runs_ablated_Pr],
-                         ["Behaviorist",
-                          "Behaviorist (Canalized)",
-                        "Inferential",
-                        "Inf. no P_ref"],
-                        all_speakers_avg=True,
-                        rolling_window=100, t_val=1.833)
+    # make_avg_probe_plot([behaviorist_live_listeners_runs,
+    #                      behaviorist_dead_listeners_runs,
+    #                     inferential_no_penalty_runs,
+    #                     inferential_no_penalty_runs_ablated_Pr],
+    #                      ["Behaviorist",
+    #                       "Behaviorist (Canalized)",
+    #                     "Inferential",
+    #                     "Inf. no P_ref"],
+    #                     all_speakers_avg=True,
+    #                     rolling_window=100, t_val=1.833)
 
-    # speaker_selection = [0, 0, 2, 4, 8, 6, 6, 6, 14, 4]
+    speaker_selection = [0, 0, 2, 4, 8, 6, 6, 6, 14, 4]
     # directories = ["./ethereal-butterfly-2559/", "./still-pond-2549/"]
     
     # for directory in directories[-2:]:
@@ -1588,7 +1616,11 @@ def make_graphics_post_conference():
         # make_speaker_example_graphic(directory, start_epoch=199, count=10, epoch_span=3000, x_stretch=0.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
         # make_speaker_example_graphic(directory, start_epoch=199, count=20, epoch_span=3000, x_stretch=0.0, method="1/x", speaker_selection=speaker_selection, referent_selection=list(range(10)), fname_prefix="tom_", image_dim=32)
 
+    # make_multi_animation(directories=["./ethereal-butterfly-2559/", "./smart-resonance-2540/"], labels=["Behaviorist", "Inferential"], fname_prefixes=["", "tom_"], speaker_selection=speaker_selection)
+    make_multi_animation(directories=["./ethereal-butterfly-2559/", "./smart-resonance-2540/", "./ruby-butterfly-2569/"], labels=["Behaviorist", "Inferential", "Inferential – P_ref"], fname_prefixes=["", "tom_", "tom_"], speaker_selection=speaker_selection)
+
 
 if __name__=="__main__":
     make_graphics_post_conference()
+    # remake_graphics_part1()
     
