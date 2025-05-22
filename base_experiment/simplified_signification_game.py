@@ -8,14 +8,28 @@ from torchvision.datasets import MNIST
 from flax import struct
 from jaxmarl.environments.multi_agent_env import MultiAgentEnv
 from gymnax.environments.spaces import Discrete, Box
-from utils import get_channel_ratio_fn, get_speaker_referent_span_fn, get_reward_parity_fn, get_speaker_action_transform, get_agent_inferential_mode_fn, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, create_unitary_channel_map
+from utils import (
+    get_channel_ratio_fn,
+    get_speaker_referent_span_fn,
+    get_reward_parity_fn,
+    get_speaker_action_transform,
+    get_agent_inferential_mode_fn,
+    speaker_penalty_whitesum_fn,
+    speaker_penalty_curve_fn,
+    speaker_penalty_right_angle_fn,
+    speaker_penalty_right_angle_or_straight_fn,
+    speaker_penalty_similar_curve_fn,
+    speaker_penalty_spline_continuity_fn,
+    speaker_penalty_zipfian_size_fn,
+    create_unitary_channel_map,
+)
 import math
 
 from utils import to_jax, center_obs
 
 
-# The first num_speakers channel indices refer to speaker generated images, while the remaining num_channel channel indices refer to env generated images
-
+# The first num_speakers channel indices refer to speaker generated images,
+#  while the remaining num_channel channel indices refer to env generated images
 
 @struct.dataclass
 class State:
@@ -50,7 +64,38 @@ class State:
 
 
 class SimplifiedSignificationGame(MultiAgentEnv):
-    def __init__(self, num_speakers: int, num_listeners: int, num_channels: int, num_classes: int, channel_ratio_fn: Union[Callable, str], speaker_referent_span_fn: Union[Callable, str], reward_parity_fn: Union[Callable, str], agent_inferential_mode_fn: Union[Callable, str], speaker_action_transform: Union[Callable, str], speaker_action_dim: int, dataset: tuple, image_dim: int, speaker_reward_success: float = 1.0, speaker_reward_failure: float = -0.1, listener_reward_success: float = 1.0, listener_reward_failure: float = -0.1, log_prob_rewards: bool = False, speaker_whitesum_penalty_coef: float = 0.0, speaker_curve_penalty_coef: float = 0.0, gaussian_noise_stddev: float = 0.0, speaker_assignment_method: str = 'random', mandate_unitary_channel_map: bool = False, center_listener_obs: bool = False, **kwargs: dict) -> None:
+    def __init__(
+        self,
+        num_speakers: int,
+        num_listeners: int,
+        num_channels: int,
+        num_classes: int,
+        channel_ratio_fn: Union[Callable, str],
+        speaker_referent_span_fn: Union[Callable, str],
+        reward_parity_fn: Union[Callable, str],
+        agent_inferential_mode_fn: Union[Callable, str],
+        speaker_action_transform: Union[Callable, str],
+        speaker_action_dim: int,
+        dataset: tuple,
+        image_dim: int,
+        speaker_reward_success: float = 1.0,
+        speaker_reward_failure: float = -0.1,
+        listener_reward_success: float = 1.0,
+        listener_reward_failure: float = -0.1,
+        log_prob_rewards: bool = False,
+        speaker_whitesum_penalty_coef: float = 0.0,
+        speaker_curve_penalty_coef: float = 0.0,
+        speaker_right_angle_penalty_coef: float = 0.0,
+        speaker_right_angle_or_straight_penalty_coef: float = 0.0,
+        speaker_similar_curve_penalty_coef: float = 0.0,
+        speaker_spline_continuity_penalty_coef: float = 0.0,
+        speaker_zipfian_size_penalty_coef: float = 0.0,
+        gaussian_noise_stddev: float = 0.0,
+        speaker_assignment_method: str = "random",
+        mandate_unitary_channel_map: bool = False,
+        center_listener_obs: bool = False,
+        **kwargs: dict,
+    ) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
         self.num_speakers = num_speakers
         self.num_listeners = num_listeners
@@ -64,6 +109,11 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.speaker_action_transform = get_speaker_action_transform(speaker_action_transform, image_dim) if isinstance(speaker_action_transform, str) else speaker_action_transform
         self.speaker_whitesum_penalty_coef = speaker_whitesum_penalty_coef
         self.speaker_curve_penalty_coef = speaker_curve_penalty_coef
+        self.speaker_right_angle_penalty_coef = speaker_right_angle_penalty_coef
+        self.speaker_right_angle_or_straight_penalty_coef = speaker_right_angle_or_straight_penalty_coef
+        self.speaker_similar_curve_penalty_coef = speaker_similar_curve_penalty_coef
+        self.speaker_spline_continuity_penalty_coef = speaker_spline_continuity_penalty_coef
+        self.speaker_zipfian_size_penalty_coef = speaker_zipfian_size_penalty_coef
         self.stored_env_images = dataset[0]
         self.stored_env_labels = dataset[1]
         self.image_dim = image_dim
@@ -208,11 +258,23 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         speaker_rewards_near_final, listener_rewards_final, _, _, _, _ = jax.lax.fori_loop(0, self.num_channels, update_rewards, initial_rewards_tuple)
         speaker_rewards_near_final = jax.lax.select(state.iteration == 0, jnp.zeros(self.num_speakers + self.num_channels), speaker_rewards_near_final)
 
-        # Calculate penalties for whitesum and curve and multiply them by their associated weights
+        # Calculate speaker penalties and multiply them by their associated weights
         speaker_whitesum_penalty = speaker_penalty_whitesum_fn(state.speaker_images)
         speaker_curve_penalty = speaker_penalty_curve_fn(state.previous_speaker_actions)
-        # speaker_penalties = (1 - (1 - speaker_whitesum_penalty) * self.speaker_whitesum_penalty_coef) * (1 - (1 - speaker_curve_penalty) * self.speaker_curve_penalty_coef)
-        speaker_penalties = speaker_whitesum_penalty * self.speaker_whitesum_penalty_coef + speaker_curve_penalty * self.speaker_curve_penalty_coef
+        speaker_right_angle_penalty = speaker_penalty_right_angle_fn(state.previous_speaker_actions)
+        speaker_right_angle_or_straight_penalty = speaker_penalty_right_angle_or_straight_fn(state.previous_speaker_actions)
+        speaker_similar_curve_penalty = speaker_penalty_similar_curve_fn(state.previous_speaker_actions)
+        # speaker_spline_continuity_penalty = speaker_penalty_spline_continuity_fn(state.previous_speaker_actions)
+        # speaker_zipfian_size_penalty = speaker_penalty_zipfian_size_fn(state.previous_speaker_actions)
+        speaker_penalties = (
+            speaker_whitesum_penalty * self.speaker_whitesum_penalty_coef
+            + speaker_curve_penalty * self.speaker_curve_penalty_coef
+            + speaker_right_angle_penalty * self.speaker_right_angle_penalty_coef
+            + speaker_right_angle_or_straight_penalty * self.speaker_right_angle_or_straight_penalty_coef
+            + speaker_similar_curve_penalty * self.speaker_similar_curve_penalty_coef
+            # + speaker_spline_continuity_penalty * self.speaker_spline_continuity_penalty_coef
+            # + speaker_zipfian_size_penalty * self.speaker_zipfian_size_penalty_coef
+        )
 
         # Apply the penalties
         speaker_penalties = jnp.pad(speaker_penalties, (0, self.num_channels), constant_values=0.0)

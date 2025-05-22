@@ -347,6 +347,111 @@ def speaker_penalty_curve_fn(speaker_actions: jnp.array):
     return jnp.average(curve_penalty_per_spline, axis=0)
 
 @jax.vmap
+def speaker_penalty_right_angle_fn(speaker_actions: jnp.array):
+    @jax.vmap
+    def bezier_curvature(spline_params: jnp.array):
+        """
+        Calculate a scalar value representing the "curvedness" of the Bézier spline.
+        
+        Args:
+        P0, P1, P2 : numpy arrays of shape (2,)
+            Control points of the Bézier spline, normalized between 0 and 1.
+        
+        Returns:
+        curvature : float
+            A scalar value representing the curvedness of the spline, highest at 90 degrees.
+        """
+        P0, P1, P2 = spline_params[0:2], spline_params[2:4], spline_params[4:6]
+        # Vector from P0 to P2
+        P0_P2 = P2 - P0
+        
+        # Vector from P0 to P1
+        P0_P1 = P1 - P0
+        
+        # Calculate the angle between P0_P1 and P0_P2
+        dot_product = jnp.dot(P0_P1, P0_P2)
+        magnitude_P0_P1 = jnp.linalg.norm(P0_P1)
+        magnitude_P0_P2 = jnp.linalg.norm(P0_P2)
+        angle = jnp.arccos(dot_product / (magnitude_P0_P1 * magnitude_P0_P2))
+        
+        # Calculate curvature as highest at 90 degrees without converting to degrees
+        angle_diff = jnp.abs(angle - jnp.pi / 2)
+        # Normalize angle difference to [0,1] where 0 is 90 degrees and 1 is 0/180 degrees
+        curvature = angle_diff / (jnp.pi / 2)
+        
+        return jnp.nan_to_num(curvature)
+
+    rangle_penalty_per_spline = bezier_curvature(speaker_actions.reshape(-1, speaker_actions.shape[-1]))
+
+    return jnp.average(rangle_penalty_per_spline, axis=0)
+
+@jax.vmap
+def speaker_penalty_right_angle_or_straight_fn(speaker_actions: jnp.array):
+    @jax.vmap
+    def bezier_curvature(spline_params: jnp.array):
+        """
+        Returns 0 when angle between vectors is 90 degrees (pi/2), 
+        and 1 when it's pi/4, 3pi/4, etc.
+        """
+        P0, P1, P2 = spline_params[0:2], spline_params[2:4], spline_params[4:6]
+        v1 = P1 - P0
+        v2 = P2 - P0
+
+        dot = jnp.dot(v1, v2)
+        norm_v1 = jnp.linalg.norm(v1)
+        norm_v2 = jnp.linalg.norm(v2)
+
+        cos_theta = dot / (norm_v1 * norm_v2)
+        theta = jnp.arccos(jnp.clip(cos_theta, -1.0, 1.0))  # ensure numerical stability
+
+        curvature = jnp.abs(jnp.sin(2 * theta))
+        return jnp.nan_to_num(curvature)
+
+    curve_penalty_per_spline = bezier_curvature(speaker_actions.reshape(-1, speaker_actions.shape[-1]))
+
+    return jnp.average(curve_penalty_per_spline, axis=0)
+
+@jax.vmap
+def speaker_penalty_similar_curve_fn(speaker_actions: jnp.array):
+    @jax.vmap
+    def bezier_curvature(spline_params: jnp.array):
+        """
+        Calculate a scalar value representing the "curvedness" of the Bézier spline.
+        
+        Args:
+        P0, P1, P2 : numpy arrays of shape (2,)
+            Control points of the Bézier spline, normalized between 0 and 1.
+        
+        Returns:
+        curvature : float
+            A scalar value representing the curvedness of the spline, highest at 90 degrees.
+        """
+        P0, P1, P2 = spline_params[0:2], spline_params[2:4], spline_params[4:6]
+        # Vector from P0 to P2
+        P0_P2 = P2 - P0
+        
+        # Vector from P0 to P1
+        P0_P1 = P1 - P0
+        
+        # Calculate the angle between P0_P1 and P0_P2
+        dot_product = jnp.dot(P0_P1, P0_P2)
+
+        return jnp.nan_to_num(dot_product)
+    
+    angle_per_spline = bezier_curvature(speaker_actions.reshape(-1, speaker_actions.shape[-1]))
+
+    return jnp.std(angle_per_spline)
+
+@jax.vmap
+def speaker_penalty_spline_continuity_fn(speaker_actions: jnp.array):
+    pass
+
+@jax.vmap
+def speaker_penalty_zipfian_size_fn(speaker_actions: jnp.array):
+    pass
+
+
+@jax.vmap
 def center_obs(image: jnp.array):
     image_shape = image.shape 
     center = jnp.array(image_shape) / 2  # Center of the image
