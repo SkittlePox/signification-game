@@ -292,18 +292,18 @@ def make_graphics_part2():
     # download_pr_data(run_id="signification-team/signification-game/cmrqqctn", directory="./dark-cosmos-2353/", listeners=(7,))
 
     # Make evolution graphics
-    # directories = ["./dark-cosmos-2353/", "./dazzling-meadow-2352/", "./tough-cloud-2359/", "./glad-dew-2358/"]
+    directories = ["./frosty-silence-2354/", "./dark-cosmos-2353/", "./dazzling-meadow-2352/", "./tough-cloud-2359/", "./glad-dew-2358/"]
     # speaker_selections = [[12, 8, 12, 2, 2, 12, 0, 14, 2, 12],
     #                       [12, 8, 12, 2, 2, 12, 0, 14, 2, 12]]
     
-    # speaker_selection = [12, 8, 12, 2, 2, 12, 0, 14, 2, 12]
+    speaker_selection = [12, 8, 12, 2, 2, 12, 0, 14, 2, 12]
     # abbreviated_speaker_selection = [12, 2, 12, 2, 12]
     # abbreviated_referent_selection = [0, 4, 5, 8, 9]
-    # name_prefixes = ["tom_", "", "tom_", "tom_"]
-    # for directory, fname_prefix in list(zip(directories, name_prefixes))[1:]:
-    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, interval_epoch=180)
-    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=100.0, method="1/x")
-    #     make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=0.0, method="1/x")
+    name_prefixes = ["tom_", "", "tom_", "tom_"]
+    for directory, fname_prefix in list(zip(directories, name_prefixes))[:1]:
+        make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, interval_epoch=180)
+        make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=100.0, method="1/x")
+        make_speaker_example_graphic(directory, image_dim=32, fname_prefix=fname_prefix, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=149, count=15, epoch_span=2800, x_stretch=0.0, method="1/x")
         # make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", one_sign=(5, 12), vertical=False, start_epoch=149, count=20, interval_epoch=75)
         # make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", one_sign=(5, 12), vertical=False, start_epoch=149, count=10, epoch_span=1800, x_stretch=200.0, method="1/x")
         # make_speaker_example_graphic(directory, image_dim=32, fname_prefix="tom_", one_sign=(5, 12), vertical=False, start_epoch=149, count=10, epoch_span=1800, x_stretch=0.0, method="1/x")
@@ -357,15 +357,15 @@ def make_graphics_part2():
     #     num_epochs=2800,
     #     epoch_start=0)
 
-    download_pr_data(run_id="signification-team/signification-game/zsbo8nlx", directory="./resilient-violet-2427/", listeners=(7,))
+    # download_pr_data(run_id="signification-team/signification-game/zsbo8nlx", directory="./resilient-violet-2427/", listeners=(7,))
 
-    make_pr_plot(directory="./resilient-violet-2427/",
-        referent_labels=("Snail", "Dolphin", "Palm Tree", "Rocket", "Spider"),
-        referent_nums=(7, 4, 5, 6, 9),
-        num_epochs=3000,
-        epoch_start=0,
-        agent_num=7,
-        log_scale=True)
+    # make_pr_plot(directory="./resilient-violet-2427/",
+    #     referent_labels=("Snail", "Dolphin", "Palm Tree", "Rocket", "Spider"),
+    #     referent_nums=(7, 4, 5, 6, 9),
+    #     num_epochs=3000,
+    #     epoch_start=0,
+    #     agent_num=7,
+    #     log_scale=True)
 
 
 def remake_graphics_part1():
@@ -1621,6 +1621,7 @@ def make_graphics_post_conference():
 
 
 if __name__=="__main__":
-    make_graphics_post_conference()
+    # make_graphics_post_conference()
     # remake_graphics_part1()
+    make_graphics_part2()
     

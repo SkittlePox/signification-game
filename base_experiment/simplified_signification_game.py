@@ -25,7 +25,7 @@ from utils import (
 )
 import math
 
-from utils import to_jax, center_obs
+from utils import to_jax, center_obs, shift_obs
 
 
 # The first num_speakers channel indices refer to speaker generated images,
@@ -93,7 +93,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         gaussian_noise_stddev: float = 0.0,
         speaker_assignment_method: str = "random",
         mandate_unitary_channel_map: bool = False,
-        center_listener_obs: bool = False,
+        center_and_reshuffle_listener_obs: bool = False,
         **kwargs: dict,
     ) -> None:
         super().__init__(num_agents=num_speakers + num_listeners)
@@ -124,7 +124,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.log_prob_rewards = log_prob_rewards
         self.gaussian_noise_stddev = gaussian_noise_stddev
         self.speaker_assignment_method = speaker_assignment_method
-        self.center_listener_obs = center_listener_obs
+        self.center_and_reshuffle_listener_obs = center_and_reshuffle_listener_obs
         self.mandate_unitary_channel_map = mandate_unitary_channel_map
         self.kwargs = kwargs
 
@@ -329,9 +329,15 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         next_channel_map = jnp.hstack((speakers, listeners))
 
         speaker_images_for_new_state = self.speaker_action_transform(speaker_actions)
-        if self.center_listener_obs:
+        if self.center_and_reshuffle_listener_obs:
+            # Get rid of background, the center
+            speaker_images_for_new_state -= 0.3
             speaker_images_for_new_state = center_obs(speaker_images_for_new_state)
-
+            
+            # Now randomly translate the images and add the background back
+            speaker_images_for_new_state = shift_obs(speaker_images_for_new_state, jax.random.split(k6, len(speaker_images_for_new_state)))
+            speaker_images_for_new_state = jnp.clip(speaker_images_for_new_state + 0.3, 0.0, 1.0)
+            
         # Calculate listener_obs_source based on state.next_channel_map. It should be the size of the number of speakers and be 0 if from env, 1 if from speaker. Based on channel ratio fn.
         listener_obs_values = jnp.where(state.next_channel_map[:, 0] < self.num_speakers, 1, 0)
         listener_obs_indices = state.next_channel_map[:, 1]
@@ -452,7 +458,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         return {"speakers": self.speaker_agents, "listeners": self.listener_agents}
     
     def render_mnist(self, state: State, actions: dict = None) -> None:
-        """Renders the environment (mnist)."""
+        """DEPRECATED Renders the environment (mnist)."""
 
         import matplotlib as mpl
         from matplotlib.backends.backend_agg import (

@@ -469,6 +469,20 @@ def center_obs(image: jnp.array):
     
     return recentered_image
 
+
+@jax.vmap
+def shift_obs(image: jnp.array, rng_key: jnp.array):
+    image_shape = image.shape 
+    image_shift_window = 6
+
+    # Compute the translation
+    translation = (jax.random.uniform(key=rng_key, shape=(2,)) - 0.5) * image_shift_window
+    
+    # Shift the image based on the computed translation
+    shifted_image = jax.image.scale_and_translate(image, image_shape, (0, 1), jnp.array([1.0, 1.0]), translation, method="linear")
+    
+    return shifted_image
+
         
 def get_speaker_action_transform(fn_name, image_dim):
     @jax.vmap
@@ -722,13 +736,15 @@ def get_speaker_action_transform(fn_name, image_dim):
             all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
 
             # Update the canvas
-            canvas = jnp.ones((image_dim, image_dim)) * 0.1 # This is the background color! For nearly all experiments it has been 0.2. For a larger sig gap go for 0.1
+            canvas = jnp.zeros((image_dim, image_dim))
             canvas = canvas.at[all_x_indices, all_y_indices].add(W)
             return canvas
 
+        background_shade = 0.3 # This is the background color! For nearly all experiments it has been 0.2*number of splines. For a larger sig gap go for 0.1*number of splines
+
         # Vmap over splines and sum contributions
         all_spline_params = jnp.clip(all_spline_params, 0.0, 1.0)
-        canvas = jnp.clip(paint_spline_on_canvas(all_spline_params.reshape(-1, 7)).sum(axis=0), 0.0, 1.0)
+        canvas = jnp.clip(paint_spline_on_canvas(all_spline_params.reshape(-1, 7)).sum(axis=0) + background_shade, 0.0, 1.0)
         return canvas
 
     if fn_name == "identity":
