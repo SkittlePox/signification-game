@@ -330,12 +330,14 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
         speaker_images_for_new_state = self.speaker_action_transform(speaker_actions)
         if self.center_and_reshuffle_listener_obs:
-            # Get rid of background, the center
+            # Get rid of background, then center
             speaker_images_for_new_state -= 0.3
+            speaker_images_for_new_state *= -1
             speaker_images_for_new_state = center_obs(speaker_images_for_new_state)
             
             # Now randomly translate the images and add the background back
             speaker_images_for_new_state = shift_obs(speaker_images_for_new_state, jax.random.split(k6, len(speaker_images_for_new_state)))
+            speaker_images_for_new_state *= -1
             speaker_images_for_new_state = jnp.clip(speaker_images_for_new_state + 0.3, 0.0, 1.0)
             
         # Calculate listener_obs_source based on state.next_channel_map. It should be the size of the number of speakers and be 0 if from env, 1 if from speaker. Based on channel ratio fn.

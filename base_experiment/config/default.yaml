@@ -55,7 +55,7 @@
 "PROBE_OPTIMIZER": "adam"
 
 "ENV_NAME": "simple-sig-game"
-"ENV_DATASET": 'cifar100'
+"ENV_DATASET": 'cifar10b'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
   "num_speakers": 10  # best to have num_speakers = num_listeners
