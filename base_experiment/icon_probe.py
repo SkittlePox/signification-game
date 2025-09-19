@@ -77,7 +77,7 @@ def apply_model(state, images, labels):
 
     def loss_fn(params):
         logits = state.apply_fn({'params': params}, images)
-        one_hot = jax.nn.one_hot(labels, 10)
+        one_hot = jax.nn.one_hot(labels, 20)    #  NOTE: this number must be set to the number of classes
         loss = jnp.mean(optax.softmax_cross_entropy(
             logits=logits, labels=one_hot))
         return loss, logits

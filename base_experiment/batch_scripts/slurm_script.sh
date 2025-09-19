@@ -147,6 +147,22 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R26a - cifar10b tom agents 4 splines 0.1 canvas spline similarity penalty 0.3" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.5 jump to 1.0 at 1000" ENV_KWARGS.speaker_similar_curve_penalty_coef=0.3 ENV_KWARGS.speaker_action_dim=28 ENV_KWARGS.speaker_assignment_method="random" ENV_KWARGS.agent_inferential_mode_fn="1.0" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH="2" LISTENER_PR_WEIGHT=1.0 L2_REG_COEF_SPEAKER=1e-2 LISTENER_LR_SCHEDULE="1e-5" SPEAKER_LR_SCHEDULE="1e-4" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10b-woven-glade-2275-2000e-5000dp-c6fb" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True MAX_SPEAKER_N_SEARCH=2
 # python3 -u ippo_ff.py WANDB_NOTES="Post-Draft-Part2-R26b - cifar10b tom agents 4 splines 0.1 canvas spline similarity penalty -0.3" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.5 jump to 1.0 at 1000" ENV_KWARGS.speaker_similar_curve_penalty_coef=-0.3 ENV_KWARGS.speaker_action_dim=28 ENV_KWARGS.speaker_assignment_method="random" ENV_KWARGS.agent_inferential_mode_fn="1.0" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH="2" LISTENER_PR_WEIGHT=1.0 L2_REG_COEF_SPEAKER=1e-2 LISTENER_LR_SCHEDULE="1e-5" SPEAKER_LR_SCHEDULE="1e-4" SPEAKER_TRAIN_SCHEDULE="on" PRETRAINED_LISTENERS="agents-cifar10b-woven-glade-2275-2000e-5000dp-c6fb" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True MAX_SPEAKER_N_SEARCH=2
 
-## Probe models below
+
+
+########################################################################
+########################################################################
+##################### Fall 2025  Starts Below ##########################
+########################################################################
+########################################################################
+
+
+
+#### For collecting listeners to run ToM experiments on cifar20
+python3 -u ippo_ff.py WANDB_NOTES="Fall-2025 cifar20 just listeners 5000 punish less" +dataset=cifar20 ENV_KWARGS.channel_ratio_fn="0.0" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.listener_reward_success=2.0 ENV_KWARGS.listener_reward_failure=-0.01 ENV_KWARGS.channel_ratio_fn=0.0 ENV_KWARGS.speaker_referent_span_fn=20 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+
+
+
+## Pre-trained agent models below
 # for cifar10: "agents-cifar10-peach-spaceship-2253-2000e-5000dp-0fea"
 # for cifar10b: "agents-cifar10b-woven-glade-2275-2000e-5000dp-c6fb"
+# for cifar20: ""
