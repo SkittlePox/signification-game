@@ -491,7 +491,6 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
 def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
     speaker_obs = jnp.tile(jnp.arange(config["ENV_KWARGS"]["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
-    center_listener_obs = config["ENV_KWARGS"]["center_listener_obs"]
     sp_action_dim = config["ENV_KWARGS"]["speaker_action_dim"]
     num_speakers = config["ENV_KWARGS"]["num_speakers"]
     
@@ -504,15 +503,12 @@ def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_t
     speaker_actions = vmap_get_speaker_outputs(speaker_params).reshape((-1, sp_action_dim))
     speaker_images = speaker_action_transform(speaker_actions)
     
-    if center_listener_obs:
-        speaker_images = center_obs(speaker_images)
     return speaker_images
 
 def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_apply_fn, speaker_params, speaker_action_transform, config, tom_speaker_n_search):
     env_kwargs = config["ENV_KWARGS"]
     speaker_obs = jnp.tile(jnp.arange(env_kwargs["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
-    center_listener_obs = env_kwargs["center_listener_obs"]
     sp_action_dim = env_kwargs["speaker_action_dim"]
     num_speakers = env_kwargs["num_speakers"]
     max_speaker_n_search = config["MAX_SPEAKER_N_SEARCH"]
@@ -526,8 +522,6 @@ def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_ap
     speaker_actions = vmap_get_speaker_outputs(speaker_params, listener_params).reshape((-1, sp_action_dim))
     speaker_images = speaker_action_transform(speaker_actions)
     
-    if center_listener_obs:
-        speaker_images = center_obs(speaker_images)
     return speaker_images
 
 def calculate_gae_listeners(trans_batch, last_val, gamma, gae_lambda):
@@ -1270,8 +1264,6 @@ def make_train(config):
             
             ## Collect the last set of speaker-generated images for this epoch.
             final_speaker_images = speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((env_kwargs["num_speakers"]), -1))
-            if env_kwargs["center_listener_obs"]:
-                final_speaker_images = center_obs(final_speaker_images)
             ## speaker_images is shaped (num_speakers, image_dim, image_dim)
 
             ### Calculate optimizer param stats (L2-Norm) and learning rates (assuming they are the same for all agents of that type)
@@ -1297,7 +1289,8 @@ def make_train(config):
                 speaker_images_for_icon_probe = jnp.expand_dims(speaker_action_transform(trimmed_transition_batch.speaker_action[:config["PROBE_NUM_EXAMPLES"]].reshape((-1, env_kwargs["speaker_action_dim"]))), axis=3)
                 # I need to calculate the whitesum penalty based on the speaker_images. I don't know what shape they are
                 return probe_train_state.apply_fn({'params': probe_train_state.params}, speaker_images_for_icon_probe).reshape((-1, env_kwargs["num_speakers"], env_kwargs["num_classes"]))
-            probe_logits = jax.lax.cond((update_step + 1) % config["PROBE_LOGGING_ITER"] == 0, lambda _: get_probe_logits(), lambda _: jnp.zeros((config["PROBE_NUM_EXAMPLES"], env_kwargs["num_speakers"], env_kwargs["num_classes"])), operand=None)
+            num_probe_exs = config["PROBE_NUM_EXAMPLES"] if config["NUM_STEPS"] >= config["PROBE_NUM_EXAMPLES"] else config["NUM_STEPS"]
+            probe_logits = jax.lax.cond((update_step + 1) % config["PROBE_LOGGING_ITER"] == 0, lambda _: get_probe_logits(), lambda _: jnp.zeros((num_probe_exs, env_kwargs["num_speakers"], env_kwargs["num_classes"])), operand=None)
             ###
 
             ### Collect env channel info
@@ -1309,7 +1302,7 @@ def make_train(config):
 
             ### Some other debug info
             speaker_example_logging_params = (config["SPEAKER_EXAMPLE_DEBUG"], config["SPEAKER_EXAMPLE_LOGGING_ITER"])
-            probe_logging_params = (config["PROBE_LOGGING_ITER"], config["PROBE_NUM_EXAMPLES"])
+            probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
 
             metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
