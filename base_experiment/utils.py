@@ -473,7 +473,7 @@ def center_obs(image: jnp.array):
 @jax.vmap
 def shift_obs(image: jnp.array, rng_key: jnp.array):
     image_shape = image.shape 
-    image_shift_window = 6
+    image_shift_window = 4
 
     # Compute the translation
     translation = (jax.random.uniform(key=rng_key, shape=(2,)) - 0.5) * image_shift_window

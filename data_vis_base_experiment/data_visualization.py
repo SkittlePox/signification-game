@@ -11,10 +11,11 @@ import matplotlib.animation as animation
 import seaborn as sns
 import json
 
+# os.chdir(os.path.join(os.getcwd(), "data_vis_base_experiment/runs"))  # For debug!
 os.chdir(os.path.join(os.getcwd(), "runs"))
 
 
-def download_speaker_examples(run_id, directory, tom_examples_only=False):
+def download_speaker_examples(run_id, directory, tom_examples_only=True):
     fname_fragment = "tom_speaker_examples" if tom_examples_only else "speaker_examples"
     os.makedirs(directory, exist_ok=True)
     api = wandb.Api()
@@ -181,6 +182,96 @@ def make_speaker_example_graphic(directory, count=5, log_interval=5, image_dim=2
         for img_file in image_files:
             f.write(f"{img_file}\n")
 
+
+def make_multi_speaker_example_graphic_single_sign(directories, one_sign, count=5, log_interval=5, image_dim=32, method="uniform", fname_prefix="tom_", vertical=True, **kwargs):
+    height_dx = image_dim + 2   # Assuming 2px border
+    fname_template = fname_prefix+"speaker_examples_"
+
+    all_image_files = []
+    image_dirs = []
+
+    for directory in directories:
+        image_dir = os.path.join(directory, "media/images/env/")
+        files = os.listdir(image_dir)
+
+        sorted_files = sorted([f for f in files if f.startswith(fname_template)],
+                            key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
+        
+        # print(len(sorted_files))
+        
+        if method == "uniform":
+            start_epoch = kwargs["start_epoch"]
+            interval_epoch = kwargs["interval_epoch"]
+
+            start_index=int((start_epoch-(log_interval-1))/log_interval)
+            mid_index=int(start_index + count * interval_epoch / log_interval)
+            interval_index=int(interval_epoch/log_interval)
+
+            indices = range(start_index, mid_index, interval_index) if count > 0 else []
+            image_files = [sorted_files[i] for i in indices if i < len(sorted_files)]
+            
+            graphic_name = f"{fname_template}onesign_{str(one_sign)}_{start_epoch}s_{interval_epoch}i_{count}c_{str(uuid.uuid4())[:5]}"
+
+        elif method == "1/x":
+            start_epoch = kwargs["start_epoch"]
+            epoch_span = kwargs["epoch_span"]
+            x_stretch = kwargs["x_stretch"]
+
+            index_span = int(epoch_span / log_interval)
+            start_index = int((start_epoch-(log_interval-1))/log_interval)
+            # print(start_index)
+
+            indices_of_interest = range(len(sorted_files))[start_index: start_index+index_span+1]
+
+            index_values = np.array([(1.0/(x+x_stretch)) for x in indices_of_interest])
+
+            # print(index_values)
+            # return
+            
+            tot_sum = sum(index_values)
+            desired_interval = tot_sum / count
+
+            running_sum = 0.0
+            indices = [indices_of_interest[0]]
+            for i, v in enumerate(index_values):
+                running_sum += v
+                if running_sum >= desired_interval:
+                    indices.append(indices_of_interest[i])
+                    running_sum = 0.0
+
+            # print(indices)
+            image_files = [sorted_files[i] for i in indices if i < len(sorted_files)]
+            graphic_name = f"{fname_template}onesign_{str(one_sign)}_{start_epoch}s_{epoch_span}s_{x_stretch}x_{count}c_{str(uuid.uuid4())[:5]}"
+        
+        all_image_files.append(image_files)
+        image_dirs.append(image_dir)
+
+
+    # Assuming one sign
+    images = []
+    for run_ix, image_files in enumerate(all_image_files):
+        col_imgs = []
+        for i, f in enumerate(image_files):
+            img = Image.open(os.path.join(image_dirs[run_ix], f))
+            img_array = np.array(img)
+            # local_height_dx = height_dx+2
+            local_width_dx = height_dx if i == len(image_files) - 1 else height_dx
+            col_imgs.append(img_array[height_dx*one_sign[1]:height_dx*one_sign[1]+height_dx, height_dx*one_sign[0]:height_dx*one_sign[0]+local_width_dx])
+        # col_img = np.concatenate(col_)
+        col_img = np.concatenate(col_imgs, axis=0)
+        images.append(col_img)
+
+    combined = np.concatenate(images, axis=1)
+
+    combined_image = Image.fromarray(combined)
+    combined_image.save("../joint-plots/" + f"{graphic_name}.png")
+
+    # Save image filenames
+    with open("../joint-plots/configs/" + f"{graphic_name}_image_list.txt", "w") as f:
+        for i, image_files in enumerate(all_image_files):
+            f.write(f"{image_dirs[i]}\n")
+            for img_file in image_files:    
+                f.write(f"{img_file}\n")
 
 def make_graphics_part1():
     # (Runs 1950: manipulation, 1931: whitesum, 1934: negative whitesum, 1940: auto-centering, 1944: curvature, 1945: negative curvature)
@@ -1620,8 +1711,40 @@ def make_graphics_post_conference():
     make_multi_animation(directories=["./ethereal-butterfly-2559/", "./smart-resonance-2540/", "./ruby-butterfly-2569/"], labels=["Behaviorist", "Inferential", "Inferential – P_ref"], fname_prefixes=["", "tom_", "tom_"], speaker_selection=speaker_selection)
 
 
+def make_graphics_fall_2025():
+    ### Visual penalty runs
+    # download_speaker_examples(run_id="signification-team/signification-game/30uim87h", directory="./stellar-vortex-2631/")       # Post-Draft-Part2-R26b - cifar10b tom agents 4 splines 0.1 canvas spline similarity penalty -0.3
+    # download_speaker_examples(run_id="signification-team/signification-game/5jqw6pwa", directory="./warm-thunder-2630/")         # Post-Draft-Part2-R26a - cifar10b tom agents 4 splines 0.1 canvas spline similarity penalty 0.3
+    # download_speaker_examples(run_id="signification-team/signification-game/qp4s2a6a", directory="./true-universe-2629/")        # Post-Draft-Part2-R24b - cifar10b tom agents 4 splines 0.1 canvas right angle penalty -0.1
+    # download_speaker_examples(run_id="signification-team/signification-game/ndhauk3k", directory="./glorious-dew-2628/")         # Post-Draft-Part2-R24a - cifar10b tom agents 4 splines 0.1 canvas right angle penalty 0.1
+    # download_speaker_examples(run_id="signification-team/signification-game/veqkm6ry", directory="./misunderstood-meadow-2627/") # Post-Draft-Part2-R23b - cifar10b tom agents 4 splines 0.1 canvas whitesum penalty -0.5
+    # download_speaker_examples(run_id="signification-team/signification-game/w6bvvkke", directory="./expert-pond-2626/")          # Post-Draft-Part2-R23a - cifar10b tom agents 4 splines 0.1 canvas whitesum penalty 0.5
+    # download_speaker_examples(run_id="signification-team/signification-game/h8ibznoh", directory="./summer-oath-2625/")          # Post-Draft-Part2-R22b - cifar10b tom agents 4 splines 0.2 canvas no penalties
+    # download_speaker_examples(run_id="signification-team/signification-game/dxmau0va", directory="./stoic-bush-2624/")           # no shuffle rerun - Post-Draft-Part2-R21c - cifar10b tom agents 4 splines 0.1 canvas curve penalty 0.001
+    # download_speaker_examples(run_id="signification-team/signification-game/oceg4oyg", directory="./hardy-cosmos-2623/")         # no shuffle rerun - Post-Draft-Part2-R21b - cifar10b tom agents 4 splines 0.1 canvas curve penalty -0.01
+
+    directories = ("./stellar-vortex-2631/",
+                    "./warm-thunder-2630/",
+                    "./true-universe-2629/",
+                    "./glorious-dew-2628/",
+                    "./misunderstood-meadow-2627/",
+                    "./expert-pond-2626/",
+                    "./summer-oath-2625/",
+                    "./stoic-bush-2624/",
+                    "./hardy-cosmos-2623/")
+
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=15, epoch_span=2550, x_stretch=100.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=15, epoch_span=2550, x_stretch=0.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, interval_epoch=255)
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, interval_epoch=125)
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=100.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=0.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=0.0, method="1/x")
+
 if __name__=="__main__":
     # make_graphics_post_conference()
     # remake_graphics_part1()
-    make_graphics_part2()
+    # make_graphics_part2()
+    make_graphics_fall_2025()
     

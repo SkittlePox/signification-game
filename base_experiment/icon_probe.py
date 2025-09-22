@@ -19,6 +19,9 @@ import pickle
 from utils import to_jax
 
 
+NUM_CLASSES = 10
+
+
 class CNN(nn.Module):
     """A simple CNN model."""
     action_dim: Sequence[int]
@@ -77,7 +80,7 @@ def apply_model(state, images, labels):
 
     def loss_fn(params):
         logits = state.apply_fn({'params': params}, images)
-        one_hot = jax.nn.one_hot(labels, 20)    #  NOTE: this number must be set to the number of classes
+        one_hot = jax.nn.one_hot(labels, NUM_CLASSES)    #  NOTE: this number must be set to the number of classes
         loss = jnp.mean(optax.softmax_cross_entropy(
             logits=logits, labels=one_hot))
         return loss, logits

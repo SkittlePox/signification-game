@@ -5,7 +5,7 @@
 #SBATCH -c 4
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=10:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mem=12GB
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
@@ -158,11 +158,11 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 
 #### For collecting listeners to run ToM experiments on cifar20
-python3 -u ippo_ff.py WANDB_NOTES="Fall-2025 cifar20 just listeners 5000 punish less" +dataset=cifar20 ENV_KWARGS.channel_ratio_fn="0.0" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.listener_reward_success=2.0 ENV_KWARGS.listener_reward_failure=-0.01 ENV_KWARGS.channel_ratio_fn=0.0 ENV_KWARGS.speaker_referent_span_fn=20 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
+# python3 -u ippo_ff.py WANDB_NOTES="Fall-2025 cifar20 just listeners punish even less 3.5k epochs" +dataset=cifar20 ENV_KWARGS.channel_ratio_fn="0.0" SPEAKER_TRAIN_SCHEDULE="off" UPDATE_EPOCHS=3500 ENV_NUM_DATAPOINTS=5000 ENV_KWARGS.listener_reward_success=5.0 ENV_KWARGS.listener_reward_failure=-0.01 ENV_KWARGS.channel_ratio_fn=0.0 ENV_KWARGS.speaker_referent_span_fn=20 WANDB_MODE=online PICKLE_FINAL_AGENTS=True
 
 
 
 ## Pre-trained agent models below
 # for cifar10: "agents-cifar10-peach-spaceship-2253-2000e-5000dp-0fea"
 # for cifar10b: "agents-cifar10b-woven-glade-2275-2000e-5000dp-c6fb"
-# for cifar20: ""
+# for cifar20: "agents-cifar20-jolly-dawn-2614-3500e-5000dp-5231"

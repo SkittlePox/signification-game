@@ -75,7 +75,7 @@
   "speaker_right_angle_penalty_coef": 0.0
   "speaker_right_angle_or_straight_penalty_coef": 0.0
   "speaker_similar_curve_penalty_coef": 0.0
-  "center_and_reshuffle_listener_obs": True
+  "center_and_reshuffle_listener_obs": False
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "coop"  # "1.0 at 300", "coop", "manip"
