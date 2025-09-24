@@ -1757,9 +1757,9 @@ def make_graphics_fall_2025():
                     "./peach-shadow-2634/")
 
 
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, epoch_span=3000, x_stretch=100.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, epoch_span=3000, x_stretch=0.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, interval_epoch=500)
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=100.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=0.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, interval_epoch=625)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, interval_epoch=125)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=100.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
