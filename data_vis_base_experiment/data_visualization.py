@@ -1719,28 +1719,28 @@ def make_graphics_fall_2025():
     # download_speaker_examples(run_id="signification-team/signification-game/ndhauk3k", directory="./glorious-dew-2628/")         # Post-Draft-Part2-R24a - cifar10b tom agents 4 splines 0.1 canvas right angle penalty 0.1
     # download_speaker_examples(run_id="signification-team/signification-game/veqkm6ry", directory="./misunderstood-meadow-2627/") # Post-Draft-Part2-R23b - cifar10b tom agents 4 splines 0.1 canvas whitesum penalty -0.5
     # download_speaker_examples(run_id="signification-team/signification-game/w6bvvkke", directory="./expert-pond-2626/")          # Post-Draft-Part2-R23a - cifar10b tom agents 4 splines 0.1 canvas whitesum penalty 0.5
-    # download_speaker_examples(run_id="signification-team/signification-game/h8ibznoh", directory="./summer-oath-2625/")          # Post-Draft-Part2-R22b - cifar10b tom agents 4 splines 0.2 canvas no penalties
     # download_speaker_examples(run_id="signification-team/signification-game/dxmau0va", directory="./stoic-bush-2624/")           # no shuffle rerun - Post-Draft-Part2-R21c - cifar10b tom agents 4 splines 0.1 canvas curve penalty 0.001
     # download_speaker_examples(run_id="signification-team/signification-game/oceg4oyg", directory="./hardy-cosmos-2623/")         # no shuffle rerun - Post-Draft-Part2-R21b - cifar10b tom agents 4 splines 0.1 canvas curve penalty -0.01
+    # download_speaker_examples(run_id="signification-team/signification-game/h8ibznoh", directory="./summer-oath-2625/")          # Post-Draft-Part2-R22b - cifar10b tom agents 4 splines 0.2 canvas no penalties
 
     directories = ("./stellar-vortex-2631/",
                     "./warm-thunder-2630/",
                     "./true-universe-2629/",
                     "./glorious-dew-2628/",
                     "./misunderstood-meadow-2627/",
-                    "./expert-pond-2626/",
-                    "./summer-oath-2625/",
+                    "./expert-pond-2626/",                    
                     "./stoic-bush-2624/",
-                    "./hardy-cosmos-2623/")
+                    "./hardy-cosmos-2623/",
+                    "./summer-oath-2625/")
 
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=15, epoch_span=2550, x_stretch=100.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=15, epoch_span=2550, x_stretch=0.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, interval_epoch=255)
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, interval_epoch=125)
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=100.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=0.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=0.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, epoch_span=3000, x_stretch=100.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, epoch_span=3000, x_stretch=0.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, interval_epoch=500)
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, interval_epoch=125)
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=100.0, method="1/x")
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=0.0, method="1/x")
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=0.0, method="1/x")
 
 if __name__=="__main__":
     # make_graphics_post_conference()
