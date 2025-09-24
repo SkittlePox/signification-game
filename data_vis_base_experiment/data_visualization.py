@@ -1712,7 +1712,7 @@ def make_graphics_post_conference():
 
 
 def make_graphics_fall_2025():
-    ### Visual penalty runs
+    ### Visual penalty runs 4 splines
     # download_speaker_examples(run_id="signification-team/signification-game/30uim87h", directory="./stellar-vortex-2631/")       # Post-Draft-Part2-R26b - cifar10b tom agents 4 splines 0.1 canvas spline similarity penalty -0.3
     # download_speaker_examples(run_id="signification-team/signification-game/5jqw6pwa", directory="./warm-thunder-2630/")         # Post-Draft-Part2-R26a - cifar10b tom agents 4 splines 0.1 canvas spline similarity penalty 0.3
     # download_speaker_examples(run_id="signification-team/signification-game/qp4s2a6a", directory="./true-universe-2629/")        # Post-Draft-Part2-R24b - cifar10b tom agents 4 splines 0.1 canvas right angle penalty -0.1
@@ -1733,6 +1733,30 @@ def make_graphics_fall_2025():
                     "./hardy-cosmos-2623/",
                     "./summer-oath-2625/")
 
+
+    ### Visual penalty runs 3 splines
+    # download_speaker_examples(run_id="signification-team/signification-game/bdc2ns0f", directory="./solar-dragon-2640/")            # Post-Draft-Part2-R26b - cifar10b tom agents 3 splines 0.3 canvas spline similarity penalty -0.3
+    # download_speaker_examples(run_id="signification-team/signification-game/jaigtgpe", directory="./pleasant-aardvark-2637/")       # Post-Draft-Part2-R24a - cifar10b tom agents 3 splines 0.3 canvas right angle penalty 0.1
+    # download_speaker_examples(run_id="signification-team/signification-game/lw59sb9i", directory="./stellar-snow-2638/")            # Post-Draft-Part2-R26a - cifar10b tom agents 3 splines 0.3 canvas spline similarity penalty 0.3
+    # download_speaker_examples(run_id="signification-team/signification-game/t6kyuyjx", directory="./bright-silence-2638/")          # Post-Draft-Part2-R23b - cifar10b tom agents 3 splines 0.3 canvas whitesum penalty -0.5
+    # download_speaker_examples(run_id="signification-team/signification-game/0mxqdjk5", directory="./helpful-tree-2636/")            # Post-Draft-Part2-R24b - cifar10b tom agents 3 splines 0.3 canvas right angle penalty -0.1
+    # download_speaker_examples(run_id="signification-team/signification-game/uh9h2zgn", directory="./ruby-snow-2634/")               # Post-Draft-Part2-R23a - cifar10b tom agents 3 splines 0.3 canvas whitesum penalty 0.5
+    # download_speaker_examples(run_id="signification-team/signification-game/jaf2ejp2", directory="./silver-violet-2633/")           # Post-Draft-Part2-R21c - cifar10b tom agents 3 splines 0.3 canvas curve penalty 0.001
+    # download_speaker_examples(run_id="signification-team/signification-game/r5bnxfd1", directory="./feasible-aardvark-2632/")       # Post-Draft-Part2-R21b - cifar10b tom agents 3 splines 0.3 canvas curve penalty -0.01
+    # download_speaker_examples(run_id="signification-team/signification-game/20xx8eba", directory="./peach-shadow-2634/")            # Post-Draft-Part2-R22b - cifar10b tom agents 3 splines 0.3 canvas no penalties
+
+
+    directories = ("./solar-dragon-2640/",
+                    "./pleasant-aardvark-2637/",
+                    "./stellar-snow-2638/",
+                    "./bright-silence-2638/",
+                    "./helpful-tree-2636/",
+                    "./ruby-snow-2634/",                    
+                    "./silver-violet-2633/",
+                    "./feasible-aardvark-2632/",
+                    "./peach-shadow-2634/")
+
+
     make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, epoch_span=3000, x_stretch=100.0, method="1/x")
     make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, epoch_span=3000, x_stretch=0.0, method="1/x")
     make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,0), start_epoch=449, count=6, interval_epoch=500)
@@ -1741,6 +1765,8 @@ def make_graphics_fall_2025():
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=0.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=0.0, method="1/x")
+
+
 
 if __name__=="__main__":
     # make_graphics_post_conference()
