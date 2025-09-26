@@ -803,6 +803,72 @@ def make_simple_animation(directory, labels=True, num_epochs=2800, epoch_start=0
     print("Saved file")
 
 
+def make_simple_animation_same_sign_multi_agent(directories, referent_coordinates=((0,1), (4,5)), labels=[], fname_prefix="tom_", epochs=3000, image_dim=32):
+    height_dx = image_dim + 2   # Assuming 2px border
+
+    FPS=20
+
+    sorted_files_by_dir = []
+    
+    for directory in directories:
+        # Load image data
+        image_dir = os.path.join(directory, "media/images/env/")
+        files = os.listdir(image_dir)
+        fname_template = fname_prefix+"speaker_examples_"
+
+        sorted_files = sorted([f for f in files if f.startswith(fname_template)],
+                            key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
+        sorted_files = [os.path.join(image_dir, f) for f in sorted_files]
+        sorted_files_by_dir.append(sorted_files)
+    
+
+    # Initialize figure
+    fig, axe = plt.subplots(figsize=(4, 2))
+    img_ax = axe
+
+    def update(frame):
+        # Load and update image
+        # img = plt.imread(sorted_files[frame])
+
+        ##### Crop img here if you want.
+        row_imgs = []
+        for sorted_files in sorted_files_by_dir:
+            img = Image.open(sorted_files[frame])
+            img_array = np.array(img)
+            # local_height_dx = height_dx if i == len(image_files) - 1 else height_dx
+            col_images = []
+            for (x, y) in referent_coordinates:
+                local_width_dx = height_dx #if ii == referent_selection[-1] else height_dx
+                col_images.append(img_array[height_dx*y:height_dx*y+height_dx, height_dx*x:height_dx*x+local_width_dx])
+            col_image = np.concatenate(col_images, axis=0)
+            row_imgs.append(col_image)
+        row_img = np.concatenate(row_imgs, axis=1)
+        
+        ###########
+
+        img_ax.clear()
+        img_ax.imshow(row_img, cmap="viridis")
+        img_ax.axis("off")
+        img_ax.set_title(f"Signals at Epoch {frame * 5}")
+        # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
+        # if labels:
+        #     img_ax.text(-2, 45, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
+
+        return img_ax
+    
+    # print(animation.writers.list())
+    
+    ani = animation.FuncAnimation(fig, update, frames=epochs//5, interval=1000//FPS)
+
+    uuidstr = str(uuid.uuid4())[:5]
+
+    directory_names = "_".join(directory.split('-')[-1][:-1] for directory in directories)
+    ani.save(f"../joint-plots/vid_multi_onesign_{directory_names}_{uuidstr}.mp4", writer="ffmpeg", fps=FPS)
+
+    print(f"Saved file: ../joint-plots/vid_multi_onesign_{directory_names}_{uuidstr}.mp4")
+
+
+
 def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epoch_start=0, agent_num=None, log_scale=False):
     if agent_num:
         datas = [pd.read_csv(os.path.join(directory, f"inference_pr_listener_{agent_num}_referent_{ref_num}.csv")) for ref_num in referent_nums]
@@ -1757,15 +1823,44 @@ def make_graphics_fall_2025():
                     "./peach-shadow-2634/")
 
 
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=100.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=0.0, method="1/x")
-    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, interval_epoch=625)
+    ### Visual penalty runs 3 splines - XL (6000 epochs)
+
+    # Excluded
+    # download_speaker_examples(run_id="signification-team/signification-game/q38rm6d9", directory="./comic-meadow-2649/")            # XL Post-Draft-Part2-R25b - cifar10b tom agents 3 splines 0.3 canvas right angle or straight penalty -0.1
+    # download_speaker_examples(run_id="signification-team/signification-game/i63san15", directory="./desert-sponge-2646/")           # XL Post-Draft-Part2-R25a - cifar10b tom agents 3 splines 0.3 canvas right angle or straight penalty 0.1
+
+    # download_speaker_examples(run_id="signification-team/signification-game/b29hyp3d", directory="./sunny-wind-2646/")              # XL Post-Draft-Part2-R24a - cifar10b tom agents 3 splines 0.3 canvas right angle penalty 0.1
+    # download_speaker_examples(run_id="signification-team/signification-game/k95y3zqx", directory="./divine-oath-2646/")             # XL Post-Draft-Part2-R24b - cifar10b tom agents 3 splines 0.3 canvas right angle penalty -0.1
+    # download_speaker_examples(run_id="signification-team/signification-game/eejb1l80", directory="./grateful-firefly-2651/")        # XL Post-Draft-Part2-R26b - cifar10b tom agents 3 splines 0.3 canvas spline similarity penalty -0.3
+    # download_speaker_examples(run_id="signification-team/signification-game/n1jn54v1", directory="./dutiful-glade-2650/")           # XL Post-Draft-Part2-R26a - cifar10b tom agents 3 splines 0.3 canvas spline similarity penalty 0.3
+    # download_speaker_examples(run_id="signification-team/signification-game/kbt3q1rj", directory="./ruby-dew-2645/")                # XL Post-Draft-Part2-R23b - cifar10b tom agents 3 splines 0.3 canvas whitesum penalty -0.5
+    # download_speaker_examples(run_id="signification-team/signification-game/iiacje3z", directory="./unique-sky-2643/")              # XL Post-Draft-Part2-R23a - cifar10b tom agents 3 splines 0.3 canvas whitesum penalty 0.5
+    # download_speaker_examples(run_id="signification-team/signification-game/uiax9t3x", directory="./azure-thunder-2644/")           # XL Post-Draft-Part2-R21c - cifar10b tom agents 3 splines 0.3 canvas curve penalty 0.001
+    # download_speaker_examples(run_id="signification-team/signification-game/yn1yg2xe", directory="./daily-snowball-2641/")          # XL Post-Draft-Part2-R21b - cifar10b tom agents 3 splines 0.3 canvas curve penalty -0.01
+    # download_speaker_examples(run_id="signification-team/signification-game/5ds59x9l", directory="./distinctive-haze-2642/")        # XL Post-Draft-Part2-R22b - cifar10b tom agents 3 splines 0.3 canvas no penalties
+
+    directories = ("./sunny-wind-2646/",
+                    "./divine-oath-2646/",
+                    "./grateful-firefly-2651/",
+                    "./dutiful-glade-2650/",
+                    "./ruby-dew-2645/",
+                    "./unique-sky-2643/",                    
+                    "./azure-thunder-2644/",
+                    "./daily-snowball-2641/",
+                    "./distinctive-haze-2642/")
+
+
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=100.0, method="1/x")
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=0.0, method="1/x")
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, interval_epoch=625)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, interval_epoch=125)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=100.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=0.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=0.0, method="1/x")
 
+
+    make_simple_animation_same_sign_multi_agent(directories[:3], referent_coordinates=((0,1), (4,5)), epochs=2000)
 
 
 if __name__=="__main__":
