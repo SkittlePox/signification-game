@@ -21,6 +21,7 @@ def download_speaker_examples(run_id, directory, tom_examples_only=True):
     api = wandb.Api()
     run = api.run(run_id)
     files = run.files()
+    print("Downloading for run", directory)
     for file in tqdm(files, desc="Downloading speaker examples"):
         if fname_fragment in str(file):
             file.download(root=directory)
@@ -30,6 +31,7 @@ def download_probe_data(run_id, directory, which_speakers=[0]):
     api = wandb.Api()
     run = api.run(run_id)
     history = run.scan_history()
+    print("Downloading for run", directory)
     for sp_num in which_speakers:
         probe_entropy = [row[f"probe/entropy/speaker {sp_num} average"] for row in tqdm(history, desc="Downloading probe data")]
         probe_entropy_df = pd.DataFrame(probe_entropy)
@@ -43,6 +45,7 @@ def download_pr_data(run_id, directory, referents=list(range(10)), listeners=())
     api = wandb.Api()
     run = api.run(run_id)
     history = run.scan_history()
+    print("Downloading for run", directory)
     for ref_num in referents:
         probe_entropy = [row[f"inference/all listeners referent {ref_num}"] for row in tqdm(history, desc="Downloading probe data")]
         probe_entropy_df = pd.DataFrame(probe_entropy)
@@ -56,6 +59,7 @@ def download_reward_data(run_id, directory):
     os.makedirs(directory, exist_ok=True)
     api = wandb.Api()
     run = api.run(run_id)
+    print("Downloading for run", directory)
     history = run.scan_history()
     # for sp_num in which_speakers:
     #     probe_entropy = [row[f"probe/entropy/speaker {sp_num} average"] for row in tqdm(history, desc="Downloading probe data")]
@@ -71,6 +75,7 @@ def download_communication_success_data(run_id, directory, referents=list(range(
     api = wandb.Api()
     run = api.run(run_id)
     history = run.scan_history()
+    print("Downloading for run", directory)
     for ref_num in referents:
         success_data = [row[f"success/average success/all speakers referent {ref_num}"] for row in tqdm(history, desc=f"Downloading communication success data for referent {ref_num}")]
         success_data_df = pd.DataFrame(success_data)
@@ -1850,9 +1855,9 @@ def make_graphics_fall_2025():
                     "./distinctive-haze-2642/")
 
 
-    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=100.0, method="1/x")
-    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, epoch_span=2500, x_stretch=0.0, method="1/x")
-    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=4, interval_epoch=625)
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=5, epoch_span=5500, x_stretch=100.0, method="1/x")
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=5, epoch_span=5500, x_stretch=0.0, method="1/x")
+    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=5, interval_epoch=1100)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, interval_epoch=125)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=100.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
