@@ -1846,8 +1846,8 @@ def make_graphics_fall_2025():
 
     directories = ("./sunny-wind-2646/",
                     "./divine-oath-2646/",
-                    "./grateful-firefly-2651/",
-                    "./dutiful-glade-2650/",
+                    # "./grateful-firefly-2651/",
+                    # "./dutiful-glade-2650/",
                     "./ruby-dew-2645/",
                     "./unique-sky-2643/",                    
                     "./azure-thunder-2644/",
@@ -1855,9 +1855,9 @@ def make_graphics_fall_2025():
                     "./distinctive-haze-2642/")
 
 
-    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=5, epoch_span=5500, x_stretch=100.0, method="1/x")
-    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=5, epoch_span=5500, x_stretch=0.0, method="1/x")
-    # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(8,2), start_epoch=449, count=5, interval_epoch=1100)
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(4,4), start_epoch=449, count=5, epoch_span=5500, x_stretch=100.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(4,4), start_epoch=449, count=5, epoch_span=5500, x_stretch=0.0, method="1/x")
+    make_multi_speaker_example_graphic_single_sign(directories, one_sign=(4,4), start_epoch=449, count=5, interval_epoch=1100)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, interval_epoch=125)
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=10, epoch_span=2550, x_stretch=100.0, method="1/x")
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=100.0, method="1/x")
@@ -1865,7 +1865,7 @@ def make_graphics_fall_2025():
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=0.0, method="1/x")
 
 
-    make_simple_animation_same_sign_multi_agent(directories[:3], referent_coordinates=((0,1), (4,5)), epochs=2000)
+    # make_simple_animation_same_sign_multi_agent(directories[:3], referent_coordinates=((0,1), (4,5)), epochs=2000)
 
 
 if __name__=="__main__":
