@@ -39,6 +39,8 @@ class Transition(NamedTuple):
     speaker_log_q: jnp.ndarray
     speaker_obs: jnp.ndarray
     speaker_alive: jnp.ndarray
+    naive_speaker_scale_diags: jnp.ndarray
+    tom_speaker_scale_diags: jnp.ndarray
     listener_action: jnp.ndarray
     listener_reward: jnp.ndarray
     listener_value: jnp.ndarray
@@ -46,6 +48,8 @@ class Transition(NamedTuple):
     listener_obs: jnp.ndarray
     listener_alive: jnp.ndarray
     listener_pRs: jnp.ndarray
+    naive_listener_entropies: jnp.ndarray
+    tom_listener_entropies: jnp.ndarray
     channel_map: jnp.ndarray
     listener_obs_source: jnp.ndarray
 
@@ -358,21 +362,16 @@ def execute_individual_listener(__rng, _listener_apply_fn, _listener_params_i, _
     policy, value = _listener_apply_fn(_listener_params_i, _listener_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
-    return action, log_prob, value
+    entropy = policy.entropy()
+    return action, log_prob, value, entropy
 
 def execute_individual_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
     __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
     _speaker_obs_i = _speaker_obs_i.ravel()
     policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
     action, log_prob = policy.sample_and_log_prob(seed=__rng)
-
-    # d = 21  # Dimensionality
-    # k = 3.5  # Mahalanobis radius
-    # cov = policy.covariance()
-    # log_volume = calc_log_volume(cov, d, k)
-    # approx_log_prob = log_volume + log_prob
-
-    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value
+    scale_diag = policy.scale_diag
+    return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value, scale_diag
 
 def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _listener_obs_i, speaker_action_transform_fn, listener_n_samples=50, num_classes=10, speaker_action_dim=12, listener_pr_weight=1.0, center_and_reshuffle_listener_obs=False):  # obs is an image
     # P(r_i|s) p= P(s|r_i)P(r_i)P_R(r_i)
@@ -443,7 +442,7 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
     # _log_prob_gut_pi = listener_assessments_for_obs.log_prob(pictogram_action) # This is the log_prob for the original listener policy, which was generated from the listener observation
 
     # What should be the value here?? Perhaps I should pass the observation directly through the listener agent again and extract that value? I'm not sure.
-    return pictogram_action.reshape(-1,), log_prob_tom_pi, values.reshape(-1,), jnp.exp(log_pRs)
+    return pictogram_action.reshape(-1,), log_prob_tom_pi, values.reshape(-1,), jnp.exp(log_pRs), pictogram_pi.entropy()
 
 def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_apply_fn, _listener_params_i, _speaker_obs_i, speaker_action_transform_fn, speaker_n_search=5, max_speaker_n_search=10, num_classes=10, speaker_action_dim=12, action_selection_beta=1.0, center_and_reshuffle_listener_obs=False):
     # P(s|r_i) p= f_i(s) / sum f_j(s) for j != i       here, f_i(s) represents unnormalized probabilites.
@@ -510,7 +509,7 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
     log_prob = search_signal_gut_policy.log_prob(maxaction)
     log_q = log_prob
 
-    return maxaction, log_prob.reshape(-1,), values[sample_idx].reshape(-1,), log_q.reshape(-1,)
+    return maxaction, log_prob.reshape(-1,), values[sample_idx].reshape(-1,), log_q.reshape(-1,), search_signal_gut_policy.scale_diag
 
 def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
     speaker_obs = jnp.tile(jnp.arange(config["ENV_KWARGS"]["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
@@ -625,18 +624,18 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
     
     ## COLLECT LISTENER ACTIONS
     # Collect naive actions
-    naive_listener_actions, naive_listener_log_probs, naive_listener_values = jax.vmap(execute_individual_listener, in_axes=(0, None, 0, 0))(listener_rngs, listener_apply_fn, batched_listener_params, listener_obs)
+    naive_listener_actions, naive_listener_log_probs, naive_listener_values, naive_listener_entropies = jax.vmap(execute_individual_listener, in_axes=(0, None, 0, 0))(listener_rngs, listener_apply_fn, batched_listener_params, listener_obs)
     # Collect tom actions
     def calc_tom_listener_actions():
-        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values, full_tom_listener_pRs = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight, center_and_reshuffle_listener_obs)
+        full_tom_listener_actions, full_tom_listener_log_probs, full_tom_listener_values, full_tom_listener_pRs, full_tom_listener_entropies = jax.vmap(execute_tom_listener, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, listener_obs, speaker_action_transform, listener_n_samples, num_classes, speaker_action_dim, listener_pr_weight, center_and_reshuffle_listener_obs)
         tom_listener_actions = jax.lax.select(listener_obs_source == 1, full_tom_listener_actions, naive_listener_actions)
         tom_listener_log_probs = jax.lax.select(listener_obs_source == 1, full_tom_listener_log_probs, naive_listener_log_probs)
         tom_listener_values = jax.lax.select(listener_obs_source == 1, full_tom_listener_values, naive_listener_values)
-        return tom_listener_actions, tom_listener_log_probs, tom_listener_values, full_tom_listener_pRs
+        return tom_listener_actions, tom_listener_log_probs, tom_listener_values, full_tom_listener_pRs, full_tom_listener_entropies
     # Choose the right ones
-    listener_actions, listener_log_probs, listener_values, listener_pRs = jax.lax.cond(
+    listener_actions, listener_log_probs, listener_values, listener_pRs, tom_listener_entropies = jax.lax.cond(
         global_agent_inferential_mode == 0.0,
-        lambda _: (naive_listener_actions, naive_listener_log_probs, naive_listener_values, jnp.zeros((env_kwargs["num_listeners"], num_classes))),
+        lambda _: (naive_listener_actions, naive_listener_log_probs, naive_listener_values, jnp.zeros((env_kwargs["num_listeners"], num_classes)), jnp.zeros((env_kwargs["num_listeners"],))),
         lambda _: calc_tom_listener_actions(),
         None)
     listener_actions = listener_actions.reshape((1, -1))
@@ -647,7 +646,7 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
     ## COLLECT SPEAKER ACTIONS
     requested_num_tom_speakers = jnp.floor(global_agent_inferential_mode * len(speaker_obs))
     # Collect naive actions
-    naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values = jax.vmap(execute_individual_speaker, in_axes=(0, None, 0, 0))(speaker_rngs, speaker_apply_fn, batched_speaker_params, speaker_obs)
+    naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values, naive_speaker_scale_diags = jax.vmap(execute_individual_speaker, in_axes=(0, None, 0, 0))(speaker_rngs, speaker_apply_fn, batched_speaker_params, speaker_obs)
     # Collect tom actions
     def calc_tom_speaker_actions():
         mask_pre_shuffle = jnp.where(jnp.arange(len(speaker_obs)) < requested_num_tom_speakers, 1, 0)
@@ -655,16 +654,16 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
         log_and_value_mask = jnp.expand_dims(mask, axis=1)
         speaker_action_mask = jnp.expand_dims(log_and_value_mask, axis=1) * jnp.ones_like(naive_speaker_actions)
         
-        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values, full_tom_speaker_log_qs = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, num_classes, speaker_action_dim, speaker_action_selection_beta, center_and_reshuffle_listener_obs)
+        full_tom_speaker_actions, full_tom_speaker_log_probs, full_tom_speaker_values, full_tom_speaker_log_qs, full_tom_speaker_scale_diags = jax.vmap(execute_tom_speaker, in_axes=(0, None, 0, None, 0, 0, None, None, None, None, None, None, None))(listener_rngs, speaker_apply_fn, batched_speaker_params, listener_apply_fn, batched_listener_params, speaker_obs, speaker_action_transform, tom_speaker_n_search, max_speaker_n_search, num_classes, speaker_action_dim, speaker_action_selection_beta, center_and_reshuffle_listener_obs)
         tom_speaker_actions = jax.lax.select(speaker_action_mask == 1, full_tom_speaker_actions, naive_speaker_actions)
         tom_speaker_log_probs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_probs, naive_speaker_log_probs)
         tom_speaker_values = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_values, naive_speaker_values)
         tom_speaker_log_qs = jax.lax.select(log_and_value_mask == 1, full_tom_speaker_log_qs, naive_speaker_log_probs)
-        return (tom_speaker_actions, tom_speaker_log_probs, tom_speaker_values, tom_speaker_log_qs)
+        return tom_speaker_actions, tom_speaker_log_probs, tom_speaker_values, tom_speaker_log_qs, full_tom_speaker_scale_diags
     # Choose the right ones
-    speaker_actions, speaker_log_probs, speaker_values, speaker_log_qs = jax.lax.cond(
+    speaker_actions, speaker_log_probs, speaker_values, speaker_log_qs, tom_speaker_scale_diags = jax.lax.cond(
         requested_num_tom_speakers == 0,
-        lambda _: (naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values, naive_speaker_log_probs),
+        lambda _: (naive_speaker_actions, naive_speaker_log_probs, naive_speaker_values, naive_speaker_log_probs, jnp.zeros((env_kwargs["num_speakers"], env_kwargs["speaker_action_dim"]))),
         lambda _: calc_tom_speaker_actions(),
         None)
     speaker_actions = speaker_actions.reshape((1, -1, speaker_action_dim))
@@ -694,6 +693,8 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
         speaker_log_qs,
         speaker_obs,
         speaker_alive,
+        naive_speaker_scale_diags,
+        tom_speaker_scale_diags,
         listener_actions,
         listener_reward,
         listener_values,
@@ -701,6 +702,8 @@ def env_step(runner_state, speaker_apply_fn, listener_apply_fn, env, config, tom
         listener_obs,
         listener_alive,
         listener_pRs,
+        naive_listener_entropies,
+        tom_listener_entropies,
         channel_map,
         listener_obs_source
     )
@@ -986,6 +989,13 @@ def wandb_callback(metrics):
     mean_listener_pRs_avged = jnp.mean(mean_listener_pRs, axis=0)
     metric_dict.update({f"inference/listener {i} referent {j}": mean_listener_pRs[i][j].item() for i in range(len(mean_listener_pRs)) for j in range(mean_listener_pRs.shape[1])})
     metric_dict.update({f"inference/all listeners referent {i}": mean_listener_pRs_avged[i].item() for i in range(len(mean_listener_pRs_avged))})
+
+    #### Listener entropy logging
+    # metric_dict.update({f"policy entropy/naive all listeners referent {i}":None})
+    # metric_dict.update({f"policy entropy/tom all speakers referent {i}":None})
+    # metric_dict.update({f"policy entropy/tom speaker {j} referent {i}":None})
+    # metric_dict.update({f"policy entropy/tom speaker {j} all referents":None})
+    
     
     #### Speaker example logging
     speaker_example_debug_flag, speaker_example_logging_iter = speaker_example_logging_params
@@ -1173,6 +1183,8 @@ def make_train(config):
                 speaker_log_q=jnp.squeeze(transition_batch.speaker_log_q[1:-1, ...]),
                 speaker_obs=jnp.squeeze(transition_batch.speaker_obs[1:-1, ...]),
                 speaker_alive=jnp.squeeze(transition_batch.speaker_alive[2:, ...]),
+                naive_speaker_scale_diags=jnp.squeeze(transition_batch.naive_speaker_scale_diags[1:-1, ...]),
+                tom_speaker_scale_diags=jnp.squeeze(transition_batch.tom_speaker_scale_diags[1:-1, ...]),
                 listener_action=jnp.squeeze(transition_batch.listener_action[1:-1, ...]),
                 listener_reward=jnp.squeeze(transition_batch.listener_reward[1:-1, ...]),
                 listener_value=jnp.squeeze(transition_batch.listener_value[1:-1, ...]),
@@ -1180,6 +1192,8 @@ def make_train(config):
                 listener_obs=jnp.squeeze(transition_batch.listener_obs[1:-1, ...]),
                 listener_alive=jnp.squeeze(transition_batch.listener_alive[1:-1, ...]),
                 listener_pRs=transition_batch.listener_pRs[1:-1, ...],
+                naive_listener_entropies=jnp.squeeze(transition_batch.naive_listener_entropies[1:-1, ...]),
+                tom_listener_entropies=jnp.squeeze(transition_batch.tom_listener_entropies[1:-1, ...]),
                 channel_map=jnp.squeeze(transition_batch.channel_map[1:-1, ...]),
                 listener_obs_source=jnp.squeeze(transition_batch.listener_obs_source[1:-1, ...])
             )
