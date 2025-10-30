@@ -894,7 +894,14 @@ def make_simple_animation(directory, labels=True, num_epochs=2800, epoch_start=0
     print("Saved file")
 
 
-def make_simple_animation_same_sign_multi_agent(directories, referent_coordinates=((0,1), (4,5)), labels=[], fname_prefix="tom_", epochs=3000, image_dim=32):
+def make_simple_animation_same_sign_multi_agent(directories, referent_coordinates=((0,1), (4,5)), labels=[], fname_prefix="tom_", epochs=3000, image_dim=32, start_epoch=500):
+    all_referents = ["Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider"]
+
+    # Maintain a canonical order when displaying the plots
+    referent_coordinates.sort(key=lambda x: x[1])
+
+    referent_labels = [all_referents[ref[1]] for ref in referent_coordinates]
+    
     height_dx = image_dim + 2   # Assuming 2px border
 
     FPS=20
@@ -917,6 +924,9 @@ def make_simple_animation_same_sign_multi_agent(directories, referent_coordinate
     fig, axe = plt.subplots(figsize=(4, 2))
     img_ax = axe
 
+    pos = img_ax.get_position()
+    img_ax.set_position([pos.x0, pos.y0, pos.width, pos.height * 0.9])
+
     def update(frame):
         # Load and update image
         # img = plt.imread(sorted_files[frame])
@@ -930,7 +940,7 @@ def make_simple_animation_same_sign_multi_agent(directories, referent_coordinate
             col_images = []
             for (x, y) in referent_coordinates:
                 local_width_dx = height_dx #if ii == referent_selection[-1] else height_dx
-                col_images.append(img_array[height_dx*y:height_dx*y+height_dx, height_dx*x:height_dx*x+local_width_dx])
+                col_images.append(img_array[height_dx*x:height_dx*x+height_dx, height_dx*y:height_dx*y+local_width_dx])
             col_image = np.concatenate(col_images, axis=0)
             row_imgs.append(col_image)
         row_img = np.concatenate(row_imgs, axis=1)
@@ -940,16 +950,18 @@ def make_simple_animation_same_sign_multi_agent(directories, referent_coordinate
         img_ax.clear()
         img_ax.imshow(row_img, cmap="viridis")
         img_ax.axis("off")
-        img_ax.set_title(f"Signals at Epoch {frame * 5}")
+        img_ax.set_title(f"Signals at Epoch {frame * 20 + start_epoch}", pad=15)
         # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
-        # if labels:
-        #     img_ax.text(-2, 45, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
+        if labels:
+            img_ax.text(-35, 90, "\n\n\n\n".join(referent_labels), size="xx-small")
+            img_ax.text(0, -3, "   " + "     ".join(f"Agent {i}" for i in range(7)), size="xx-small")
+        
 
         return img_ax
     
     # print(animation.writers.list())
     
-    ani = animation.FuncAnimation(fig, update, frames=epochs//5, interval=1000//FPS)
+    ani = animation.FuncAnimation(fig, update, frames=(6000 - start_epoch) // 20 + 1, interval=1000//FPS)
 
     uuidstr = str(uuid.uuid4())[:5]
 
@@ -959,6 +971,84 @@ def make_simple_animation_same_sign_multi_agent(directories, referent_coordinate
     print(f"Saved file: ../joint-plots/vid_multi_onesign_{directory_names}_{uuidstr}.mp4")
 
 
+def make_labeled_animation(directories, referent_coordinates, run_labels, fname_prefix="tom_", start_epoch=500, epochs=3000, image_dim=32):
+    all_referents = ["Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider"]
+
+    # Maintain a canonical order when displaying the plots
+    referent_coordinates.sort(key=lambda x: x[1])
+
+    referent_labels = [all_referents[ref[1]] for ref in referent_coordinates]
+    
+    height_dx = image_dim + 2   # Assuming 2px border
+
+    FPS=20
+
+    sorted_files_by_dir = []
+    
+    for directory in directories:
+        # Load image data
+        image_dir = os.path.join(directory, "media/images/env/")
+        files = os.listdir(image_dir)
+        fname_template = fname_prefix+"speaker_examples_"
+
+        sorted_files = sorted([f for f in files if f.startswith(fname_template)],
+                            key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
+        sorted_files = [os.path.join(image_dir, f) for f in sorted_files]
+        sorted_files_by_dir.append(sorted_files)
+
+    num_runs = len(directories)
+    num_referents = len(referent_coordinates) # Makes more sense if referents are unique
+
+    # Initialize figure
+    fig, axe = plt.subplots(num_referents, num_runs, figsize=(num_runs * 3, num_referents * 3))
+    img_ax = axe
+
+    end_epoch = epochs
+    step_size = 10
+
+    num_frames = (end_epoch - start_epoch) // step_size
+
+    def update(frame):
+        curr_epoch = start_epoch + (frame * step_size)
+
+        for i in range(num_referents):
+            for j in range(num_runs):
+                ax = img_ax[i, j]
+                run_files = sorted_files_by_dir[j]
+                img = Image.open(run_files[frame])
+                img_array = np.array(img)
+                row_coord, col_coord = referent_coordinates[i]
+                small_img = img_array[row_coord * height_dx : (row_coord + 1) * height_dx, col_coord * height_dx : (col_coord + 1) * height_dx]
+                ax.imshow(small_img, cmap="viridis")
+                plt.setp(ax.get_xticklabels(), visible=False)
+                plt.setp(ax.get_yticklabels(), visible=False)
+                ax.tick_params(axis='both', which='both', length=0)
+
+        ###########
+        for idx, label in enumerate(referent_labels):
+            ax = img_ax[idx, 0]
+            ax.set_ylabel(f"{referent_labels[idx]}", rotation=0, labelpad=55, fontsize=18)
+
+        for idx, label in enumerate(directories):
+            ax = img_ax[0, idx]
+            ax.set_title(f"{run_labels[idx]}", fontsize=18, pad=10)
+
+        fig.suptitle(f"Signals at Epoch {curr_epoch}", fontsize=24, y=0.98)  # Move suptitle down slightly
+        fig.subplots_adjust(left=0.15, top=0.85, wspace=0, hspace=0)
+        return img_ax
+
+    print(directories)
+
+    # print(animation.writers.list())
+    
+    ani = animation.FuncAnimation(fig, update, frames=epochs//step_size, interval=1000//FPS)
+
+    uuidstr = str(uuid.uuid4())[:5]
+
+    directory_names = "_".join(directory.split('-')[-1][:-1] for directory in directories)
+    ani.save(f"../joint-plots/vid_multi_onesign_{directory_names}_{uuidstr}.mp4", writer="ffmpeg", fps=FPS)
+
+    print(f"Saved file: ../joint-plots/vid_multi_onesign_{directory_names}_{uuidstr}.mp4")
 
 def make_pr_plot(directory, referent_labels, referent_nums, num_epochs=None, epoch_start=0, agent_num=None, log_scale=False):
     if agent_num:
@@ -1951,13 +2041,17 @@ def make_graphics_fall_2025():
     # make_multi_speaker_example_graphic_single_sign(directories, one_sign=(5,10), start_epoch=949, count=20, epoch_span=2550, x_stretch=0.0, method="1/x")
 
 
-    # make_simple_animation_same_sign_multi_agent(directories[:3], referent_coordinates=((0,1), (4,5)), epochs=2000)
+    referent_coordinates = [(3, 5), (0, 0), (3, 4)]
+    run_labels = ["Baseline", "Right Angle\nReward", "Right Angle\nPenalty", "Whitesum\nPenalty", "Whitesum\nReward", "Curvature\nReward", "Curvature\nPenalty"]
 
-    directory = "./daily-snowball-2641/"
-    speaker_selection = [0, 0, 2, 4, 8, 6, 6, 6, 14, 4]
-    speaker_selection = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    make_speaker_example_graphic(directory, image_dim=32, speaker_selection=speaker_selection, referent_selection=list(range(10)), start_epoch=449, count=15, interval_epoch=360)
+    animation_inds = [8, 0, 1, 4, 5, 6, 7]
+    animation_dirs = [directories[i] for i in animation_inds]
 
+    all_labels = ["Bicycle", "Dolphin", "Palm Tree"]
+
+#    make_labeled_animation(animation_dirs, referent_coordinates=referent_coordinates, run_labels=run_labels, epochs=5500)
+    make_simple_animation_same_sign_multi_agent(animation_dirs, referent_coordinates=referent_coordinates, epochs=6000, labels=run_labels, start_epoch=500)
+    # make_labeled_animation(animation_dirs, num_epochs=5500, epoch_start=500, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
 
 if __name__=="__main__":
     # make_graphics_post_conference()
