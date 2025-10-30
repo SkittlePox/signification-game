@@ -1018,7 +1018,7 @@ def wandb_callback(metrics):
         final_speaker_images = wandb.Image(np.array(speaker_images), caption=f"tried generating: {str(trimmed_transition_batch.speaker_obs[-2])}")
         metric_dict.update({"env/speaker_images": final_speaker_images})
         
-    ### Speaker Entropy Logging
+    #### Speaker Entropy Logging
     def calculate_entropy(scale_diags):
         """
         The formula to calculate the entropy of a multivariate gaussian is
@@ -1034,7 +1034,7 @@ def wandb_callback(metrics):
     num_steps, num_speaks, num_params = trimmed_transition_batch.naive_speaker_scale_diags.shape
 
     naive_reshape = jnp.reshape(trimmed_transition_batch.naive_speaker_scale_diags, (-1, num_params))
-    tom_reshape = jnp.reshape(trimmed_transition_batch.naive_speaker_scale_diags, (-1, num_params))
+    tom_reshape = jnp.reshape(trimmed_transition_batch.tom_speaker_scale_diags, (-1, num_params))
 
     naive_speaker_entropies = jax.vmap(calculate_entropy)(naive_reshape)
     tom_speaker_entropies = jax.vmap(calculate_entropy)(tom_reshape)
@@ -1049,7 +1049,7 @@ def wandb_callback(metrics):
         for j in range(num_classes):
             referent_mask = jnp.where(speaker_obs_i == j, 1, 0)
             masked_naive = speaker_naive_entropies * referent_mask
-            avg_naive = jnp.sum(masked_naive) / jnp.sum(referent_mask)
+            avg_naive = jnp.sum(masked_naive) / (jnp.sum(referent_mask) + 1e-8)
             
             metric_dict.update({
                 f"policy entropy/naive speaker {i} referent {j}": avg_naive.item()
@@ -1062,10 +1062,10 @@ def wandb_callback(metrics):
         for j in range(num_classes):
             referent_mask = jnp.where(speaker_obs_i == j, 1, 0)
             mask = speaker_tom_entropies * referent_mask
-            avg_tom = jnp.sum(mask) / jnp.sum(referent_mask)
+            avg_tom = jnp.sum(mask) / (jnp.sum(referent_mask) + 1e-8)
             
             metric_dict.update({
-                f"policy entropy/naive speaker {i} referent {j}": avg_tom.item()
+                f"policy entropy/tom speaker {i} referent {j}": avg_tom.item()
             })
 
     ##### Iconicity Probe Logging   # This strikes me as something that belongs in the main scan loop.
