@@ -37,20 +37,20 @@
 "SPEAKER_NOISE_LATENT_DIM": 10
 "SPEAKER_NOISE_LATENT_STDDEV": 0.05
 
-"LISTENER_N_SAMPLES": 5
-"SPEAKER_N_SEARCH": 7
+"LISTENER_N_SAMPLES": 2 # 5
+"SPEAKER_N_SEARCH": 2   # 7
 "MAX_SPEAKER_N_SEARCH": 10
 "LISTENER_PR_WEIGHT": 1.0
 "SPEAKER_ACTION_SELECTION_BETA": 1.0
 
 "NUM_ENVS": 1  # Always 1
-"NUM_STEPS": 2048 # 2048
-"UPDATE_EPOCHS": 4000
-"MINIBATCH_SIZE_LISTENER": 32 # 32 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 128 # 128 # This must be a whole divisor of NUM_STEPS
+"NUM_STEPS": 2 # 2048
+"UPDATE_EPOCHS": 2 # 3000
+"MINIBATCH_SIZE_LISTENER": 2 # 32 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 2 # 128 # This must be a whole divisor of NUM_STEPS
 
 "PROBE_MODEL_NAME": "probe-cifar10-5k-20k-40e-sgd-75f8" # for cifar10 # "probe-5k-20k-20e-sgd-bedc" # for mnist
-"PROBE_NUM_EXAMPLES": 512 # 500 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 2 # 500 # This must be less than or equal to "NUM_STEPS"
 "PROBE_MODEL": "cnn"
 "PROBE_OPTIMIZER": "adam"
 
@@ -58,9 +58,9 @@
 "ENV_DATASET": 'cifar10b'
 "ENV_NUM_DATAPOINTS": 5000
 "ENV_KWARGS":
-  "num_speakers": 10  # best to have num_speakers = num_listeners
-  "num_listeners": 10
-  "num_channels": 10
+  "num_speakers": 2  # best to have num_speakers = num_listeners
+  "num_listeners": 2
+  "num_channels": 2
   "num_classes": 10
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10
   "speaker_reward_success": 1.0
@@ -79,8 +79,8 @@
   "gaussian_noise_stddev": 0.05
   "speaker_assignment_method": "arange" # "arange" or "random"
   "reward_parity_fn": "coop"  # "1.0 at 300", "coop", "manip"
-  "agent_inferential_mode_fn": "1.0" # Default is "gut" or 0.0, same as lr schedule syntax e.g. "0.23 anneal to 1.0 at 10"
-  "channel_ratio_fn": 0.7  # E.g. "1.0 at 300", "sigmoid-custom"
+  "agent_inferential_mode_fn": "gut" # Default is "gut" or 0.0, same as lr schedule syntax e.g. "0.23 anneal to 1.0 at 10"
+  "channel_ratio_fn": 0.5  # E.g. "1.0 at 300", "sigmoid-custom"
   "speaker_referent_span_fn": 10 # default should be the same as num_classes above
   "mandate_unitary_channel_map": True
   "sigmoid_offset": 600
