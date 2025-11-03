@@ -1033,6 +1033,8 @@ def wandb_callback(metrics):
     # Shape of ttb scale diags = (num_steps, num_speakers, num_params) -> (num_steps, num_speakers)
     num_steps, num_speaks, num_params = trimmed_transition_batch.naive_speaker_scale_diags.shape
 
+    assert num_speakers == num_speaks, "Sanity check: speakers in naive_speaker_scale_diags is consistent with other fields"
+
     naive_reshape = jnp.reshape(trimmed_transition_batch.naive_speaker_scale_diags, (-1, num_params))
     tom_reshape = jnp.reshape(trimmed_transition_batch.tom_speaker_scale_diags, (-1, num_params))
 
@@ -1042,19 +1044,24 @@ def wandb_callback(metrics):
     naive_speaker_entropies = jnp.reshape(naive_speaker_entropies, (num_steps, num_speaks))
     tom_speaker_entropies = jnp.reshape(tom_speaker_entropies, (num_steps, num_speaks))
 
+    # Logging for naive speaker
     for i in range(num_speakers):
         speaker_naive_entropies = naive_speaker_entropies[:, i]
         speaker_obs_i = trimmed_transition_batch.speaker_obs[:, i]
         
+        # Logging entropy per speaker, per referent
         for j in range(num_classes):
             referent_mask = jnp.where(speaker_obs_i == j, 1, 0)
             masked_naive = speaker_naive_entropies * referent_mask
             avg_naive = jnp.sum(masked_naive) / (jnp.sum(referent_mask) + 1e-8)
             
-            metric_dict.update({
-                f"policy entropy/naive speaker {i} referent {j}": avg_naive.item()
-            })
+            metric_dict.update({f"policy entropy/naive speaker {i} referent {j}": avg_naive.item()})
+
+        # Logging entropy per speaker
+        speaker_avg = jnp.mean(speaker_naive_entropies)
+        metric_dict.update({f"policy entropy/speaker {i} all referents": speaker_avg.item()})
     
+    # Logging for tom speaker
     for i in range(num_speakers):
         speaker_tom_entropies = tom_speaker_entropies[:, i]
         speaker_obs_i = trimmed_transition_batch.speaker_obs[:, i]
@@ -1064,9 +1071,111 @@ def wandb_callback(metrics):
             mask = speaker_tom_entropies * referent_mask
             avg_tom = jnp.sum(mask) / (jnp.sum(referent_mask) + 1e-8)
             
-            metric_dict.update({
-                f"policy entropy/tom speaker {i} referent {j}": avg_tom.item()
-            })
+            metric_dict.update({f"policy entropy/tom speaker {i} referent {j}": avg_tom.item()})
+
+        # Logging entropy per speaker
+        speaker_avg = jnp.mean(speaker_tom_entropies)
+        metric_dict.update({f"policy entropy/speaker {i} all referents": speaker_avg.item()})
+
+    for j in range(num_classes):
+        referent_mask = jnp.where(trimmed_transition_batch.speaker_obs == j, 1, 0)
+        
+        referent_naive_entropies = naive_speaker_entropies * referent_mask
+        naive_referent_avg = jnp.sum(referent_naive_entropies) / (jnp.sum(referent_mask) + 1e-8)
+        metric_dict.update({f"policy entropy/referent {j} all speakers": naive_referent_avg.item()})
+
+        referent_tom_entropies = tom_speaker_entropies * referent_mask
+        tom_referent_avg = jnp.sum(referent_tom_entropies) / (jnp.sum(referent_mask) + 1e-8)
+        metric_dict.update({f"policy entropy/referent {j} all speakers": tom_referent_avg.item()})
+
+    #### Listener Entropy Logging
+    for i in range(num_listeners):
+        listener_naive_entropies = trimmed_transition_batch.naive_listener_entropies[:, i]
+        listener_tom_entropies = trimmed_transition_batch.tom_listener_entropies[:, i]
+        listener_obs_source = trimmed_transition_batch.listener_obs_source[:, i]
+        ground_truth_referents = # Have to fill this in...
+        
+        env_mask = jnp.where(listener_obs_source == 0, 1, 0)
+        speaker_mask = 1 - env_mask
+        
+        # Entropies per source
+        naive_env_avg = jnp.sum(listener_naive_entropies * env_mask) / (jnp.sum(env_mask) + 1e-8)
+        naive_speaker_avg = jnp.sum(listener_naive_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
+        naive_overall = jnp.mean(listener_naive_entropies)
+        
+        metric_dict.update({f"policy entropy/naive listener {i} env images": naive_env_avg.item()})
+        metric_dict.update({f"policy entropy/naive listener {i} speaker images": naive_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/naive listener {i}": naive_overall.item()})
+        
+        tom_env_avg = jnp.sum(listener_tom_entropies * env_mask) / (jnp.sum(env_mask) + 1e-8)
+        tom_speaker_avg = jnp.sum(listener_tom_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
+        tom_overall = jnp.mean(listener_tom_entropies)
+        
+        metric_dict.update({f"policy entropy/tom listener {i} env images": tom_env_avg.item()})
+        metric_dict.update({f"policy entropy/tom listener {i} speaker images": tom_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/tom listener {i}": tom_overall.item()})
+
+        # Per referent, per source logging
+        for j in range(num_classes):
+            referent_mask = jnp.where(ground_truth_referents == j, 1, 0)
+            
+            # Naive entropy for current referent, split by source
+            naive_referent_env_mask = referent_mask * env_mask
+            naive_referent_speaker_mask = referent_mask * speaker_mask
+            
+            naive_referent_env_avg = jnp.sum(listener_naive_entropies * naive_referent_env_mask) / (jnp.sum(naive_referent_env_mask) + 1e-8)
+            naive_referent_speaker_avg = jnp.sum(listener_naive_entropies * naive_referent_speaker_mask) / (jnp.sum(naive_referent_speaker_mask) + 1e-8)
+            naive_referent_overall = jnp.sum(listener_naive_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
+            
+            metric_dict.update({f"policy entropy/naive listener {i} referent {j} env images": naive_referent_env_avg.item()})
+            metric_dict.update({f"policy entropy/naive listener {i} referent {j} speaker images": naive_referent_speaker_avg.item()})
+            metric_dict.update({f"policy entropy/naive listener {i} referent {j}": naive_referent_overall.item()})
+            
+            # tom entropy for current referent, split by source
+            tom_referent_env_mask = referent_mask * env_mask
+            tom_referent_speaker_mask = referent_mask * speaker_mask
+            
+            tom_referent_env_avg = jnp.sum(listener_tom_entropies * tom_referent_env_mask) / (jnp.sum(tom_referent_env_mask) + 1e-8)
+            tom_referent_speaker_avg = jnp.sum(listener_tom_entropies * tom_referent_speaker_mask) / (jnp.sum(tom_referent_speaker_mask) + 1e-8)
+            tom_referent_overall = jnp.sum(listener_tom_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
+            
+            metric_dict.update({f"policy entropy/tom listener {i} referent {j} env images": tom_referent_env_avg.item()})
+            metric_dict.update({f"policy entropy/tom listener {i} referent {j} speaker images": tom_referent_speaker_avg.item()})
+            metric_dict.update({f"policy entropy/tom listener {i} referent {j}": tom_referent_overall.item()})
+    
+    # Entropies across all listeners
+    for j in range(num_classes):
+        ground_truth_referents = # Have to fill this in...
+        all_listener_obs_source = trimmed_transition_batch.listener_obs_source
+        
+        referent_mask = jnp.where(ground_truth_referents == j, 1, 0)
+        env_mask = jnp.where(all_listener_obs_source == 0, 1, 0)
+        speaker_mask = 1 - env_mask
+        
+        # Naive entropy aggregates
+        naive_referent_env_mask = referent_mask * env_mask
+        naive_referent_speaker_mask = referent_mask * speaker_mask
+        
+        naive_all_env_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * naive_referent_env_mask) / (jnp.sum(naive_referent_env_mask) + 1e-8)
+        naive_all_speaker_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * naive_referent_speaker_mask) / (jnp.sum(naive_referent_speaker_mask) + 1e-8)
+        naive_all_overall = jnp.sum(trimmed_transition_batch.naive_listener_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
+        
+        metric_dict.update({f"policy entropy/naive all listeners referent {j} env images": naive_all_env_avg.item()})
+        metric_dict.update({f"policy entropy/naive all listeners referent {j} speaker images": naive_all_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/naive all listeners referent {j}": naive_all_overall.item()})
+        
+        # ToM entropy aggregates
+        tom_referent_env_mask = referent_mask * env_mask
+        tom_referent_speaker_mask = referent_mask * speaker_mask
+        
+        tom_all_env_avg = jnp.sum(trimmed_transition_batch.tom_listener_entropies * tom_referent_env_mask) / (jnp.sum(tom_referent_env_mask) + 1e-8)
+        tom_all_speaker_avg = jnp.sum(trimmed_transition_batch.tom_listener_entropies * tom_referent_speaker_mask) / (jnp.sum(tom_referent_speaker_mask) + 1e-8)
+        tom_all_overall = jnp.sum(trimmed_transition_batch.tom_listener_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
+        
+        metric_dict.update({f"policy entropy/tom all listeners referent {j} env images": tom_all_env_avg.item()})
+        metric_dict.update({f"policy entropy/tom all listeners referent {j} speaker images": tom_all_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/tom all listeners referent {j}": tom_all_overall.item()})
+
 
     ##### Iconicity Probe Logging   # This strikes me as something that belongs in the main scan loop.
     probe_logging_iter, probe_num_examples = probe_logging_params
