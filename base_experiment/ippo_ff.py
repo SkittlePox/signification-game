@@ -1093,7 +1093,7 @@ def wandb_callback(metrics):
         listener_naive_entropies = trimmed_transition_batch.naive_listener_entropies[:, i]
         listener_tom_entropies = trimmed_transition_batch.tom_listener_entropies[:, i]
         listener_obs_source = trimmed_transition_batch.listener_obs_source[:, i]
-        ground_truth_referents = # Have to fill this in...
+        ground_truth_referents = # TODO: Have to fill this in...
         
         env_mask = jnp.where(listener_obs_source == 0, 1, 0)
         speaker_mask = 1 - env_mask
@@ -1145,7 +1145,7 @@ def wandb_callback(metrics):
     
     # Entropies across all listeners
     for j in range(num_classes):
-        ground_truth_referents = # Have to fill this in...
+        ground_truth_referents = # TODO: Have to fill this in...
         all_listener_obs_source = trimmed_transition_batch.listener_obs_source
         
         referent_mask = jnp.where(ground_truth_referents == j, 1, 0)
