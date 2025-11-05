@@ -1059,7 +1059,7 @@ def wandb_callback(metrics):
 
         # Logging entropy per speaker
         speaker_avg = jnp.mean(speaker_naive_entropies)
-        metric_dict.update({f"policy entropy/speaker {i} all referents": speaker_avg.item()})
+        metric_dict.update({f"policy entropy/naive speaker {i} all referents": speaker_avg.item()})
     
     # Logging for tom speaker
     for i in range(num_speakers):
@@ -1075,25 +1075,29 @@ def wandb_callback(metrics):
 
         # Logging entropy per speaker
         speaker_avg = jnp.mean(speaker_tom_entropies)
-        metric_dict.update({f"policy entropy/speaker {i} all referents": speaker_avg.item()})
+        metric_dict.update({f"policy entropy/tom speaker {i} all referents": speaker_avg.item()})
 
     for j in range(num_classes):
         referent_mask = jnp.where(trimmed_transition_batch.speaker_obs == j, 1, 0)
         
         referent_naive_entropies = naive_speaker_entropies * referent_mask
         naive_referent_avg = jnp.sum(referent_naive_entropies) / (jnp.sum(referent_mask) + 1e-8)
-        metric_dict.update({f"policy entropy/referent {j} all speakers": naive_referent_avg.item()})
+        metric_dict.update({f"policy entropy/referent {j} all naive speakers": naive_referent_avg.item()})
 
         referent_tom_entropies = tom_speaker_entropies * referent_mask
         tom_referent_avg = jnp.sum(referent_tom_entropies) / (jnp.sum(referent_mask) + 1e-8)
-        metric_dict.update({f"policy entropy/referent {j} all speakers": tom_referent_avg.item()})
+        metric_dict.update({f"policy entropy/referent {j} all tom speakers": tom_referent_avg.item()})
 
     #### Listener Entropy Logging
     for i in range(num_listeners):
         listener_naive_entropies = trimmed_transition_batch.naive_listener_entropies[:, i]
         listener_tom_entropies = trimmed_transition_batch.tom_listener_entropies[:, i]
         listener_obs_source = trimmed_transition_batch.listener_obs_source[:, i]
-        ground_truth_referents = # TODO: Have to fill this in...
+
+        # TODO: Revisit this in meeting!
+        all_speakers_for_listener = trimmed_transition_batch.channel_map[:, i]
+        inds = jnp.arange(len(all_speakers_for_listener))
+        ground_truth_referents = trimmed_transition_batch.speaker_obs[inds, all_speakers_for_listener]
         
         env_mask = jnp.where(listener_obs_source == 0, 1, 0)
         speaker_mask = 1 - env_mask
@@ -1145,7 +1149,9 @@ def wandb_callback(metrics):
     
     # Entropies across all listeners
     for j in range(num_classes):
-        ground_truth_referents = # TODO: Have to fill this in...
+        # TODO: Revisit this in meeting!
+        # ground_truth_referents = trimmed_transition_batch.speaker_obs[inds, all_speakers_for_listener]
+
         all_listener_obs_source = trimmed_transition_batch.listener_obs_source
         
         referent_mask = jnp.where(ground_truth_referents == j, 1, 0)
