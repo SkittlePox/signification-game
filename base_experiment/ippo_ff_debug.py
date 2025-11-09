@@ -17,8 +17,8 @@ import flax.linen as nn
 from flax.training import train_state, orbax_utils
 import orbax.checkpoint
 import pickle
-from torchvision.utils import make_grid
-from torchvision.datasets import MNIST
+# from torchvision.utils import make_grid
+# from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
@@ -69,7 +69,7 @@ def define_env(config):
     if dataset_name == 'mnist':        
         from utils import to_jax
 
-        mnist_dataset = MNIST('/tmp/mnist/', download=True)
+        mnist_dataset = 123#MNIST('/tmp/mnist/', download=True)
         images, labels = to_jax(mnist_dataset, num_datapoints=config["ENV_NUM_DATAPOINTS"])  # This should also be in ENV_KWARGS
         images = images.astype('float32') / 255.0
 
@@ -163,7 +163,7 @@ def define_env(config):
         #     meta_data = pickle.load(f, encoding='bytes')
         # fine_labels = {l: i for i, l in enumerate(meta_data[b'fine_label_names'])}
 
-        acceptable_label_names = config["ENV_DATASET_CATEGORIES"]
+        acceptable_label_names = {"bicycle": 8, "butterfly": 14, "camel": 15, "crab": 26, "dolphin": 30, "palm_tree": 56, "rocket": 69, "snail": 77, "snake": 78, "spider": 79}#config["ENV_DATASET_CATEGORIES"]
         acceptable_labels = jnp.array(list(acceptable_label_names.values()))
 
         with open(download_path+'cifar-100-python/train', 'rb') as f:   # 50,000 images
@@ -274,7 +274,7 @@ def initialize_listener(env, rng, config, i):
         # We modify the trainstate by putting what we want in it.
 
         local_path = str(pathlib.Path().resolve())
-        model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+        model_path_str = "/base_experiment/models/" #if config["DEBUGGER"] else "/models/"
         checkpoint_name = local_path+model_path_str+config["PRETRAINED_LISTENERS"]+f'/listener_{i}.agent'
         
         empty_checkpoint = {'model': train_state}
@@ -1094,6 +1094,7 @@ def wandb_callback(metrics):
         listener_tom_entropies = trimmed_transition_batch.tom_listener_entropies[:, i]
         listener_obs_source = trimmed_transition_batch.listener_obs_source[:, i]
 
+        # TODO: Revisit this in meeting!
         all_speakers_for_listener = trimmed_transition_batch.channel_map[:, i]
         inds = jnp.arange(len(all_speakers_for_listener))
         ground_truth_referents = trimmed_transition_batch.speaker_obs[inds, all_speakers_for_listener]
@@ -1104,15 +1105,19 @@ def wandb_callback(metrics):
         # Entropies per source
         naive_env_avg = jnp.sum(listener_naive_entropies * env_mask) / (jnp.sum(env_mask) + 1e-8)
         naive_speaker_avg = jnp.sum(listener_naive_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
+        naive_overall = jnp.mean(listener_naive_entropies)
         
         metric_dict.update({f"policy entropy/naive listener {i} env images": naive_env_avg.item()})
         metric_dict.update({f"policy entropy/naive listener {i} speaker images": naive_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/naive listener {i}": naive_overall.item()})
         
         tom_env_avg = jnp.sum(listener_tom_entropies * env_mask) / (jnp.sum(env_mask) + 1e-8)
         tom_speaker_avg = jnp.sum(listener_tom_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
+        tom_overall = jnp.mean(listener_tom_entropies)
         
         metric_dict.update({f"policy entropy/tom listener {i} env images": tom_env_avg.item()})
         metric_dict.update({f"policy entropy/tom listener {i} speaker images": tom_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/tom listener {i}": tom_overall.item()})
 
         # Per referent, per source logging
         for j in range(num_classes):
@@ -1124,9 +1129,11 @@ def wandb_callback(metrics):
             
             naive_referent_env_avg = jnp.sum(listener_naive_entropies * naive_referent_env_mask) / (jnp.sum(naive_referent_env_mask) + 1e-8)
             naive_referent_speaker_avg = jnp.sum(listener_naive_entropies * naive_referent_speaker_mask) / (jnp.sum(naive_referent_speaker_mask) + 1e-8)
+            naive_referent_overall = jnp.sum(listener_naive_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
             
             metric_dict.update({f"policy entropy/naive listener {i} referent {j} env images": naive_referent_env_avg.item()})
             metric_dict.update({f"policy entropy/naive listener {i} referent {j} speaker images": naive_referent_speaker_avg.item()})
+            metric_dict.update({f"policy entropy/naive listener {i} referent {j}": naive_referent_overall.item()})
             
             # tom entropy for current referent, split by source
             tom_referent_env_mask = referent_mask * env_mask
@@ -1134,9 +1141,11 @@ def wandb_callback(metrics):
             
             tom_referent_env_avg = jnp.sum(listener_tom_entropies * tom_referent_env_mask) / (jnp.sum(tom_referent_env_mask) + 1e-8)
             tom_referent_speaker_avg = jnp.sum(listener_tom_entropies * tom_referent_speaker_mask) / (jnp.sum(tom_referent_speaker_mask) + 1e-8)
+            tom_referent_overall = jnp.sum(listener_tom_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
             
             metric_dict.update({f"policy entropy/tom listener {i} referent {j} env images": tom_referent_env_avg.item()})
             metric_dict.update({f"policy entropy/tom listener {i} referent {j} speaker images": tom_referent_speaker_avg.item()})
+            metric_dict.update({f"policy entropy/tom listener {i} referent {j}": tom_referent_overall.item()})
     
     # Entropies across all listeners
     for j in range(num_classes):
@@ -1155,9 +1164,11 @@ def wandb_callback(metrics):
         
         naive_all_env_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * naive_referent_env_mask) / (jnp.sum(naive_referent_env_mask) + 1e-8)
         naive_all_speaker_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * naive_referent_speaker_mask) / (jnp.sum(naive_referent_speaker_mask) + 1e-8)
+        naive_all_overall = jnp.sum(trimmed_transition_batch.naive_listener_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
         
         metric_dict.update({f"policy entropy/naive all listeners referent {j} env images": naive_all_env_avg.item()})
         metric_dict.update({f"policy entropy/naive all listeners referent {j} speaker images": naive_all_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/naive all listeners referent {j}": naive_all_overall.item()})
         
         # ToM entropy aggregates
         tom_referent_env_mask = referent_mask * env_mask
@@ -1165,9 +1176,11 @@ def wandb_callback(metrics):
         
         tom_all_env_avg = jnp.sum(trimmed_transition_batch.tom_listener_entropies * tom_referent_env_mask) / (jnp.sum(tom_referent_env_mask) + 1e-8)
         tom_all_speaker_avg = jnp.sum(trimmed_transition_batch.tom_listener_entropies * tom_referent_speaker_mask) / (jnp.sum(tom_referent_speaker_mask) + 1e-8)
+        tom_all_overall = jnp.sum(trimmed_transition_batch.tom_listener_entropies * referent_mask) / (jnp.sum(referent_mask) + 1e-8)
         
         metric_dict.update({f"policy entropy/tom all listeners referent {j} env images": tom_all_env_avg.item()})
         metric_dict.update({f"policy entropy/tom all listeners referent {j} speaker images": tom_all_speaker_avg.item()})
+        metric_dict.update({f"policy entropy/tom all listeners referent {j}": tom_all_overall.item()})
 
 
     ##### Iconicity Probe Logging   # This strikes me as something that belongs in the main scan loop.
@@ -1213,7 +1226,7 @@ def make_train(config):
 
         # LOAD ICON PROBE
         local_path = str(pathlib.Path().resolve())
-        model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+        model_path_str = "/base_experiment/models/" #if config["DEBUGGER"] else "/models/"
         raw_restored = icon_probe.load_probe_model(local_path+model_path_str+config["PROBE_MODEL_NAME"], None, action_dim=env_kwargs['num_classes'], opt=config["PROBE_OPTIMIZER"], no_train=True)
         probe_train_state = raw_restored['model']
 
@@ -1573,3 +1586,4 @@ if __name__ == "__main__":
     #     main()
 
     # interact -t 6:00:00 -q gpu -f quadrortx
+
