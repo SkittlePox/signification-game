@@ -643,6 +643,416 @@ class ActorCriticSpeakerSplinesNoise(nn.Module):
 
         return pi, jnp.squeeze(critic, axis=-1)
 
+class ActorCriticListenerBottleneck(nn.Module):
+    """
+    This actor-critic model has a bottleneck with the embedding layer 
+    which leads to more compact representations and may make ToM reasoning
+    better.
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+
+        # Bottleneck Layer
+        bottleneck = nn.Dense(32)(x)
+        bottleneck = nn.relu(bottleneck)
+        
+        # Embedding Layer
+        embedding = nn.Dense(128)(bottleneck)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerLargeKernel(nn.Module):
+    """
+    This actor-critic model includes a larger kernel than other
+    models, perhaps enabling listeners to be receptive to more 
+    sensitive to local changes. 
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(5, 5), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(5, 5), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(128)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerStrided(nn.Module):
+    """
+    This actor-critic model includes a larger stride than other
+    models, perhaps enabling listeners to be receptive to global
+    fetaures.
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(3, 3), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(3, 3), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(128)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+
+class ActorCriticListenerDeep(nn.Module):
+    """
+    This actor-critic model includes a deeper architecture 
+    with more convolutional layers and a higher embedding space.
+    Ideally, this would lead the speaker models to communicate more
+    complex signs.
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=16, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=128, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=256, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(256)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(128)(actor_mean)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(256)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerSeparateEmbeddings(nn.Module):
+    """
+    This actor-critic model includes separate embeddings for the actor 
+    and the critic models. Even though the environment is relatively 
+    simple, separate embeddings can prevent backpropagating gradients
+    through the same embedding.
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Actor Embedding Layer
+        actor_embedding = nn.Dense(64)(x)
+        actor_embedding = nn.relu(actor_embedding)
+        actor_embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(actor_embedding)
+        actor_embedding = nn.Dense(128)(actor_embedding)
+        actor_embedding = nn.relu(actor_embedding)
+        actor_embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(actor_embedding)
+        actor_embedding = nn.Dense(128)(actor_embedding)
+        actor_embedding = nn.relu(actor_embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(actor_embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Embedding Layer
+        critic_embedding = nn.Dense(64)(x)
+        critic_embedding = nn.relu(critic_embedding)
+        critic_embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(critic_embedding)
+        critic_embedding = nn.Dense(128)(critic_embedding)
+        critic_embedding = nn.relu(critic_embedding)
+        critic_embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(critic_embedding)
+        critic_embedding = nn.Dense(128)(critic_embedding)
+        critic_embedding = nn.relu(critic_embedding)
+
+        # Critic Layer
+        critic = nn.Dense(128)(critic_embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerStrongActor(nn.Module):
+    """
+    This model has a strong actor and weak critic which 
+    would allow the listener to freely explore more policies.
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Actor Embedding Layer
+        actor_embedding = nn.Dense(128)(x)
+        actor_embedding = nn.relu(actor_embedding)
+        actor_embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(actor_embedding)
+        actor_embedding = nn.Dense(128)(actor_embedding)
+        actor_embedding = nn.relu(actor_embedding)
+        actor_embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(actor_embedding)
+        actor_embedding = nn.Dense(128)(actor_embedding)
+        actor_embedding = nn.relu(actor_embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(actor_embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(128)(actor_mean)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Embedding Layer
+        critic_embedding = nn.Dense(128)(x)
+        critic_embedding = nn.relu(critic_embedding)
+
+        # Critic Layer
+        critic = nn.Dense(128)(critic_embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerStrongCritic(nn.Module):
+    """
+    This model has a strong critic and weak actor which 
+    constrains the policies the actor can explore. This would
+    lead to more restrictive communication.
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Actor Embedding Layer
+        actor_embedding = nn.Dense(128)(x)
+        actor_embedding = nn.relu(actor_embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(actor_embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Embedding Layer
+        critic_embedding = nn.Dense(128)(x)
+        critic_embedding = nn.relu(critic_embedding)
+        critic_embedding = nn.Dense(128)(critic_embedding)
+        critic_embedding = nn.relu(critic_embedding)
+        critic_embedding = nn.Dense(128)(critic_embedding)
+        critic_embedding = nn.relu(critic_embedding)
+
+        # Critic Layer
+        critic = nn.Dense(128)(critic_embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerStrongEmbedding(nn.Module):
+    """
+    This model has a strong embedding layer that could lead 
+    to more complex representations of the observed splines. The 
+    actor and critic layers themselves are barebones to allow the 
+    internal representation to do the heavy-lifting.
+    """
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(64)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(256)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dense(256)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
 
 def examine_speaker():
     speaker_network = ActorCriticSpeakerSplines(latent_dim=64, num_classes=10, action_dim=12, config={"SPEAKER_STDDEV": 0.6, "SPEAKER_STDDEV2": 0.2})
