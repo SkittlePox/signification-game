@@ -1161,19 +1161,19 @@ def wandb_callback(metrics):
         
     #     metric_dict.update({f"policy entropy/tom all listeners referent {j} speaker images": tom_all_speaker_avg.item()})
 
-    all_listener_obs_source = trimmed_transition_batch.listener_obs_source
-    env_mask = jnp.where(all_listener_obs_source == 0, 1, 0)
-    speaker_mask = 1 - env_mask
+    # all_listener_obs_source = trimmed_transition_batch.listener_obs_source
+    # env_mask = jnp.where(all_listener_obs_source == 0, 1, 0)
+    # speaker_mask = 1 - env_mask
 
-    naive_all_env_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * env_mask) / (jnp.sum(env_mask) + 1e-8)
-    naive_all_speaker_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
+    # naive_all_env_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * env_mask) / (jnp.sum(env_mask) + 1e-8)
+    # naive_all_speaker_avg = jnp.sum(trimmed_transition_batch.naive_listener_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
 
-    metric_dict.update({"policy entropy/naive all listeners all referents env images": naive_all_env_avg.item()})
-    metric_dict.update({"policy entropy/naive all listeners all referents speaker images": naive_all_speaker_avg.item()})
+    # metric_dict.update({"policy entropy/naive all listeners all referents env images": naive_all_env_avg.item()})
+    # metric_dict.update({"policy entropy/naive all listeners all referents speaker images": naive_all_speaker_avg.item()})
     
-    tom_all_speaker_avg = jnp.sum(trimmed_transition_batch.tom_listener_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
+    # tom_all_speaker_avg = jnp.sum(trimmed_transition_batch.tom_listener_entropies * speaker_mask) / (jnp.sum(speaker_mask) + 1e-8)
 
-    metric_dict.update({"policy entropy/tom all listeners all referents speaker images": tom_all_speaker_avg.item()})
+    # metric_dict.update({"policy entropy/tom all listeners all referents speaker images": tom_all_speaker_avg.item()})
 
     ##### Iconicity Probe Logging   # This strikes me as something that belongs in the main scan loop.
     probe_logging_iter, probe_num_examples = probe_logging_params
