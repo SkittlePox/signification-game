@@ -233,6 +233,16 @@ def initialize_listener(env, rng, config, i):
         listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense-batchnorm':
         listener_network = ActorCriticListenerDenseBatchnorm(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-bottleneck-1':
+        listener_network = ActorCriticListenerBottleneck(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-largekernel-1':
+        listener_network = ActorCriticListenerLargeKernel(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-strided-1':
+        listener_network = ActorCriticListenerStrided(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-strongembed-1':
+        listener_network = ActorCriticListenerStrongEmbedding(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+    elif config["LISTENER_ARCH"] == 'conv-weakembed-1':
+        listener_network = ActorCriticListenerStrongConvWeakEmbed(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
