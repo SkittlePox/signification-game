@@ -295,11 +295,11 @@ class ActorCriticListenerDense(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        obs = x
+        obs = x.reshape((x.shape[0], -1))
         # Embedding Layer
         embedding = nn.Dense(128)(obs)
         embedding = nn.relu(embedding)
-        embedding = nn.Dense(128)(obs)
+        embedding = nn.Dense(128)(embedding)
         embedding = nn.relu(embedding)
         embedding = nn.Dense(128)(embedding)
         embedding = nn.relu(embedding)
