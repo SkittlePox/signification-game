@@ -295,9 +295,15 @@ class ActorCriticListenerDense(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        obs = x.reshape((-1, self.image_dim ** 2, 1))
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.sigmoid(x)
+        x = x.reshape((x.shape[0], -1))
+
         # Embedding Layer
-        embedding = nn.Dense(128)(obs)
+        embedding = nn.Dense(128)(x)
         embedding = nn.relu(embedding)
         embedding = nn.Dense(128)(embedding)
         embedding = nn.relu(embedding)
