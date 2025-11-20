@@ -818,15 +818,22 @@ class ActorCriticListenerStrongEmbedding(nn.Module):
         
         # Embedding Layer
         embedding = nn.Dense(64)(x)
+        embedding = nn.LayerNorm()(embedding)
         embedding = nn.relu(embedding)
         embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+
         embedding = nn.Dense(128)(embedding)
+        embedding = nn.LayerNorm()(embedding)
         embedding = nn.relu(embedding)
         embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+
         embedding = nn.Dense(256)(embedding)
+        embedding = nn.LayerNorm()(embedding)
         embedding = nn.relu(embedding)
         embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+
         embedding = nn.Dense(256)(embedding)
+        embedding = nn.LayerNorm()(embedding)
         embedding = nn.relu(embedding)
 
         # Actor Layer
@@ -861,6 +868,7 @@ class ActorCriticListenerStrongConvWeakEmbed(nn.Module):
         x = nn.relu(x)
         x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
         x = nn.relu(x)
+        x = nn.avg_pool(x, window_shape=(2, 2), strides=(2, 2))
         x = x.reshape((x.shape[0], -1))  # Flatten
         
         # Embedding Layer
@@ -883,6 +891,253 @@ class ActorCriticListenerStrongConvWeakEmbed(nn.Module):
 
         return pi, jnp.squeeze(critic, axis=-1)
 
+class ActorCriticListenerHighFeatures(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=128, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(128)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerLowFeatures(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(128)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerHighEmbedding(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(256)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(256)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(256)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(256)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(256)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(256)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerLowEmbedding(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(64)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(64)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(64)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(64)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(64)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(64)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticListenerLessConv(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(128)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+class ActorCriticLessEmbed(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)  # Assuming x is flat, and image_dim is [height, width]
+
+        # Convolutional layers
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # Flatten
+        
+        # Embedding Layer
+        embedding = nn.Dense(128)(x)
+        embedding = nn.relu(embedding)
+        embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+        embedding = nn.Dense(128)(embedding)
+        embedding = nn.relu(embedding)
+
+        # Actor Layer
+        actor_mean = nn.Dense(128)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic Layer
+        critic = nn.Dense(128)(embedding)
+        critic = nn.relu(critic)
+        critic = nn.Dense(128)(critic)
+        critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+    
 def examine_speaker():
     speaker_network = ActorCriticSpeakerSplines(latent_dim=64, num_classes=10, action_dim=12, config={"SPEAKER_STDDEV": 0.6, "SPEAKER_STDDEV2": 0.2})
     
