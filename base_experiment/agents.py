@@ -1099,7 +1099,7 @@ class ActorCriticListenerLessConv(nn.Module):
 
         return pi, jnp.squeeze(critic, axis=-1)
 
-class ActorCriticLessEmbed(nn.Module):
+class ActorCriticListenerLessEmbed(nn.Module):
     action_dim: Sequence[int]
     image_dim: Sequence[int]
     config: Dict
