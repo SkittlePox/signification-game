@@ -462,8 +462,6 @@ def train_probe(config):
     )
     
     if config["TRAIN_MODEL"]:
-        if config["ENV_KWARGS"]["num_mixing_classes"] > 0 :
-            config["ENV_KWARGS"]["mixing_class_indices"] = random.sample( range(0, (len(config["ENV_DATASET_CATEGORIES"]) - config["ENV_KWARGS"]["num_classes"])), config["ENV_KWARGS"]["num_mixing_classes"] * )
         train_state = train_and_evaluate(config)
 
         if config["SAVE_MODEL"]:
