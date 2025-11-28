@@ -21,7 +21,7 @@ import pickle
 from utils import to_jax
 
 
-NUM_CLASSES = 10
+NUM_CLASSES = 100
 
 
 class CNN(nn.Module):

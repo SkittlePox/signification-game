@@ -62,6 +62,8 @@
   "num_listeners": 5
   "num_channels": 5
   "num_classes": 10
+  "mixing_classes": 0
+  "total_classes": 100
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR-10
   "speaker_reward_success": 1.0
   "speaker_reward_failure": -0.1
