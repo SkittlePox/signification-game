@@ -77,7 +77,7 @@ Follow the [Oscar Jax Instructions](https://docs.ccv.brown.edu/oscar/gpu-computi
         unset LD_LIBRARY_PATH
         module load cuda cudnn
     ```
-2. In a separate directory, create a python virtual environment:
+2. In a separate directory, create a python virtual environment (using python 3.10!):
     ```shell
         python -m venv jax.venv
     ```
