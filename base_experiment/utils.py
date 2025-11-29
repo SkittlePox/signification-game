@@ -793,6 +793,56 @@ def get_speaker_action_transform(fn_name, image_dim):
         all_spline_params = jnp.clip(all_spline_params, 0.0, 1.0)
         canvas = jnp.clip(paint_spline_on_canvas_relative(all_spline_params.reshape(-1, 6)).sum(axis=0), 0.0, 1.0)
         return canvas
+    
+    @jax.vmap
+    def paint_multiple_splines_relative_with_intensity(all_spline_params: jnp.array):
+        """Paint multiple splines on a single canvas. Requires speaker_action_dim be a multiple of 7."""
+
+        @jax.vmap
+        def paint_spline_on_canvas_relative(spline_params: jnp.array):
+            """Paint a single spline on the canvas with specified thickness using advanced indexing."""
+
+            def bezier_spline(t, P0, P1, P2):
+                """Compute points on a quadratic Bézier spline for a given t."""
+                t = t[:, None]  # Shape (N, 1) to broadcast with P0, P1, P2 of shape (2,)
+                P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
+                return P  # Returns shape (N, 2), a list of points on the spline
+
+            brush_size = 1
+
+            spline_params *= image_dim
+            
+            # P0, P1, P2 = spline_params.reshape((3, 2)) 
+            P0, P1, P2, W = spline_params[0:2], spline_params[0:2]+spline_params[2:4], spline_params[0:2]+spline_params[4:6], spline_params[6]
+            W *= -0.003  # This is the weight param. -0.005 is too dark. -0.002 may be too light.
+            t_values = jnp.linspace(0, 1, num=50)
+            spline_points = bezier_spline(t_values, P0, P1, P2)
+            x_points, y_points = jnp.round(spline_points).astype(int).T
+
+            # Generate brush offsets
+            brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size)    # brush_size + 1
+                                                for dy in range(-brush_size, brush_size)])  # brush_size + 1
+            x_offsets, y_offsets = brush_offsets.T
+
+            # Calculate all indices to update for each point (broadcasting magic)
+            all_x_indices = x_points[:, None] + x_offsets
+            all_y_indices = y_points[:, None] + y_offsets
+
+            # Flatten indices and filter out-of-bound ones
+            all_x_indices = jnp.clip(all_x_indices.flatten(), 0, image_dim)
+            all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
+
+            # Update the canvas
+            canvas = jnp.zeros((image_dim, image_dim))
+            canvas = canvas.at[all_x_indices, all_y_indices].add(W)
+            return canvas
+
+        background_shade = 0.3 # This is the background color! For nearly all experiments it has been 0.2*number of splines. For a larger sig gap go for 0.1*number of splines
+
+        # Vmap over splines and sum contributions
+        all_spline_params = jnp.clip(all_spline_params, 0.0, 1.0)
+        canvas = jnp.clip(paint_spline_on_canvas_relative(all_spline_params.reshape(-1, 7)).sum(axis=0) + background_shade, 0.0, 1.0)
+        return canvas
         
 
     if fn_name == "identity":
@@ -811,6 +861,8 @@ def get_speaker_action_transform(fn_name, image_dim):
         return paint_multiple_splines_with_intensity
     elif fn_name == "splines_relative":
         return paint_multiple_splines_relative
+    elif fn_name == "splines_relative_weight":
+        return paint_multiple_splines_relative_with_intensity
 
 
 ##################################################################
