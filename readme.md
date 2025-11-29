@@ -100,6 +100,8 @@ Follow the [Oscar Jax Instructions](https://docs.ccv.brown.edu/oscar/gpu-computi
     ```
 
 You should be able to run `jaxmarl_testdrive.py`.
+
+`-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html`
     
 
 ## Running experiments.
