@@ -537,7 +537,6 @@ def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_t
     speaker_obs = jnp.tile(jnp.arange(config["ENV_KWARGS"]["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
     sp_action_dim = config["ENV_KWARGS"]["speaker_action_dim"]
-    num_speakers = config["ENV_KWARGS"]["num_speakers"]
     
     def get_speaker_outputs(speaker_params_i):
         vmap_execute_speaker_test = jax.vmap(execute_individual_speaker, in_axes=(0, None, None, 0))
@@ -550,12 +549,29 @@ def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_t
     
     return speaker_images
 
+def get_speaker_heatmap(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
+    speaker_obs = jnp.tile(jnp.arange(config["ENV_KWARGS"]["num_classes"]), config["SPEAKER_HEATMAP_NUM"])
+    speaker_rngs = jax.random.split(rng, len(speaker_obs))
+    sp_action_dim = config["ENV_KWARGS"]["speaker_action_dim"]
+    
+    def get_speaker_outputs(speaker_params_i):
+        vmap_execute_speaker_test = jax.vmap(execute_individual_speaker, in_axes=(0, None, None, 0))
+        speaker_actions = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)[0]   # Indices 1 and 2 are for logprobs and values. 0 
+        return speaker_actions.reshape(-1, sp_action_dim)
+
+    vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0))
+    speaker_actions = vmap_get_speaker_outputs(speaker_params).reshape((-1, sp_action_dim))
+    speaker_images = speaker_action_transform(speaker_actions)
+
+    # TODO: Average images now
+    
+    return speaker_images
+
 def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_apply_fn, speaker_params, speaker_action_transform, config, tom_speaker_n_search):
     env_kwargs = config["ENV_KWARGS"]
     speaker_obs = jnp.tile(jnp.arange(env_kwargs["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
     sp_action_dim = env_kwargs["speaker_action_dim"]
-    num_speakers = env_kwargs["num_speakers"]
     max_speaker_n_search = config["MAX_SPEAKER_N_SEARCH"]
 
     def get_speaker_outputs(speaker_params_i, listener_params_i):
