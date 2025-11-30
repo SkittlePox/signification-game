@@ -901,7 +901,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     return runner_state, total_loss
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmap, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
     def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
@@ -1495,6 +1495,11 @@ def make_train(config):
                                                 lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_EXAMPLE_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             speaker_examples = (gut_speaker_examples, tom_speaker_examples)
             ## Both sets of examples are shape (num_classes * num_speakers * speaker_example_num, image_dim, image_dim)
+
+            ## Collect speaker heatmap
+            gut_speaker_heatmap = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
+                                            lambda _: get_speaker_heatmap(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), 
+                                            lambda _: jnp.zeros((env_kwargs["num_speakers"]*config["SPEAKER_HEATMAP_NUM"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             
             ## Collect the last set of speaker-generated images for this epoch.
             final_speaker_images = speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((env_kwargs["num_speakers"]), -1))
@@ -1538,7 +1543,7 @@ def make_train(config):
             speaker_example_logging_params = (config["SPEAKER_EXAMPLE_DEBUG"], config["SPEAKER_EXAMPLE_LOGGING_ITER"])
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmap, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
