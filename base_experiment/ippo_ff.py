@@ -550,13 +550,22 @@ def get_speaker_examples(rng, speaker_apply_fn, speaker_params, speaker_action_t
     return speaker_images
 
 def get_speaker_heatmap(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
-    speaker_obs = jnp.repeat(jnp.arange(config["ENV_KWARGS"]["num_classes"]), config["SPEAKER_HEATMAP_NUM"])
+    speaker_obs = jnp.repeat(jnp.arange(config["ENV_KWARGS"]["num_classes"]), 1)
     speaker_rngs = jax.random.split(rng, len(speaker_obs))
     sp_action_dim = config["ENV_KWARGS"]["speaker_action_dim"]
     num_speakers = config["ENV_KWARGS"]["num_speakers"]
+
+    def execute_individual_speaker_and_sample(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
+        __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
+        _speaker_obs_i = _speaker_obs_i.ravel()
+        policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        # action, log_prob = policy.sample_and_log_prob(seed=__rng)
+        actions = policy.sample(seed=__rng, sample_shape=config["SPEAKER_HEATMAP_NUM"])
+        # scale_diag = policy.scale_diag
+        return actions.reshape(-1, sp_action_dim)
     
     def get_speaker_outputs(speaker_params_i):
-        vmap_execute_speaker_test = jax.vmap(execute_individual_speaker, in_axes=(0, None, None, 0))
+        vmap_execute_speaker_test = jax.vmap(execute_individual_speaker_and_sample, in_axes=(0, None, None, 0))
         speaker_actions = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)[0]   # Indices 1 and 2 are for logprobs and values. 0 
         return speaker_actions.reshape(-1, sp_action_dim)
 
@@ -595,7 +604,7 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     num_speakers = config["ENV_KWARGS"]["num_speakers"]
     spline_size = config["SPEAKER_SPLINE_PARAM_SIZE"]
 
-    def get_individual_speaker_policies(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
+    def get_individual_speaker_policy_params(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
         __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
         _speaker_obs_i = _speaker_obs_i.ravel()
         policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
@@ -604,7 +613,7 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         return policy.loc, policy.scale_diag
     
     def get_speaker_outputs(speaker_params_i):
-        vmap_execute_speaker_test = jax.vmap(get_individual_speaker_policies, in_axes=(0, None, None, 0))
+        vmap_execute_speaker_test = jax.vmap(get_individual_speaker_policy_params, in_axes=(0, None, None, 0))
         policy_locs, policy_scale_diags = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)
         return policy_locs, policy_scale_diags
 
