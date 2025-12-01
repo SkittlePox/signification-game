@@ -1,0 +1,6 @@
+"NUM_STEPS": 2 # 1024
+"MINIBATCH_SIZE_LISTENER": 2 # 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 2 # 64 # This must be a whole divisor of NUM_STEPS
+
+"PROBE_NUM_EXAMPLES": 2 # 512 # This must be less than or equal to "NUM_STEPS"
+"SPEAKER_EXAMPLE_DEBUG": False
