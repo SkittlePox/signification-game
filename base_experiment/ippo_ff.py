@@ -559,9 +559,7 @@ def get_speaker_heatmap(rng, speaker_apply_fn, speaker_params, speaker_action_tr
         __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
         _speaker_obs_i = _speaker_obs_i.ravel()
         policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
-        # action, log_prob = policy.sample_and_log_prob(seed=__rng)
         actions = policy.sample(seed=__rng, sample_shape=config["SPEAKER_HEATMAP_NUM"])
-        # scale_diag = policy.scale_diag
         return actions.reshape(-1, sp_action_dim)
     
     def get_speaker_outputs(speaker_params_i):
@@ -621,8 +619,8 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     speaker_policy_locs, speaker_policy_scale_diags = vmap_get_speaker_outputs(speaker_params)
     
     # These will be (num_speakers*num_splines*num_observations, spline_size)
-    speaker_policy_locs = speaker_policy_locs.reshape((-1, spline_size))
-    speaker_policy_scale_diags = speaker_policy_scale_diags.reshape((-1, spline_size))
+    speaker_policy_locs = speaker_policy_locs.reshape((num_speakers, -1, spline_size))
+    speaker_policy_scale_diags = speaker_policy_scale_diags.reshape((num_speakers, -1, spline_size))
     
     # speaker_images = speaker_action_transform(speaker_actions)
 
