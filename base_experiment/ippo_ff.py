@@ -587,6 +587,41 @@ def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_ap
     
     return speaker_images
 
+
+def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
+    speaker_obs = jnp.tile(jnp.arange(config["ENV_KWARGS"]["num_classes"]), 1)
+    speaker_rngs = jax.random.split(rng, len(speaker_obs))
+    sp_action_dim = config["ENV_KWARGS"]["speaker_action_dim"]
+    num_speakers = config["ENV_KWARGS"]["num_speakers"]
+    spline_size = config["SPEAKER_SPLINE_PARAM_SIZE"]
+
+    def get_individual_speaker_policies(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
+        __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
+        _speaker_obs_i = _speaker_obs_i.ravel()
+        policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        # action, log_prob = policy.sample_and_log_prob(seed=__rng)
+        # scale_diag = policy.scale_diag
+        return policy.loc, policy.scale_diag
+    
+    def get_speaker_outputs(speaker_params_i):
+        vmap_execute_speaker_test = jax.vmap(get_individual_speaker_policies, in_axes=(0, None, None, 0))
+        policy_locs, policy_scale_diags = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)
+        return policy_locs, policy_scale_diags
+
+    vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0))
+    speaker_policy_locs, speaker_policy_scale_diags = vmap_get_speaker_outputs(speaker_params)
+    
+    # These will be (num_speakers*num_splines*num_observations, spline_size)
+    speaker_policy_locs = speaker_policy_locs.reshape((-1, spline_size))
+    speaker_policy_scale_diags = speaker_policy_scale_diags.reshape((-1, spline_size))
+    
+    # speaker_images = speaker_action_transform(speaker_actions)
+
+    # Average images now to create heatmaps
+    # speaker_heatmaps = speaker_images.reshape(config["ENV_KWARGS"]["num_classes"]*num_speakers, config["SPEAKER_HEATMAP_NUM"], speaker_images.shape[-1], speaker_images.shape[-1]).mean(axis=1)
+    
+    return None
+
 def calculate_gae_listeners(trans_batch, last_val, gamma, gae_lambda):
     def _get_advantages(gae_and_next_value, transition):
         gae, next_value = gae_and_next_value
@@ -903,7 +938,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     return runner_state, total_loss
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
     def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
@@ -1247,6 +1282,7 @@ def make_train(config):
     config["NUM_ACTORS"] = (env_kwargs["num_speakers"] + env_kwargs["num_listeners"]) * config["NUM_ENVS"]
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
+    config["SPEAKER_SPLINE_PARAM_SIZE"] = 7 if env_kwargs["speaker_action_transform"] == 'splines_weight' else None
     
     def train(rng):
         # MAKE AGENTS
@@ -1506,6 +1542,10 @@ def make_train(config):
             gut_speaker_heatmaps = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
                                             lambda _: get_speaker_heatmap(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config), 
                                             lambda _: jnp.zeros((env_kwargs["num_speakers"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            ##
+
+            ## Collect Wasserstein distance between splines
+            wasserstein_spline_info = get_speaker_spline_wasserstein_distances(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config)
             
             ## Collect the last set of speaker-generated images for this epoch.
             final_speaker_images = speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((env_kwargs["num_speakers"]), -1))
@@ -1548,8 +1588,9 @@ def make_train(config):
             ### Some other debug info
             speaker_example_logging_params = (config["SPEAKER_EXAMPLE_DEBUG"], config["SPEAKER_EXAMPLE_LOGGING_ITER"])
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
+            ###
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             

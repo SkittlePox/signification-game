@@ -19,8 +19,12 @@
 "ENV_KWARGS":
   ${ENV_KWARGS}:  # This doesn't look right
   "image_dim": 32 # 28 for MNIST, 32 for CIFAR
+  "speaker_reward_success": 1.0
+  "speaker_reward_failure": -0.5
+  "listener_reward_success": 1.0
+  "listener_reward_failure": -0.5
   "speaker_action_transform": "splines_weight"
-  "speaker_action_dim": 21  # This must be a multiple of 6 for "splines", 7 for "splines_weight"
+  "speaker_action_dim": 14  # This must be a multiple of 6 for "splines", 7 for "splines_weight"
   "num_classes": 20
   "speaker_referent_span_fn": 20
 
