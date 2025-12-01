@@ -566,7 +566,7 @@ def get_speaker_heatmap(rng, speaker_apply_fn, speaker_params, speaker_action_tr
     
     def get_speaker_outputs(speaker_params_i):
         vmap_execute_speaker_test = jax.vmap(execute_individual_speaker_and_sample, in_axes=(0, None, None, 0))
-        speaker_actions = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)[0]   # Indices 1 and 2 are for logprobs and values. 0 
+        speaker_actions = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)   # Indices 1 and 2 are for logprobs and values. 0 
         return speaker_actions.reshape(-1, sp_action_dim)
 
     vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0))
