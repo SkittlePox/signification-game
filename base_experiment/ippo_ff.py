@@ -220,41 +220,41 @@ def define_env(config):
 
 def initialize_listener(env, rng, config, i):
     if config["LISTENER_ARCH"] == 'conv':
-        listener_network = ActorCriticListenerConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerConv(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-boost':
-        listener_network = ActorCriticListenerBoost(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerBoost(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-reduced':
-        listener_network = ActorCriticListenerConvReduced(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerConvReduced(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-sigmoid':
-        listener_network = ActorCriticListenerConvSigmoid(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerConvSigmoid(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-small':
-        listener_network = ActorCriticListenerConvSmall(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerConvSmall(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense':
-        listener_network = ActorCriticListenerDense(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerDense(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'dense-batchnorm':
-        listener_network = ActorCriticListenerDenseBatchnorm(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerDenseBatchnorm(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-bottleneck-1':
-        listener_network = ActorCriticListenerBottleneck(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerBottleneck(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-largekernel-1':
-        listener_network = ActorCriticListenerLargeKernel(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerLargeKernel(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-strided-1':
-        listener_network = ActorCriticListenerStrided(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerStrided(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-strongembed-1':
-        listener_network = ActorCriticListenerStrongEmbedding(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerStrongEmbedding(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-weakembed-1':
-        listener_network = ActorCriticListenerStrongConvWeakEmbed(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerStrongConvWeakEmbed(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-high-features-1':
-        listener_network = ActorCriticListenerHighFeatures(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerHighFeatures(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-low-features-1':
-        listener_network = ActorCriticListenerLowFeatures(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerLowFeatures(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-high-embed-1':
-        listener_network = ActorCriticListenerHighEmbedding(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerHighEmbedding(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-low-embed-1':
-        listener_network = ActorCriticListenerLowEmbedding(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerLowEmbedding(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-less-conv-1':
-        listener_network = ActorCriticListenerLessConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerLessConv(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-less-embed-1':
-        listener_network = ActorCriticListenerLessEmbed(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+        listener_network = ActorCriticListenerLessEmbed(action_dim=(config["ENV_KWARGS"]["num_classes"] + config["ENV_KWARGS"]["mixing_extra_classes"]), image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
