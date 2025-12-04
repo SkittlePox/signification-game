@@ -619,15 +619,32 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     speaker_policy_locs, speaker_policy_scale_diags = vmap_get_speaker_outputs(speaker_params)
     
     # These will be (num_speakers*num_splines*num_observations, spline_size)
+    num_classes = config["ENV_KWARGS"]["num_classes"]
+    splines_per_class = sp_action_dim // spline_size
+    total_splines = num_classes * splines_per_class
     speaker_policy_locs = speaker_policy_locs.reshape((num_speakers, -1, spline_size))
     speaker_policy_scale_diags = speaker_policy_scale_diags.reshape((num_speakers, -1, spline_size))
-    
-    # speaker_images = speaker_action_transform(speaker_actions)
 
-    # Average images now to create heatmaps
-    # speaker_heatmaps = speaker_images.reshape(config["ENV_KWARGS"]["num_classes"]*num_speakers, config["SPEAKER_HEATMAP_NUM"], speaker_images.shape[-1], speaker_images.shape[-1]).mean(axis=1)
+    def calculate_wasserstein_distance(mu1, mu2, sig1, sig2):
+        return jnp.sqrt((mu1 - mu2) ** 2 + (sig1 - sig2) ** 2)
     
-    return None
+    def compute_spline_pair_distance(mu1, mu2, sig1, sig2):
+        distances_per_param = jax.vmap(calculate_wasserstein_distance)(mu1, mu2, sig1, sig2)
+        
+        # mean across params of the spline
+        return jnp.mean(distances_per_param)
+    
+    def compute_pairwise_matrix(locs, scale_diags):
+        def compute_row(i):
+            def compute_cell(j):
+                return compute_spline_pair_distance(locs[i], locs[j], scale_diags[i], scale_diags[j])
+            return jax.vmap(compute_cell)(jnp.arange(total_splines))
+        
+        return jax.vmap(compute_row)(jnp.arange(total_splines))
+    
+    pairwise_matrices = jax.vmap(compute_pairwise_matrix)(speaker_policy_locs, speaker_policy_scale_diags)
+    
+    return pairwise_matrices
 
 def calculate_gae_listeners(trans_batch, last_val, gamma, gae_lambda):
     def _get_advantages(gae_and_next_value, transition):
