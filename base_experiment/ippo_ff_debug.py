@@ -17,8 +17,8 @@ import flax.linen as nn
 from flax.training import train_state, orbax_utils
 import orbax.checkpoint
 import pickle
-from torchvision.utils import make_grid
-from torchvision.datasets import MNIST
+# from torchvision.utils import make_grid
+# from torchvision.datasets import MNIST
 from omegaconf import OmegaConf
 from simplified_signification_game import SimplifiedSignificationGame, State
 from agents import *
@@ -163,7 +163,18 @@ def define_env(config):
         #     meta_data = pickle.load(f, encoding='bytes')
         # fine_labels = {l: i for i, l in enumerate(meta_data[b'fine_label_names'])}
 
-        acceptable_label_names = config["ENV_DATASET_CATEGORIES"]
+        acceptable_label_names = {
+            "bicycle": 8,
+            "butterfly": 14,
+            "camel": 15,
+            "crab": 26,
+            "dolphin": 30,
+            "palm_tree": 56,
+            "rocket": 69,
+            "snail": 77,
+            "snake": 78,
+            "spider": 79,
+        }
         acceptable_labels = jnp.array(list(acceptable_label_names.values()))
 
         with open(download_path+'cifar-100-python/train', 'rb') as f:   # 50,000 images
@@ -296,7 +307,7 @@ def initialize_listener(env, rng, config, i):
         # We modify the trainstate by putting what we want in it.
 
         local_path = str(pathlib.Path().resolve())
-        model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+        model_path_str = "/base_experiment/models/" #if config["DEBUGGER"] else "/models/"
         checkpoint_name = local_path+model_path_str+config["PRETRAINED_LISTENERS"]+f'/listener_{i}.agent'
         
         empty_checkpoint = {'model': train_state}
@@ -358,7 +369,7 @@ def initialize_speaker(env, rng, config, i):
         # We modify the trainstate by putting what we want in it.
 
         local_path = str(pathlib.Path().resolve())
-        model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+        model_path_str = "/base_experiment/models/" # if config["DEBUGGER"] else "/models/"
         checkpoint_name = local_path+model_path_str+config["PRETRAINED_SPEAKERS"]+f'/speaker_{i}.agent'
         
         empty_checkpoint = {'model': train_state}
@@ -1278,6 +1289,10 @@ def wandb_callback(metrics):
 
     # metric_dict.update({"policy entropy/tom all listeners all referents speaker images": tom_all_speaker_avg.item()})
 
+
+    #### Wasserstein Distance Logging
+    
+
     ##### Iconicity Probe Logging   # This strikes me as something that belongs in the main scan loop.
     probe_logging_iter, probe_num_examples = probe_logging_params
     if (update_step + 1) % probe_logging_iter == 0:
@@ -1322,7 +1337,7 @@ def make_train(config):
 
         # LOAD ICON PROBE
         local_path = str(pathlib.Path().resolve())
-        model_path_str = "/base_experiment/models/" if config["DEBUGGER"] else "/models/"
+        model_path_str = "/base_experiment/models/" # if config["DEBUGGER"] else "/models/"
         raw_restored = icon_probe.load_probe_model(local_path+model_path_str+config["PROBE_MODEL_NAME"], None, action_dim=env_kwargs['num_classes'], opt=config["PROBE_OPTIMIZER"], no_train=True)
         probe_train_state = raw_restored['model']
 
