@@ -625,26 +625,22 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     speaker_policy_locs = speaker_policy_locs.reshape((num_speakers, -1, spline_size))
     speaker_policy_scale_diags = speaker_policy_scale_diags.reshape((num_speakers, -1, spline_size))
 
-    def calculate_wasserstein_distance(mu1, mu2, sig1, sig2):
-        return jnp.sqrt((mu1 - mu2) ** 2 + (sig1 - sig2) ** 2)
+    def calculate_wasserstein_distance(mu1, sig1, mu2, sig2):
+        # return jnp.sqrt((mu1 - mu2) ** 2 + (sig1 - sig2) ** 2)
+        mean_term = jnp.sum((mu1 - mu2) ** 2)
+        cov_term = jnp.sum(sig1**2 + sig2**2 - 2 * sig1 * sig2)
+        w2_squared = mean_term + cov_term
+        return jnp.sqrt(w2_squared)
     
-    def compute_spline_pair_distance(mu1, mu2, sig1, sig2):
-        distances_per_param = jax.vmap(calculate_wasserstein_distance)(mu1, mu2, sig1, sig2)
-        
-        # mean across params of the spline
-        return jnp.mean(distances_per_param)
+    calculate_wasserstein_distance_vmapped = jax.vmap(calculate_wasserstein_distance, in_axes=(None, None, 0, 0))
     
-    def compute_pairwise_matrix(locs, scale_diags):
-        def compute_row(i):
-            def compute_cell(j):
-                return compute_spline_pair_distance(locs[i], locs[j], scale_diags[i], scale_diags[j])
-            return jax.vmap(compute_cell)(jnp.arange(total_splines))
-        
-        return jax.vmap(compute_row)(jnp.arange(total_splines))
+    calculate_wasserstein_distance_double_vmapped = jax.vmap(calculate_wasserstein_distance_vmapped, in_axes=(0, 0, None, None))
+    # e.g. run calculate_wasserstein_distance_double_vmapped(speaker_policy_locs[0], speaker_policy_scale_diags[0], speaker_policy_locs[0], speaker_policy_scale_diags[0])
+
+    # triple vmap! This is shape (num_agents, total_splines, total_splines)
+    spline_wasserstein_matrix = jax.vmap(calculate_wasserstein_distance_double_vmapped)(speaker_policy_locs, speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_scale_diags)
     
-    pairwise_matrices = jax.vmap(compute_pairwise_matrix)(speaker_policy_locs, speaker_policy_scale_diags)
-    
-    return pairwise_matrices
+    return spline_wasserstein_matrix
 
 def calculate_gae_listeners(trans_batch, last_val, gamma, gae_lambda):
     def _get_advantages(gae_and_next_value, transition):
@@ -1278,6 +1274,12 @@ def wandb_callback(metrics):
 
     # metric_dict.update({"policy entropy/tom all listeners all referents speaker images": tom_all_speaker_avg.item()})
 
+
+    ##### Wasserstein Spline Distance logging
+    # TODO: Log an image heatmap for each agent. Diagonals should 0! total_splines by total_splines. num_speaker of those.
+    # TODO: Log entropy of the spline similarities for each agent, ignoring diagonals! reshape to (num_agents, total_splines*total_splines), then discard total_splines self-comparisons. Calculate entropy of this distribution and its mean. Also log an image of the distribution, 1 sorted by value and another canonical.
+
+
     ##### Iconicity Probe Logging   # This strikes me as something that belongs in the main scan loop.
     probe_logging_iter, probe_num_examples = probe_logging_params
     if (update_step + 1) % probe_logging_iter == 0:
@@ -1569,7 +1571,11 @@ def make_train(config):
             ##
 
             ## Collect Wasserstein distance between splines
-            wasserstein_spline_info = get_speaker_spline_wasserstein_distances(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config)
+            splines_per_sign = env_kwargs["speaker_action_dim"]/config["SPEKAER_SPLINE_PARAM_SIZE"]
+            wasserstein_spline_matrix = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
+                                            lambda _: get_speaker_spline_wasserstein_distances(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config),
+                                            lambda _: jnp.zeros((env_kwargs["num_speakers"], env_kwargs["num_classes"]*splines_per_sign, env_kwargs["num_classes"]*splines_per_sign)), operand=None)
+            ##
             
             ## Collect the last set of speaker-generated images for this epoch.
             final_speaker_images = speaker_action_transform(trimmed_transition_batch.speaker_action[-2].reshape((env_kwargs["num_speakers"]), -1))
@@ -1614,7 +1620,7 @@ def make_train(config):
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
             ###
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
