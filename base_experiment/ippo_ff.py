@@ -1279,6 +1279,33 @@ def wandb_callback(metrics):
     # TODO: Log an image heatmap for each agent. Diagonals should 0! total_splines by total_splines. num_speaker of those.
     # TODO: Log entropy of the spline similarities for each agent, ignoring diagonals! reshape to (num_agents, total_splines*total_splines), then discard total_splines self-comparisons. Calculate entropy of this distribution and its mean. Also log an image of the distribution, 1 sorted by value and another canonical.
 
+    num_speakers, total_splines, _ = wasserstein_spline_info.shape
+    for i in range(num_speakers):
+        # Heatmap image for each agent
+        wasserstein_speaker = wasserstein_spline_info[i]
+
+        speaker_zero_diag = wasserstein_speaker.at[jnp.diag_indices(total_splines)].set(0.0)
+
+        heatmap_image = wandb.Image(np.array(speaker_zero_diag), caption=f"spline_wasserstein_distance_speaker_{i}")
+        metric_dict.update({f"spline_wasserstein/heatmap/speaker {i} heatmap": heatmap_image})
+
+        # Entropy calc and distribution images
+        speaker_matrix = wasserstein_spline_info[i]
+        diag_mask = ~jnp.eye(total_splines, dtype=bool)
+        distances_no_diag = speaker_matrix[diag_mask] # Flattens and removes 0s which would skew distribution
+        
+        probs = jax.nn.softmax(-distances_no_diag)
+        
+        entropy = -jnp.sum(probs * jnp.log(probs + 1e-10))
+        metric_dict.update({f"spline_wasserstein/entropy/speaker {i}": entropy.item()})
+        
+        canonical_dist_image = wandb.Image(np.array(distances_no_diag.reshape(1, -1)), caption=f"Canonical distance distribution speaker {i}")
+        metric_dict.update({f"spline_wasserstein/canonical/speaker {i}": canonical_dist_image})
+        
+        sorted_distances = jnp.sort(distances_no_diag)
+        sorted_dist_image = wandb.Image(np.array(sorted_distances.reshape(1, -1)), caption=f"Sorted distance distribution speaker {i}")
+        metric_dict.update({f"spline_wasserstein/sorted/speaker {i}": sorted_dist_image})
+
 
     ##### Iconicity Probe Logging   # This strikes me as something that belongs in the main scan loop.
     probe_logging_iter, probe_num_examples = probe_logging_params
