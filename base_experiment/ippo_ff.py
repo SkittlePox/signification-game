@@ -1278,12 +1278,31 @@ def wandb_callback(metrics):
     ##### Wasserstein Spline Distance logging
     num_speakers, total_splines, _ = wasserstein_spline_info.shape
     if (update_step + 1 - speaker_example_debug_flag) % speaker_example_logging_iter == 0:
+        
+        # Mean for all speakers
+        metric_dict.update({"spline wasserstein distances/all speakers mean": jnp.mean(wasserstein_spline_info.flatten())})
+
+        # Calculate CV for each speaker
+        n = wasserstein_spline_info.shape[1]
+        # Get indices for lower triangle (k=-1 excludes the diagonal)
+        lower_triangle_indices = jnp.tril_indices(n, k=-1)
+        # Extract lower triangles for all matrices at once
+        # This will give shape (num_speakers, num_lower_triangle_elements)
+        flattened_lower_triangles = wasserstein_spline_info[:, lower_triangle_indices[0], lower_triangle_indices[1]]
+        # Calculate CV for all speakers at once
+        means = flattened_lower_triangles.mean(axis=1)
+        stds = flattened_lower_triangles.std(axis=1, ddof=0)
+        cvs = stds / means
+
+        metric_dict.update({"spline wasserstein distances/all speakers cv": jnp.mean(cvs)})
+        
         for i in range(num_speakers):
             # Heatmap image for each agent
             wasserstein_speaker = wasserstein_spline_info[i]
 
-            heatmap_image = wandb.Image(np.array(wasserstein_speaker)/6.0, caption=f"spline wasserstein distances speaker {i}")
+            heatmap_image = wandb.Image(np.array(wasserstein_speaker)/7.0, caption=f"spline wasserstein distances speaker {i}")
             metric_dict.update({f"spline wasserstein distances/speaker {i} heatmap": heatmap_image})
+
 
             # Entropy calc and distribution images
             probs = (wasserstein_speaker/(jnp.sum(wasserstein_speaker) + 1e-10)).flatten()
@@ -1294,6 +1313,19 @@ def wandb_callback(metrics):
             metric_dict.update({f"spline wasserstein distances/speaker {i} wasserstein max": jnp.max(wasserstein_speaker.flatten())})
 
             metric_dict.update({f"spline wasserstein distances/speaker {i} wasserstein mean": jnp.mean(wasserstein_speaker.flatten())})
+
+
+            # # Calculate the CV
+            # n = wasserstein_speaker.shape[0]
+            # # Get indices for lower triangle (k=-1 excludes the diagonal)
+            # lower_triangle_indices = np.tril_indices(n, k=-1)
+            # # Extract and flatten the lower triangle into a 1D array
+            # flattened_lower_triangle = np.array(wasserstein_speaker)[lower_triangle_indices]
+            
+            # cv = flattened_lower_triangle.std(ddof=0) / flattened_lower_triangle.mean()
+
+            metric_dict.update({f"spline wasserstein distances/speaker {i} wasserstein cv": cvs[i]})
+
             
             # canonical_dist_image = wandb.Image(np.array(wasserstein_speaker.flatten()), caption=f"Canonical distance distribution speaker {i}")
             # # TODO: Calculate labels according to flatten
