@@ -255,6 +255,10 @@ def initialize_listener(env, rng, config, i):
         listener_network = ActorCriticListenerLessConv(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"] == 'conv-less-embed-1':
         listener_network = ActorCriticListenerLessEmbed(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+
+    elif config["LISTENER_ARCH"].startswith("conv-ablate-"):
+        config["LISTENER_ARCH_ABLATION_PARAMS"] = LISTENER_ARCH_ABLATION_PARAMETERS[config["LISTENER_ARCH"]]
+        listener_network = ActorCriticListenerConvAblationReady(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
@@ -334,6 +338,10 @@ def initialize_speaker(env, rng, config, i):
         speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'splinesnoise':
         speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
+
+    elif config["SPEAKER_ARCH"].startswith("splines-ablate-"):
+        config["SPEAKER_ARCH_ABLATION_PARAMS"] = SPEAKER_ARCH_ABLATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        speaker_network = ActorCriticSpeakerSplinesAblationReady(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
 
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
