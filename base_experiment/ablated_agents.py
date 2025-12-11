@@ -97,7 +97,7 @@ class ActorCriticListenerConvAblationReady(nn.Module):
 
 
 LISTENER_ARCH_ABLATION_PARAMETERS = {
-    "conv-ablate-0": {
+    "conv-ablate-50-0": {
         "LISTENER_ARCH_ABLATION_PARAMS": {
             "conv_features": [32, 64],
             "embedding_dims": [128, 128, 128],
@@ -150,6 +150,14 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "conv_features": [32, 64],
             "embedding_dims": [128, 128, 128],
             "actor_hidden": 64,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-25-0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32, 64],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
             "critic_hidden": [128, 128]
         }
     },
@@ -283,7 +291,7 @@ class ActorCriticSpeakerSplinesAblationReady(nn.Module):
         return pi, jnp.squeeze(critic, axis=-1) # Return policy function and value
 
 SPEAKER_ARCH_ABLATION_PARAMETERS = {
-    "splines-ablate-0": {
+    "splines-ablate-50-0": {
         "SPEAKER_ARCH_ABLATION_PARAMETERS": {
             "embedding_latent_dim": 128,
             "embedding_dims": [128, 128, 128]
@@ -311,6 +319,12 @@ SPEAKER_ARCH_ABLATION_PARAMETERS = {
         "SPEAKER_ARCH_ABLATION_PARAMETERS": {
             "embedding_latent_dim": 128,
             "embedding_dims": [128, 128, 64]
+        }
+    },
+    "splines-ablate-25-0": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 128]
         }
     },
     "splines-ablate-25-1": {

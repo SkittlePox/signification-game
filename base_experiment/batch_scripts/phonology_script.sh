@@ -5,19 +5,24 @@
 #SBATCH -c 4
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=16:00:00
+#SBATCH --time=18:00:00
 #SBATCH --mem=12GB
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
-#SBATCH -o job_outputs/siggame_job_%j.o
-#SBATCH -e job_outputs/siggame_job_%j.e
+
+#SBATCH --array=1-35
+#SBATCH -o job_outputs/siggame_ph_job_%j.o
+#SBATCH -e job_outputs/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
 #SBATCH --mail-user=benjamin_spiegel@brown.edu
 
 echo $LD_LIBRARY_PATH
 unset LD_LIBRARY_PATH
 echo $LD_LIBRARY_PATH
+
+PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" sweep_phones_25.txt)
+# PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" sweep_phones_50.txt)
 
 # export JAX_DEBUG_NANS=True
 
@@ -69,7 +74,25 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 # python3 -u ippo_ff.py WANDB_NOTES="cifar10b phonology sweep 2 splines listener conv-strongembed" +dataset=cifar10b LISTENER_ARCH="conv-strongembed-1" ENV_KWARGS.channel_ratio_fn="0.0 jump to 0.8 at 2000" ENV_KWARGS.speaker_curve_penalty_coef=0.0 ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.speaker_assignment_method="random" ENV_KWARGS.agent_inferential_mode_fn="1.0" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 L2_REG_COEF_SPEAKER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 5e-6 at 2000" SPEAKER_LR_SCHEDULE="1e-4" SPEAKER_TRAIN_SCHEDULE="off then on at 2000" UPDATE_EPOCHS=4000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True
 # python3 -u ippo_ff.py WANDB_NOTES="cifar10b phonology sweep 2 splines listener conv-weakembed" +dataset=cifar10b LISTENER_ARCH="conv-weakembed-1" ENV_KWARGS.channel_ratio_fn="0.0 jump to 0.8 at 2000" ENV_KWARGS.speaker_curve_penalty_coef=0.0 ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.speaker_assignment_method="random" ENV_KWARGS.agent_inferential_mode_fn="1.0" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 L2_REG_COEF_SPEAKER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 5e-6 at 2000" SPEAKER_LR_SCHEDULE="1e-4" SPEAKER_TRAIN_SCHEDULE="off then on at 2000" UPDATE_EPOCHS=4000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True
 
-python3 -u ippo_ff.py WANDB_NOTES="cifar10b speaker 2 splines listener conv heatmap test ch 1" +dataset=cifar10b LISTENER_ARCH=conv ENV_KWARGS.speaker_action_transform=splines_weight ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_curve_penalty_coef=0.0 ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.speaker_assignment_method=random ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 L2_REG_COEF_SPEAKER=1e-2 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS=agents-cifar10b-woven-glade-2275-2000e-5000dp-c6fb
+# python3 -u ippo_ff.py WANDB_NOTES="cifar10b speaker 2 splines listener conv heatmap test ch 1" +dataset=cifar10b LISTENER_ARCH=conv ENV_KWARGS.speaker_action_transform=splines_weight ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_curve_penalty_coef=0.0 ENV_KWARGS.speaker_whitesum_penalty_coef=0.0 ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.speaker_assignment_method=random ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 L2_REG_COEF_SPEAKER=1e-2 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS=agents-cifar10b-woven-glade-2275-2000e-5000dp-c6fb
+
+########################################################################
+################### Full Phonology Sweep Below #########################
+########################################################################
+
+# echo $PARAMS
+
+# ## cifar10b, no pretraining, 2 splines
+# python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b no pretraining 2 splines" PROJECT="phonology-study" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
+
+# ## cifar10b, no pretraining, 3 splines
+# python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b no pretraining 3 splines" PROJECT="phonology-study" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
+
+## cifar10b, 250 epoch pretraining, 2 splines
+# python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 250 epoch pretraining 2 splines" PROJECT="phonology-study" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3250 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
+
+# ## cifar10b, 250 epoch pretraining, 3 splines
+# python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 250 epoch pretraining 3 splines" PROJECT="phonology-study" PROJECT="phonology-study"+dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3250 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
 
 
 ## Pre-trained listener agent models below
