@@ -11,7 +11,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
 
-#SBATCH --array=1-1
+#SBATCH --array=1-7
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
@@ -22,7 +22,6 @@ unset LD_LIBRARY_PATH
 echo $LD_LIBRARY_PATH
 
 export HYDRA_FULL_ERROR=1
-
 # export JAX_DEBUG_NANS=True
 
 source /oscar/home/bspiegel/envs/jax.venv/bin/activate
@@ -103,8 +102,8 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 #### Listener Pretraining
 
-PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_listener_pretrain_25.txt)
-# PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_listener_pretrain_50.txt)
+# PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_listener_pretrain_25.txt)
+PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_listener_pretrain_50.txt)
 # echo $PARAMS
 # There are 7 of these
 

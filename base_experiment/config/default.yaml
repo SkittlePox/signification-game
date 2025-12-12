@@ -79,7 +79,7 @@
   "speaker_similar_curve_penalty_coef": 0.0
   "center_and_reshuffle_listener_obs": False
   "gaussian_noise_stddev": 0.05
-  "speaker_assignment_method": "arange" # "arange" or "random"
+  "speaker_assignment_method": "random" # "arange" or "random"
   "reward_parity_fn": "coop"  # "1.0 at 300", "coop", "manip"
   "agent_inferential_mode_fn": "gut" # Default is "gut" or 0.0, same as lr schedule syntax e.g. "0.23 anneal to 1.0 at 10"
   "channel_ratio_fn": 0.5  # E.g. "1.0 at 300", "sigmoid-custom"
