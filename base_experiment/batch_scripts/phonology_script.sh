@@ -107,8 +107,11 @@ PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_pho
 # echo $PARAMS
 # There are 7 of these
 
-## cifar10b, 2000 epoch just pretraining to save
-python3 -u ippo_ff.py WANDB_NOTES="cifar10b 2000 epoch just pretraining" PROJECT="phonology-study" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 2000" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 2000" UPDATE_EPOCHS=2000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
+# ## cifar10b, 1000 epoch just pretraining to save (these have different pre-training parameters than those above)
+# python3 -u ippo_ff.py WANDB_NOTES="cifar10b 1000 epoch just pretraining" PROJECT="phonology-study" +dataset=cifar10b NUM_STEPS=2048 ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 1000" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn="gut" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-4 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 1000" UPDATE_EPOCHS=1000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
+
+## cifar10b, 250 epoch just pretraining to save
+python3 -u ippo_ff.py WANDB_NOTES="cifar10b 250 epoch just pretraining" PROJECT="phonology-study" +dataset=cifar10b NUM_STEPS=2048 ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn="gut" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-4 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=250 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
 
 
 ## Pre-trained listener agent models below
