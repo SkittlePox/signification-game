@@ -1,0 +1,7 @@
+LISTENER_ARCH="conv-ablate-25-0"
+LISTENER_ARCH="conv-ablate-25-1"
+LISTENER_ARCH="conv-ablate-25-2"
+LISTENER_ARCH="conv-ablate-25-3"
+LISTENER_ARCH="conv-ablate-25-4"
+LISTENER_ARCH="conv-ablate-25-5"
+LISTENER_ARCH="conv-ablate-25-6"

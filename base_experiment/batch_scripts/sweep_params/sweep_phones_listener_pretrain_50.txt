@@ -1,0 +1,7 @@
+LISTENER_ARCH="conv-ablate-50-0"
+LISTENER_ARCH="conv-ablate-50-1"
+LISTENER_ARCH="conv-ablate-50-2"
+LISTENER_ARCH="conv-ablate-50-3"
+LISTENER_ARCH="conv-ablate-50-4"
+LISTENER_ARCH="conv-ablate-50-5"
+LISTENER_ARCH="conv-ablate-50-6"
