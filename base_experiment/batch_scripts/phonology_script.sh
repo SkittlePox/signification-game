@@ -88,7 +88,7 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 #### Listener Pretraining ####
 
-PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_listener_pretrain_25.txt)
+# PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_listener_pretrain_25.txt)
 # PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_listener_pretrain_50.txt)
 # echo $PARAMS
 # There are 7 of these
@@ -97,7 +97,7 @@ PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_pho
 # python3 -u ippo_ff.py WANDB_NOTES="cifar10b 1000 epoch just pretraining" PROJECT="phonology-study" +dataset=cifar10b NUM_STEPS=2048 ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 1000" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn="gut" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-4 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 1000" UPDATE_EPOCHS=1000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
 
 ## cifar10b, 250 epoch just pretraining to save
-python3 -u ippo_ff.py WANDB_NOTES="cifar10b 250 epoch just pretraining" PROJECT="phonology-study" +dataset=cifar10b NUM_STEPS=2048 ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn="gut" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-4 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=250 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
+# python3 -u ippo_ff.py WANDB_NOTES="cifar10b 250 epoch just pretraining" PROJECT="phonology-study" +dataset=cifar10b NUM_STEPS=2048 ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn="gut" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-4 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=250 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=True LOG_TOM_SPEAKER_EXAMPLES=True PRETRAINED_LISTENERS="" $PARAMS
 
 
 #### Full Sweep ####
@@ -105,7 +105,7 @@ python3 -u ippo_ff.py WANDB_NOTES="cifar10b 250 epoch just pretraining" PROJECT=
 # PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_no_pretraining_params_25.txt)
 # PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_no_pretraining_params_50.txt)
 # PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_params_pretrained_25_250_epochs.txt)
-# PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_params_pretrained_25_1000_epochs.txt)
+PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_params_pretrained_25_1000_epochs.txt)
 # PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_params_pretrained_50_250_epochs.txt)
 # PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_phones_params_pretrained_50_1000_epochs.txt)
 # echo $PARAMS
@@ -115,8 +115,8 @@ python3 -u ippo_ff.py WANDB_NOTES="cifar10b 250 epoch just pretraining" PROJECT=
 ## cifar10b, 2 splines
 # python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 2 splines" PROJECT="phonology-study" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True $PARAMS
 
-## cifar10b, 3 splines
-# python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 3 splines" PROJECT="phonology-study" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True $PARAMS
+# cifar10b, 3 splines
+python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 3 splines" PROJECT="phonology-study" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn=1.0 LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True $PARAMS
 
 
 ## Pre-trained listener agent models below
