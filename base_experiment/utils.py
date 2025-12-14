@@ -723,8 +723,8 @@ def get_speaker_action_transform(fn_name, image_dim):
             x_points, y_points = jnp.round(spline_points).astype(int).T
 
             # Generate brush offsets
-            brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size)    # brush_size + 1
-                                                for dy in range(-brush_size, brush_size)])  # brush_size + 1
+            brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size + 1)    # brush_size + 1 for thicker splines. brush_size for normal thickness.
+                                                for dy in range(-brush_size, brush_size + 1)])  # brush_size + 1 for thicker splines. brush_size for normal thickness.
             x_offsets, y_offsets = brush_offsets.T
 
             # Calculate all indices to update for each point (broadcasting magic)

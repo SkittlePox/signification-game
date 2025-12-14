@@ -1753,7 +1753,7 @@ def main(config):
     run = wandb.init(
         entity=config["ENTITY"],
         project=config["PROJECT"],
-        tags=["main"],
+        tags=config["WANDB_TAGS"],
         config=config,
         mode=config["WANDB_MODE"],
         save_code=True,
