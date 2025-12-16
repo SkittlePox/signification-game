@@ -616,7 +616,8 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
         # action, log_prob = policy.sample_and_log_prob(seed=__rng)
         # scale_diag = policy.scale_diag
-        return policy.loc, policy.scale_diag
+        policy_loc_clipped = jnp.clip(policy.loc, 0.0, 1.0)
+        return policy_loc_clipped, policy.scale_diag
     
     def get_speaker_outputs(speaker_params_i):
         vmap_execute_speaker_test = jax.vmap(get_individual_speaker_policy_params, in_axes=(0, None, None, 0))
@@ -660,6 +661,14 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     # e.g. run calculate_wasserstein_distance_double_vmapped(speaker_policy_locs[0], speaker_policy_scale_diags[0], speaker_policy_locs[0], speaker_policy_scale_diags[0])
     # triple vmap! This is shape (num_agents, total_splines, total_splines)
     spline_wasserstein_matrix_invariant = jax.vmap(calculate_wasserstein_distance_invariant_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
+    
+    sigma = 1.3
+
+    spline_affinity_matrix = jnp.exp(-spline_wasserstein_matrix / sigma)
+    spline_affinity_matrix = spline_affinity_matrix.at[jnp.diag_indices(spline_wasserstein_matrix.shape[0])].set(0.0)
+
+    spline_affinity_matrix_invariant = jnp.exp(-spline_wasserstein_matrix_invariant / sigma)
+    spline_affinity_matrix_invariant = spline_affinity_matrix_invariant.at[jnp.diag_indices(spline_wasserstein_matrix_invariant.shape[0])].set(0.0)
     
     return spline_wasserstein_matrix, spline_wasserstein_matrix_invariant
 
@@ -1316,6 +1325,7 @@ def wandb_callback(metrics):
         cvs = stds / means
 
         metric_dict.update({"spline wasserstein distances/all speakers cv": jnp.mean(cvs)})
+        metric_dict.update({"spline wasserstein distances/all speakers std dev": jnp.mean(stds)})
 
         ### Translation Invariant version
         metric_dict.update({"spline wasserstein distances invariant/all speakers mean": jnp.mean(wasserstein_spline_info_invariant.flatten())})
@@ -1329,10 +1339,11 @@ def wandb_callback(metrics):
         flattened_lower_triangles = wasserstein_spline_info_invariant[:, lower_triangle_indices[0], lower_triangle_indices[1]]
         # Calculate CV for all speakers at once
         means = flattened_lower_triangles.mean(axis=1)
-        stds = flattened_lower_triangles.std(axis=1, ddof=0)
-        cvs_invariant = stds / means
+        stds_invariant = flattened_lower_triangles.std(axis=1, ddof=0)
+        cvs_invariant = stds_invariant / means
 
         metric_dict.update({"spline wasserstein distances invariant/all speakers cv": jnp.mean(cvs_invariant)})
+        metric_dict.update({"spline wasserstein distances invariant/all speakers std dev": jnp.mean(stds_invariant)})
         
         for i in range(num_speakers):
             # Heatmap image for each agent
@@ -1354,6 +1365,8 @@ def wandb_callback(metrics):
 
             metric_dict.update({f"spline wasserstein distances/speaker {i} wasserstein cv": cvs[i]})
 
+            metric_dict.update({f"spline wasserstein distances/speaker {i} wasserstein std dev": stds[i]})
+
 
             ### Translation Invariant version
             # Heatmap image for each agent
@@ -1374,6 +1387,8 @@ def wandb_callback(metrics):
             metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein mean": jnp.mean(wasserstein_speaker.flatten())})
 
             metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein cv": cvs_invariant[i]})
+
+            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein std dev": stds_invariant[i]})
 
     #####
 
