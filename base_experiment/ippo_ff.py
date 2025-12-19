@@ -25,7 +25,7 @@ from agents import *
 import pathlib
 import icon_probe
 import time
-from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, shift_obs, save_agents, make_grid_jnp, calc_log_volume, get_tom_speaker_n_search_fn
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, shift_obs, save_agents, make_grid_jnp, calc_log_volume, get_tom_speaker_n_search_fn, get_speaker_action_transform
 
 
 class TrainState(train_state.TrainState):
@@ -584,6 +584,38 @@ def get_speaker_heatmap(rng, speaker_apply_fn, speaker_params, speaker_action_tr
     
     return speaker_heatmaps
 
+def get_speaker_heatmap_by_phone(rng, speaker_apply_fn, speaker_params, speaker_action_transform, config):
+    speaker_obs = jnp.repeat(jnp.arange(config["ENV_KWARGS"]["num_classes"]), 1)
+    speaker_rngs = jax.random.split(rng, len(speaker_obs))
+    sp_action_dim = config["ENV_KWARGS"]["speaker_action_dim"]
+    num_speakers = config["ENV_KWARGS"]["num_speakers"]
+
+    def execute_individual_speaker_and_sample(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
+        __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
+        _speaker_obs_i = _speaker_obs_i.ravel()
+        policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        actions = policy.sample(seed=__rng, sample_shape=config["SPEAKER_HEATMAP_NUM"])
+        return actions.reshape(-1, sp_action_dim)
+    
+    def get_speaker_outputs(speaker_params_i):
+        vmap_execute_speaker_test = jax.vmap(execute_individual_speaker_and_sample, in_axes=(0, None, None, 0))
+        speaker_actions = vmap_execute_speaker_test(speaker_rngs, speaker_apply_fn, speaker_params_i, speaker_obs)   # Indices 1 and 2 are for logprobs and values. 0 
+        return speaker_actions.reshape(-1, sp_action_dim)
+
+    vmap_get_speaker_outputs = jax.vmap(get_speaker_outputs, in_axes=(0))
+    speaker_actions = vmap_get_speaker_outputs(speaker_params).reshape((-1, sp_action_dim))
+    
+    
+    speaker_images = speaker_action_transform(speaker_actions)
+
+    # Average images now to create heatmaps
+
+    speaker_heatmaps_by_phone = speaker_images.reshape(-1, config["SPEAKER_HEATMAP_NUM"], speaker_images.shape[-1], speaker_images.shape[-1]).mean(axis=1)
+
+    speaker_heatmaps_by_phone = speaker_heatmaps_by_phone.reshape(config["ENV_KWARGS"]["num_classes"]*num_speakers, -1, speaker_images.shape[-1], speaker_images.shape[-1])
+
+    return speaker_heatmaps_by_phone
+    
 def get_tom_speaker_examples(rng, listener_apply_fn, listener_params, speaker_apply_fn, speaker_params, speaker_action_transform, config, tom_speaker_n_search):
     env_kwargs = config["ENV_KWARGS"]
     speaker_obs = jnp.tile(jnp.arange(env_kwargs["num_classes"]), config["SPEAKER_EXAMPLE_NUM"])
@@ -988,7 +1020,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     return runner_state, total_loss
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, gut_speaker_heatmaps_by_phone, wasserstein_spline_info, wasserstein_spline_info_invariant, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
     def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
@@ -1423,6 +1455,7 @@ def make_train(config):
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
     config["SPEAKER_SPLINE_PARAM_SIZE"] = 7 if env_kwargs["speaker_action_transform"] == 'splines_weight' else None
+    speaker_action_transform_by_phone = get_speaker_action_transform("splines_weight_by_phone", env_kwargs['image_dim'])
     
     def train(rng):
         # MAKE AGENTS
@@ -1684,12 +1717,18 @@ def make_train(config):
                                             lambda _: jnp.zeros((env_kwargs["num_speakers"]*env_kwargs["num_classes"], env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
             ##
 
+            ## Collect speaker heatmap by phone
+            num_splines_per_sign = env_kwargs["speaker_action_dim"] // config["SPEAKER_SPLINE_PARAM_SIZE"]
+            gut_speaker_heatmaps_by_phone = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
+                                            lambda _: get_speaker_heatmap_by_phone(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform_by_phone, config), 
+                                            lambda _: jnp.zeros((env_kwargs["num_speakers"]*env_kwargs["num_classes"], num_splines_per_sign, env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)
+            ##
+
             ## Collect Wasserstein distance between splines
-            splines_per_sign = env_kwargs["speaker_action_dim"]/config["SPEAKER_SPLINE_PARAM_SIZE"]
             wasserstein_spline_matrix, wasserstein_spline_matrix_invariant = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
                                             lambda _: get_speaker_spline_wasserstein_distances(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config),
-                                            lambda _: (jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*splines_per_sign), int(env_kwargs["num_classes"]*splines_per_sign))),
-                                             jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*splines_per_sign), int(env_kwargs["num_classes"]*splines_per_sign)))), operand=None)
+                                            lambda _: (jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
+                                             jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign)))), operand=None)
             ##
             
             ## Collect the last set of speaker-generated images for this epoch.
@@ -1735,7 +1774,7 @@ def make_train(config):
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
             ###
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, gut_speaker_heatmaps_by_phone, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
