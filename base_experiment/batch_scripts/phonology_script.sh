@@ -24,6 +24,8 @@ echo $LD_LIBRARY_PATH
 export HYDRA_FULL_ERROR=1
 # export JAX_DEBUG_NANS=True
 
+export WANDB_DIR=/oscar/data/gdk/bspiegel/signification-game-wandb/
+
 source /oscar/home/bspiegel/envs/jax.venv/bin/activate
 cd /oscar/home/bspiegel/signification-game/base_experiment/
 
@@ -116,7 +118,7 @@ PARAMS=$(sed -n "$((SLURM_ARRAY_TASK_ID))p" batch_scripts/sweep_params/sweep_pho
 # python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 2 splines thick gut" PROJECT="phonology-study" WANDB_TAGS="[main, 250e25a2sT]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=14 ENV_KWARGS.agent_inferential_mode_fn="gut" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True $PARAMS
 
 # cifar10b, 3 splines
-python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 3 splines gut" PROJECT="phonology-study" WANDB_TAGS="[main, 250e25a3sT, gut]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="gut" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True $PARAMS
+python3 -u ippo_ff.py WANDB_NOTES="phonology sweep cifar10b 3 splines" PROJECT="phonology-study" WANDB_TAGS="[main, 250e25a3s]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 LISTENER_LR_SCHEDULE=1e-5 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE=on UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True $PARAMS
 
 
 ## Pre-trained listener agent models below

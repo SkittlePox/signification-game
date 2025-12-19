@@ -10,13 +10,13 @@
 "SPEAKER_LR_SCHEDULE": 1e-4
 
 
-"NUM_STEPS": 2 # 1024
+"NUM_STEPS": 1024 # 1024
 "UPDATE_EPOCHS": 2000
-"MINIBATCH_SIZE_LISTENER": 2 # 64 # This must be a whole divisor of NUM_STEPS
-"MINIBATCH_SIZE_SPEAKER": 2 # 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_LISTENER": 64 # 64 # This must be a whole divisor of NUM_STEPS
+"MINIBATCH_SIZE_SPEAKER": 64 # 64 # This must be a whole divisor of NUM_STEPS
 "ENV_NUM_DATAPOINTS": 5000
 
-"PROBE_NUM_EXAMPLES": 2 # 512 # This must be less than or equal to "NUM_STEPS"
+"PROBE_NUM_EXAMPLES": 512 # 512 # This must be less than or equal to "NUM_STEPS"
 
 "ENV_KWARGS":
   # ${ENV_KWARGS}:  # This doesn't look right

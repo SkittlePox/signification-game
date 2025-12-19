@@ -713,8 +713,8 @@ def get_phone_heatmap_distances(speaker_heatmaps_by_phone, config):
 
     def compare_two_phone_images(phone_img_1, phone_img_2):
         # These will be (32, 32), each value is bounded between 0 and 1. Background is 0s.
-        
-        return 1.0
+
+        return jnp.sum((phone_img_1+1)*(phone_img_2+1))
 
     compare_two_phone_images_vmapped = jax.vmap(compare_two_phone_images, in_axes=(None, 0))
     compare_two_phone_images_double_vmapped = jax.vmap(compare_two_phone_images_vmapped, in_axes=(0, None))
@@ -1453,7 +1453,7 @@ def wandb_callback(metrics):
     if (update_step + 1 - speaker_example_debug_flag) % speaker_example_logging_iter == 0:
         
         # Mean for all speakers
-        metric_dict.update({"spline visual distances/all speakers mean": jnp.mean(phone_heatmap_matrix.flatten())})
+        metric_dict.update({"spline visual distances/all speakers multsum mean": jnp.mean(phone_heatmap_matrix.flatten())})
 
         # Calculate means and std devs for each speaker
         n = phone_heatmap_matrix.shape[1]
@@ -1467,26 +1467,26 @@ def wandb_callback(metrics):
         means = flattened_lower_triangles.mean(axis=1)
         stds = flattened_lower_triangles.std(axis=1, ddof=0)
 
-        metric_dict.update({"spline visual distances/all speakers std dev": jnp.mean(stds)})
+        metric_dict.update({"spline visual distances/all speakers multsum std dev": jnp.mean(stds)})
 
         for i in range(num_speakers):
             # Heatmap image for each agent
             phone_distance_speaker = phone_heatmap_matrix[i]
 
-            heatmap_image = wandb.Image(np.array(phone_distance_speaker)/7.0, caption=f"spline visual distances speaker {i}")
-            metric_dict.update({f"spline visual distances/speaker {i} heatmap": heatmap_image})
+            heatmap_image = wandb.Image(np.array(phone_distance_speaker)/1500.0, caption=f"spline visual distances multsum speaker {i}")
+            metric_dict.update({f"spline visual distances/multsum speaker {i} heatmap": heatmap_image})
 
             # Entropy calc and distribution images
             probs = (phone_distance_speaker/(jnp.sum(phone_distance_speaker) + 1e-10)).flatten()
             
             entropy = -jnp.sum(probs * jnp.log(probs + 1e-10))
-            metric_dict.update({f"spline visual distances/speaker {i} entropy": entropy.item()})
+            metric_dict.update({f"spline visual distances/multsum speaker {i} entropy": entropy.item()})
 
-            metric_dict.update({f"spline visual distances/speaker {i} max": jnp.max(phone_distance_speaker.flatten())})
+            metric_dict.update({f"spline visual distances/multsum speaker {i} max": jnp.max(phone_distance_speaker.flatten())})
 
-            metric_dict.update({f"spline visual distances/speaker {i} mean": jnp.mean(phone_distance_speaker.flatten())})
+            metric_dict.update({f"spline visual distances/multsum speaker {i} mean": jnp.mean(phone_distance_speaker.flatten())})
 
-            metric_dict.update({f"spline visual distances/speaker {i} std dev": stds[i]})
+            metric_dict.update({f"spline visual distances/multsum speaker {i} std dev": stds[i]})
 
     #####
 

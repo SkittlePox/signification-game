@@ -21,6 +21,8 @@ echo $LD_LIBRARY_PATH
 
 # export JAX_DEBUG_NANS=True
 
+export WANDB_DIR=/oscar/data/gdk/bspiegel/signification-game-wandb/
+
 source /oscar/home/bspiegel/envs/jax.venv/bin/activate
 cd /oscar/home/bspiegel/signification-game/base_experiment/
 
