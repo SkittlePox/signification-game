@@ -714,7 +714,7 @@ def get_phone_heatmap_distances(speaker_heatmaps_by_phone, config):
     def compare_two_phone_images(phone_img_1, phone_img_2):
         # These will be (32, 32), each value is bounded between 0 and 1. Background is 0s.
 
-        return jnp.sum((phone_img_1+1)*(phone_img_2+1))
+        return jnp.sum((phone_img_1+1)*(phone_img_2+1)-1)
 
     compare_two_phone_images_vmapped = jax.vmap(compare_two_phone_images, in_axes=(None, 0))
     compare_two_phone_images_double_vmapped = jax.vmap(compare_two_phone_images_vmapped, in_axes=(0, None))
@@ -1473,7 +1473,7 @@ def wandb_callback(metrics):
             # Heatmap image for each agent
             phone_distance_speaker = phone_heatmap_matrix[i]
 
-            heatmap_image = wandb.Image(np.array(phone_distance_speaker)/1500.0, caption=f"spline visual distances multsum speaker {i}")
+            heatmap_image = wandb.Image(np.array(phone_distance_speaker)/200.0, caption=f"spline visual distances multsum speaker {i}")
             metric_dict.update({f"spline visual distances/multsum speaker {i} heatmap": heatmap_image})
 
             # Entropy calc and distribution images
