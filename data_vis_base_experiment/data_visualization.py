@@ -8,8 +8,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator
 import matplotlib.animation as animation
+import matplotlib
+import matplotlib as mpl
 import seaborn as sns
 import json
+
+from utils import get_sweep_dirs
 
 # os.chdir(os.path.join(os.getcwd(), "data_vis_base_experiment/runs"))  # For debug!
 os.chdir(os.path.join(os.getcwd(), "runs"))
@@ -69,6 +73,34 @@ def download_reward_data(run_id, directory):
     rewards_df = pd.DataFrame(rewards)
     rewards_df.to_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv"), index=False)
 
+
+def download_spline_data(run_id, directory):
+    os.makedirs(directory, exist_ok=True)
+    api = wandb.Api()
+    run = api.run(run_id)
+    print("Downloading for run", directory)
+    history = run.scan_history()
+
+    # Define metrics to download
+    metrics = [
+        ("spline wasserstein distances/all speakers mean", "spline_wasserstein_distances_mean.csv", "spline wasserstein means"),
+        ("spline wasserstein distances/all speakers std dev", "spline_wasserstein_distances_stddevs.csv", "spline wasserstein std devs"),
+        ("spline wasserstein distances/all speakers cv", "spline_wasserstein_distances_cv.csv", "spline wasserstein cvs"),
+        ("spline wasserstein distances invariant/all speakers mean", "spline_wasserstein_distances_mean_invariant.csv", "invariant spline wasserstein means"),
+        ("spline wasserstein distances invariant/all speakers std dev", "spline_wasserstein_distances_stddevs_invariant.csv", "invariant spline wasserstein std devs"),
+        ("spline wasserstein distances invariant/all speakers cv", "spline_wasserstein_distances_cv_invariant.csv", "invariant spline wasserstein cvs"),
+        ("spline visual distances/all speakers multsum mean", "spline_visual_multsum_distances_mean.csv", "spline multsum means"),
+        ("spline visual distances/all speakers multsum std dev", "spline_visual_multsum_distances_stddevs.csv", "spline multsum std devs"),
+    ]
+
+    for metric_key, filename, description in metrics:
+        try:
+            data = [row[metric_key] for row in tqdm(history, desc=f"Downloading {description}")]
+            data_df = pd.DataFrame(data)
+            data_df.to_csv(os.path.join(directory, filename), index=False)
+            print(f"✓ Successfully saved {filename}")
+        except KeyError as e:
+            print(f"Warning: Could not find key '{metric_key}': {e}")
 
 def download_communication_success_data(run_id, directory, referents=list(range(10))):
     os.makedirs(directory, exist_ok=True)
@@ -1632,6 +1664,38 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
 
     print(f"probe_entropy_speaker_{sp_num}_{uuidstr}.png" if not all_speakers_avg else f"probe_entropy_all_speakers_{uuidstr}.png")
 
+# def make_value_grid_plot(dataframe, metric="spline_wasserstein_distances_mean", epoch=1000):
+#     # I need to grab the summary metrics at a specific epoch and add them to the dataframe
+
+#     # load data from directory and add it to dataframe
+
+#     metric_data = []
+
+#     for run_info in dataframe.values.tolist():
+
+#     # Then plot them on a grid
+
+#     vegetables = None
+#     farmers = None
+
+#     fig, ax = plt.subplots()
+#     im = ax.imshow(harvest)
+
+#     # Show all ticks and label them with the respective list entries
+#     ax.set_xticks(range(len(farmers)), labels=farmers,
+#                 rotation=45, ha="right", rotation_mode="anchor")
+#     ax.set_yticks(range(len(vegetables)), labels=vegetables)
+
+#     # Loop over data dimensions and create text annotations.
+#     for i in range(len(vegetables)):
+#         for j in range(len(farmers)):
+#             text = ax.text(j, i, harvest[i, j],
+#                         ha="center", va="center", color="w")
+
+#     ax.set_title("Harvest of local farmers (in tons/year)")
+#     fig.tight_layout()
+#     uuidstr = str(uuid.uuid4())[:5]
+#     plt.savefig(os.path.join("../sweep-plots/", f"gridplot_{metric}_epoch_{epoch}_{uuidstr}.png"))
 
 def make_graphics_post_conference():
     # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
@@ -2053,10 +2117,22 @@ def make_graphics_fall_2025():
     make_simple_animation_same_sign_multi_agent(animation_dirs, referent_coordinates=referent_coordinates, epochs=6000, labels=run_labels, start_epoch=500)
     # make_labeled_animation(animation_dirs, num_epochs=5500, epoch_start=500, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
 
+def make_phonology_graphics():
+    df = pd.read_csv("../sweep-run-list/wandb_export_2025-12-20T11_48_15.271-05_00.csv")
+    filtered_df = df[["Name", "ID", "Tags", "LISTENER_ARCH", "SPEAKER_ARCH"]]
+
+    # for run_info in filtered_df.values.tolist():
+    #     download_spline_data(run_id=f"signification-team/phonology-study/{run_info[1]}", directory=f"./{run_info[0]}/")
+
+    # make_value_grid_plot(filtered_df)
+
+    download_reward_data("signification-team/phonology-study/9v0cqy5b", "./exalted-galaxy-161/")
+
+
 if __name__=="__main__":
     # make_graphics_post_conference()
     # remake_graphics_part1()
     # make_graphics_part2()
-    make_graphics_fall_2025()
+    make_phonology_graphics()
     
     
