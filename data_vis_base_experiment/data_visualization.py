@@ -2126,8 +2126,6 @@ def make_phonology_graphics():
 
     # make_value_grid_plot(filtered_df)
 
-    download_reward_data("signification-team/phonology-study/9v0cqy5b", "./exalted-galaxy-161/")
-
 
 if __name__=="__main__":
     # make_graphics_post_conference()

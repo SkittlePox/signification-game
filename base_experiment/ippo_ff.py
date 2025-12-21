@@ -324,17 +324,7 @@ def initialize_listener(env, rng, config, i):
 
 def initialize_speaker(env, rng, config, i):
     # Passing num_classes = env_kwargs.num_classes + 1 so we can use the additional channel to sample from the general space of signals
-    if config["SPEAKER_ARCH"] == 'full_image':
-        speaker_network = ActorCriticSpeakerFullImage(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'full_image_setvariance':
-        speaker_network = ActorCriticSpeakerFullImageSetVariance(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'gauss_splat':
-        speaker_network = ActorCriticSpeakerGaussSplat(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'gauss_splatcovar':
-        speaker_network = ActorCriticSpeakerGaussSplatCov(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'gauss_splatchol':
-        speaker_network = ActorCriticSpeakerGaussSplatChol(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"] == 'splines':
+    if config["SPEAKER_ARCH"] == 'splines':
         speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'splinesnoise':
         speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
