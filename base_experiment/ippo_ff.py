@@ -259,6 +259,10 @@ def initialize_listener(env, rng, config, i):
     elif config["LISTENER_ARCH"].startswith("conv-ablate-"):
         config["LISTENER_ARCH_ABLATION_PARAMS"] = LISTENER_ARCH_ABLATION_PARAMETERS[config["LISTENER_ARCH"]]
         listener_network = ActorCriticListenerConvAblationReady(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+
+    elif config["LISTENER_ARCH"].startswith("conv-quantize-"):
+        config["LISTENER_ARCH_ABLATION_QUANTIZATION_PARAMETERS"] = LISTENER_ARCH_ABLATION_QUANTIZATION_PARAMETERS[config["LISTENER_ARCH"]]
+        listener_network = ActorCriticListenerConvAblationQuantizeReady(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
@@ -379,7 +383,8 @@ def initialize_speaker(env, rng, config, i):
 def execute_individual_listener(__rng, _listener_apply_fn, _listener_params_i, _listener_obs_i):
     __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
     _listener_obs_i = _listener_obs_i.ravel()
-    policy, value = _listener_apply_fn(_listener_params_i, _listener_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+    listener_outputs = _listener_apply_fn(_listener_params_i, _listener_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+    policy, value = listener_outputs[0], listener_outputs[1]
     action = policy.sample(seed=__rng)
     log_prob = policy.log_prob(action)
     entropy = policy.entropy()
@@ -888,7 +893,12 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
     def _loss_fn(params, _obs, _actions, values, log_probs, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
         dropout_key, noise_key = jax.random.split(__rng)
-        _i_policy, _i_value = listener_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
+        listener_outputs = listener_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
+        
+        _i_policy, _i_value = listener_outputs[0], listener_outputs[1]
+        vq_loss = listener_outputs[2] if len(listener_outputs) > 2 else 0.0
+        vq_coef = 0.25
+
         # _i_log_prob = _i_policy.log_prob(_actions) 
         # _i_log_prob = jnp.maximum(_i_log_prob, jnp.ones_like(_i_log_prob) * -1e8)
         _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -50.0, 1.0)
@@ -930,6 +940,7 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
                 + vf_coef * value_loss
                 - ent_coef_listener * entropy
                 + l2_reg_coef_listener * l2_mag
+                + vq_coef * vq_loss
         )
         total_loss = jnp.nan_to_num(total_loss, nan=0.0, posinf=1e3, neginf=-1e3)
 

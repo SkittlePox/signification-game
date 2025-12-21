@@ -10,6 +10,7 @@ from jaxmarl.wrappers.baselines import LogWrapper, LogEnvState
 from typing import Sequence, Tuple, Dict
 from simplified_signification_game import SimplifiedSignificationGame, State
 from ablated_agents import ActorCriticListenerConvAblationReady, LISTENER_ARCH_ABLATION_PARAMETERS, ActorCriticSpeakerSplinesAblationReady, SPEAKER_ARCH_ABLATION_PARAMETERS
+from quantized_agents import ActorCriticListenerConvAblationQuantizeReady, LISTENER_ARCH_ABLATION_QUANTIZATION_PARAMETERS
 
 class SimpSigGameLogWrapper(LogWrapper):
     @partial(jax.jit, static_argnums=(0,))

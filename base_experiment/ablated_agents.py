@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 import flax.linen as nn
+import jax
 import distrax
 from typing import Sequence, Dict
 
