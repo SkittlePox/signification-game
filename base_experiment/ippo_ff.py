@@ -413,8 +413,10 @@ def execute_tom_listener(__rng, _speaker_apply_fn, _speaker_params_i, _listener_
 
     #### Calculate P(s|r_i) for each possible referent
 
-    listener_assessments_for_obs, values = _listener_apply_fn(_listener_params_i, _listener_obs_i, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key}) # This is a categorical distribution.
+    listener_outputs = _listener_apply_fn(_listener_params_i, _listener_obs_i, rngs={'dropout': listener_dropout_key, 'noise': listener_noise_key}) # This is a categorical distribution.
     
+    listener_assessments_for_obs, values = listener_outputs[0], listener_outputs[1]
+
     def calc_psr(logits, index):
         numerator = logits[index]
         denominator = jax.nn.logsumexp(logits.at[index].set(-jnp.inf), axis=0)  # Set index to neg inf to remove it from denominator sum

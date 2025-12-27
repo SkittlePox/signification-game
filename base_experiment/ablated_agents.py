@@ -59,15 +59,23 @@ class ActorCriticListenerConvAblationReady(nn.Module):
         # Get architecture from config with defaults
         arch = self.config.get("LISTENER_ARCH_ABLATION_PARAMS", {})
         conv_features = arch.get("conv_features", [32, 64])
+        conv_kernels = arch.get("conv_kernels", [])
+        conv_strides = arch.get("conv_strides", [])
         embedding_dims = arch.get("embedding_dims", [128, 128, 128])
         actor_hidden = arch.get("actor_hidden", 128)
         critic_hidden = arch.get("critic_hidden", [128, 128])
         
+        if conv_kernels == []:  # Default kernel size is 3
+            conv_kernels = [3] * len(conv_features)
+        
+        if conv_strides == []:  # Default stride is 1
+            conv_strides = [1] * len(conv_features)
+        
         x = x.reshape(-1, self.image_dim, self.image_dim, 1)
 
         # Conv layers
-        for features in conv_features:
-            x = nn.Conv(features=features, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
+        for features, kernel, stride in zip(conv_features, conv_kernels, conv_strides):
+            x = nn.Conv(features=features, kernel_size=(kernel, kernel), strides=(stride, stride), padding='SAME')(x)
             x = nn.relu(x)
         
         x = x.reshape((x.shape[0], -1))
@@ -208,6 +216,86 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "embedding_dims": [128, 128, 128],
             "actor_hidden": 32,
             "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-micro-A-0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [2, 2, 2],
+            "conv_kernels": [3, 5, 3],
+            "conv_strides": [1, 5, 3],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micro-A-1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [4, 4, 4],
+            "conv_kernels": [3, 5, 3],
+            "conv_strides": [1, 5, 3],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micro-A-2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [8, 8, 8],
+            "conv_kernels": [3, 5, 3],
+            "conv_strides": [1, 5, 3],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micro-A-3": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 16],
+            "conv_kernels": [3, 5, 3],
+            "conv_strides": [1, 5, 3],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micro-B-0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [2, 2, 2],
+            "conv_kernels": [5, 4, 3],
+            "conv_strides": [1, 4, 2],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micro-B-1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [4, 4, 4],
+            "conv_kernels": [5, 4, 3],
+            "conv_strides": [1, 4, 2],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micro-B-2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [8, 8, 8],
+            "conv_kernels": [5, 4, 3],
+            "conv_strides": [1, 4, 2],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micro-B-3": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 16],
+            "conv_kernels": [5, 4, 3],
+            "conv_strides": [1, 4, 2],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 32,
+            "critic_hidden": [64, 64]
         }
     },
 }
