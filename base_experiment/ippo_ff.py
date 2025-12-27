@@ -678,6 +678,32 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         cov_term = jnp.sum(sig1**2 + sig2**2 - 2 * sig1 * sig2)
         w2_squared = mean_term + cov_term
         return jnp.sqrt(w2_squared)
+
+    def calculate_variance_weighted_wasserstein(mu1, sig1, mu2, sig2, variance_weight=0.5):
+        """
+        Calculate a modified Wasserstein distance that accounts for average variance.
+        
+        Lower average variance -> smaller distance
+        Higher average variance -> larger distance
+        
+        Args:
+            mu1, sig1: Mean and std dev of first distribution
+            mu2, sig2: Mean and std dev of second distribution
+            variance_weight: How much to weight the variance scaling (0 = pure Wasserstein, 1 = full variance scaling)
+        """
+        # Standard Wasserstein distance
+        mean_term = jnp.sum((mu1 - mu2) ** 2)
+        cov_term = jnp.sum(sig1**2 + sig2**2 - 2 * sig1 * sig2)
+        w2_squared = mean_term + cov_term
+        w2 = jnp.sqrt(w2_squared)
+        # Calculate average variance
+        avg_variance = jnp.mean(sig1**2 + sig2**2) / 2
+        # Scale factor based on variance (using sqrt to keep units consistent)
+        # Adding 1 to avoid division by zero and to ensure scaling factor >= 1
+        variance_scale = jnp.sqrt(1 + avg_variance)
+        # Combine with configurable weighting
+        scaled_distance = w2 * (1 - variance_weight + variance_weight * variance_scale)
+        return scaled_distance
     
     calculate_wasserstein_distance_vmapped = jax.vmap(calculate_wasserstein_distance, in_axes=(None, None, 0, 0))
     calculate_wasserstein_distance_double_vmapped = jax.vmap(calculate_wasserstein_distance_vmapped, in_axes=(0, 0, None, None))
@@ -690,6 +716,10 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     # e.g. run calculate_wasserstein_distance_double_vmapped(speaker_policy_locs[0], speaker_policy_scale_diags[0], speaker_policy_locs[0], speaker_policy_scale_diags[0])
     # triple vmap! This is shape (num_agents, total_splines, total_splines)
     spline_wasserstein_matrix_invariant = jax.vmap(calculate_wasserstein_distance_invariant_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
+
+    calculate_variance_weighted_wasserstein_distance_vmapped = jax.vmap(calculate_variance_weighted_wasserstein, in_axes=(None, None, 0, 0))
+    calculate_variance_weighted_wasserstein_distance_double_vmapped = jax.vmap(calculate_variance_weighted_wasserstein_distance_vmapped, in_axes=(0, 0, None, None))
+    spline_wasserstein_matrix_variance_weighted = jax.vmap(calculate_variance_weighted_wasserstein_distance_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
     
     sigma = 1.3
 
@@ -699,7 +729,7 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     spline_affinity_matrix_invariant = jnp.exp(-spline_wasserstein_matrix_invariant / sigma)
     spline_affinity_matrix_invariant = spline_affinity_matrix_invariant.at[jnp.diag_indices(spline_wasserstein_matrix_invariant.shape[0])].set(0.0)
     
-    return spline_wasserstein_matrix, spline_wasserstein_matrix_invariant
+    return spline_wasserstein_matrix, spline_wasserstein_matrix_invariant, spline_wasserstein_matrix_variance_weighted
 
 
 def get_phone_heatmap_distances(speaker_heatmaps_by_phone, config):
@@ -1046,7 +1076,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     return runner_state, total_loss
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, wasserstein_spline_info_variance_weighted, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
     def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
@@ -1402,6 +1432,24 @@ def wandb_callback(metrics):
 
         metric_dict.update({"spline wasserstein distances invariant/all speakers cv": jnp.mean(cvs_invariant)})
         metric_dict.update({"spline wasserstein distances invariant/all speakers std dev": jnp.mean(stds_invariant)})
+
+        ### Variance Weighted version
+        metric_dict.update({"spline wasserstein distances variance weighted/all speakers mean": jnp.mean(wasserstein_spline_info_variance_weighted.flatten())})
+
+        # Calculate CV for each speaker
+        n = wasserstein_spline_info_variance_weighted.shape[1]
+        # Get indices for lower triangle (k=-1 excludes the diagonal)
+        lower_triangle_indices = jnp.tril_indices(n, k=-1)
+        # Extract lower triangles for all matrices at once
+        # This will give shape (num_speakers, num_lower_triangle_elements)
+        flattened_lower_triangles = wasserstein_spline_info_variance_weighted[:, lower_triangle_indices[0], lower_triangle_indices[1]]
+        # Calculate CV for all speakers at once
+        means = flattened_lower_triangles.mean(axis=1)
+        stds_variance_weighted = flattened_lower_triangles.std(axis=1, ddof=0)
+        cvs_variance_weighted = stds_variance_weighted / means
+
+        metric_dict.update({"spline wasserstein distances variance weighted/all speakers cv": jnp.mean(cvs_variance_weighted)})
+        metric_dict.update({"spline wasserstein distances variance weighted/all speakers std dev": jnp.mean(stds_variance_weighted)})
         
         for i in range(num_speakers):
             # Heatmap image for each agent
@@ -1447,6 +1495,29 @@ def wandb_callback(metrics):
             metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein cv": cvs_invariant[i]})
 
             metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein std dev": stds_invariant[i]})
+
+
+            ### Variance Weighted version
+            # Heatmap image for each agent
+            phone_distance_speaker = wasserstein_spline_info_variance_weighted[i]
+
+            heatmap_image = wandb.Image(np.array(phone_distance_speaker)/7.0, caption=f"spline wasserstein distances speaker {i}")
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} heatmap": heatmap_image})
+
+
+            # Entropy calc and distribution images
+            probs = (phone_distance_speaker/(jnp.sum(phone_distance_speaker) + 1e-10)).flatten()
+            
+            entropy = -jnp.sum(probs * jnp.log(probs + 1e-10))
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein entropy": entropy.item()})
+
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein max": jnp.max(phone_distance_speaker.flatten())})
+
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein mean": jnp.mean(phone_distance_speaker.flatten())})
+
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein cv": cvs_variance_weighted[i]})
+
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein std dev": stds_variance_weighted[i]})
 
     #####
 
@@ -1800,9 +1871,10 @@ def make_train(config):
             ##
 
             ## Collect Wasserstein distance between splines
-            wasserstein_spline_matrix, wasserstein_spline_matrix_invariant = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
+            wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
                                             lambda _: get_speaker_spline_wasserstein_distances(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config),
                                             lambda _: (jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
+                                             jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
                                              jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign)))), operand=None)
             ##
             
@@ -1849,7 +1921,7 @@ def make_train(config):
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
             ###
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
