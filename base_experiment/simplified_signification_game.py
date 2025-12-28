@@ -19,6 +19,7 @@ from utils import (
     speaker_penalty_right_angle_fn,
     speaker_penalty_right_angle_or_straight_fn,
     speaker_penalty_similar_curve_fn,
+    speaker_penalty_too_close_to_border_fn,
     speaker_penalty_spline_continuity_fn,
     speaker_penalty_zipfian_size_fn,
     create_unitary_channel_map,
@@ -88,6 +89,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         speaker_right_angle_penalty_coef: float = 0.0,
         speaker_right_angle_or_straight_penalty_coef: float = 0.0,
         speaker_similar_curve_penalty_coef: float = 0.0,
+        speaker_too_close_to_penalty_coef: float = 0.3,
         speaker_spline_continuity_penalty_coef: float = 0.0,
         speaker_zipfian_size_penalty_coef: float = 0.0,
         gaussian_noise_stddev: float = 0.0,
@@ -112,6 +114,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.speaker_right_angle_penalty_coef = speaker_right_angle_penalty_coef
         self.speaker_right_angle_or_straight_penalty_coef = speaker_right_angle_or_straight_penalty_coef
         self.speaker_similar_curve_penalty_coef = speaker_similar_curve_penalty_coef
+        self.speaker_too_close_to_penalty_coef = speaker_too_close_to_penalty_coef
         self.speaker_spline_continuity_penalty_coef = speaker_spline_continuity_penalty_coef
         self.speaker_zipfian_size_penalty_coef = speaker_zipfian_size_penalty_coef
         self.stored_env_images = dataset[0]
@@ -264,6 +267,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         speaker_right_angle_penalty = speaker_penalty_right_angle_fn(state.previous_speaker_actions)
         speaker_right_angle_or_straight_penalty = speaker_penalty_right_angle_or_straight_fn(state.previous_speaker_actions)
         speaker_similar_curve_penalty = speaker_penalty_similar_curve_fn(state.previous_speaker_actions)
+        speaker_too_close_to_border_penalty = speaker_penalty_too_close_to_border_fn(state.previous_speaker_actions)
         # speaker_spline_continuity_penalty = speaker_penalty_spline_continuity_fn(state.previous_speaker_actions)
         # speaker_zipfian_size_penalty = speaker_penalty_zipfian_size_fn(state.previous_speaker_actions)
         speaker_penalties = (
@@ -272,6 +276,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
             + speaker_right_angle_penalty * self.speaker_right_angle_penalty_coef
             + speaker_right_angle_or_straight_penalty * self.speaker_right_angle_or_straight_penalty_coef
             + speaker_similar_curve_penalty * self.speaker_similar_curve_penalty_coef
+            + speaker_too_close_to_border_penalty * self.speaker_too_close_to_penalty_coef
             # + speaker_spline_continuity_penalty * self.speaker_spline_continuity_penalty_coef
             # + speaker_zipfian_size_penalty * self.speaker_zipfian_size_penalty_coef
         )

@@ -443,6 +443,27 @@ def speaker_penalty_similar_curve_fn(speaker_actions: jnp.array):
     return jnp.std(angle_per_spline)
 
 @jax.vmap
+def speaker_penalty_too_close_to_border_fn(speaker_actions: jnp.array):
+    @jax.vmap
+    def border_penalty(spline_params: jnp.array):
+        spline_params_no_weight = spline_params[0:6]
+        
+        # Check if each coordinate is on the border (0.0 or 1.0)
+        is_border = (spline_params_no_weight <= 0.0) | (spline_params_no_weight >= 1.0)
+        
+        # Count how many coordinates are on the border
+        num_on_border = jnp.sum(is_border)
+        
+        # Return proportion of coordinates on border (1 if all 6, 0 if none)
+        value = num_on_border / 6.0
+        
+        return jnp.nan_to_num(value)
+
+    penalty_per_spline = border_penalty(speaker_actions.reshape(-1, speaker_actions.shape[-1]))
+
+    return jnp.average(penalty_per_spline, axis=0)
+
+@jax.vmap
 def speaker_penalty_spline_continuity_fn(speaker_actions: jnp.array):
     pass
 
