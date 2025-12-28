@@ -679,7 +679,7 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         w2_squared = mean_term + cov_term
         return jnp.sqrt(w2_squared)
 
-    def calculate_variance_weighted_wasserstein(mu1, sig1, mu2, sig2, variance_weight=0.5):
+    def calculate_variance_weighted_wasserstein(mu1, sig1, mu2, sig2, variance_weight=0.8):
         """
         Calculate a modified Wasserstein distance that accounts for average variance.
         
@@ -704,23 +704,71 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         # Combine with configurable weighting
         scaled_distance = w2 * (1 - variance_weight + variance_weight * variance_scale)
         return scaled_distance
+
+    def make_flip_invariant(distance_fn):
+        """
+        Wrapper to make distance function invariant to spline endpoint swapping.
+        Swaps (x1, y1) with (x3, y3) while keeping (x2, y2) and z in place.
+        """
+        def flip_invariant_distance(mu1, sig1, mu2, sig2):
+            # Calculate distance with original orientation
+            dist_original = distance_fn(mu1, sig1, mu2, sig2)
+            
+            # Create swapped version: [x3, y3, x2, y2, x1, y1, z]
+            indices = jnp.array([4, 5, 2, 3, 0, 1, 6])
+            mu2_swapped = mu2[indices]
+            sig2_swapped = sig2[indices]
+            
+            # Calculate distance with swapped endpoints
+            dist_swapped = distance_fn(mu1, sig1, mu2_swapped, sig2_swapped)
+            
+            # Return minimum
+            return jnp.minimum(dist_original, dist_swapped)
     
-    calculate_wasserstein_distance_vmapped = jax.vmap(calculate_wasserstein_distance, in_axes=(None, None, 0, 0))
+        return flip_invariant_distance
+    
+    ### Flip sensitive! ###
+
+    # calculate_wasserstein_distance_vmapped = jax.vmap(calculate_wasserstein_distance, in_axes=(None, None, 0, 0))
+    # calculate_wasserstein_distance_double_vmapped = jax.vmap(calculate_wasserstein_distance_vmapped, in_axes=(0, 0, None, None))
+    # # e.g. run calculate_wasserstein_distance_double_vmapped(speaker_policy_locs[0], speaker_policy_scale_diags[0], speaker_policy_locs[0], speaker_policy_scale_diags[0])
+    # # triple vmap! This is shape (num_agents, total_splines, total_splines)
+    # spline_wasserstein_matrix = jax.vmap(calculate_wasserstein_distance_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
+
+    # calculate_wasserstein_distance_invariant_vmapped = jax.vmap(calculate_wasserstein_distance_translation_invariant, in_axes=(None, None, 0, 0))
+    # calculate_wasserstein_distance_invariant_double_vmapped = jax.vmap(calculate_wasserstein_distance_invariant_vmapped, in_axes=(0, 0, None, None))
+    # # e.g. run calculate_wasserstein_distance_double_vmapped(speaker_policy_locs[0], speaker_policy_scale_diags[0], speaker_policy_locs[0], speaker_policy_scale_diags[0])
+    # # triple vmap! This is shape (num_agents, total_splines, total_splines)
+    # spline_wasserstein_matrix_invariant = jax.vmap(calculate_wasserstein_distance_invariant_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
+
+    # calculate_variance_weighted_wasserstein_distance_vmapped = jax.vmap(calculate_variance_weighted_wasserstein, in_axes=(None, None, 0, 0))
+    # calculate_variance_weighted_wasserstein_distance_double_vmapped = jax.vmap(calculate_variance_weighted_wasserstein_distance_vmapped, in_axes=(0, 0, None, None))
+    # spline_wasserstein_matrix_variance_weighted = jax.vmap(calculate_variance_weighted_wasserstein_distance_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
+
+    #######################
+
+    ### Flip invariant! ###
+
+    calculate_wasserstein_distance_vmapped = jax.vmap(make_flip_invariant(calculate_wasserstein_distance), in_axes=(None, None, 0, 0))
     calculate_wasserstein_distance_double_vmapped = jax.vmap(calculate_wasserstein_distance_vmapped, in_axes=(0, 0, None, None))
     # e.g. run calculate_wasserstein_distance_double_vmapped(speaker_policy_locs[0], speaker_policy_scale_diags[0], speaker_policy_locs[0], speaker_policy_scale_diags[0])
     # triple vmap! This is shape (num_agents, total_splines, total_splines)
     spline_wasserstein_matrix = jax.vmap(calculate_wasserstein_distance_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
 
-    calculate_wasserstein_distance_invariant_vmapped = jax.vmap(calculate_wasserstein_distance_translation_invariant, in_axes=(None, None, 0, 0))
+    calculate_wasserstein_distance_invariant_vmapped = jax.vmap(make_flip_invariant(calculate_wasserstein_distance_translation_invariant), in_axes=(None, None, 0, 0))
     calculate_wasserstein_distance_invariant_double_vmapped = jax.vmap(calculate_wasserstein_distance_invariant_vmapped, in_axes=(0, 0, None, None))
     # e.g. run calculate_wasserstein_distance_double_vmapped(speaker_policy_locs[0], speaker_policy_scale_diags[0], speaker_policy_locs[0], speaker_policy_scale_diags[0])
     # triple vmap! This is shape (num_agents, total_splines, total_splines)
     spline_wasserstein_matrix_invariant = jax.vmap(calculate_wasserstein_distance_invariant_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
 
-    calculate_variance_weighted_wasserstein_distance_vmapped = jax.vmap(calculate_variance_weighted_wasserstein, in_axes=(None, None, 0, 0))
+    calculate_variance_weighted_wasserstein_distance_vmapped = jax.vmap(make_flip_invariant(calculate_variance_weighted_wasserstein), in_axes=(None, None, 0, 0))
     calculate_variance_weighted_wasserstein_distance_double_vmapped = jax.vmap(calculate_variance_weighted_wasserstein_distance_vmapped, in_axes=(0, 0, None, None))
     spline_wasserstein_matrix_variance_weighted = jax.vmap(calculate_variance_weighted_wasserstein_distance_double_vmapped)(speaker_policy_locs, speaker_policy_scale_diags, speaker_policy_locs, speaker_policy_scale_diags)
     
+    #######################
+
+    ### Spline affinity stuff that as of yet has not worked out ###
+
     sigma = 1.3
 
     spline_affinity_matrix = jnp.exp(-spline_wasserstein_matrix / sigma)
