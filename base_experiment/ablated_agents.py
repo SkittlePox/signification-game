@@ -61,6 +61,7 @@ class ActorCriticListenerConvAblationReady(nn.Module):
         conv_features = arch.get("conv_features", [32, 64])
         conv_kernels = arch.get("conv_kernels", [])
         conv_strides = arch.get("conv_strides", [])
+        conv_padding = arch.get("conv_padding", 'SAME')
         embedding_dims = arch.get("embedding_dims", [128, 128, 128])
         actor_hidden = arch.get("actor_hidden", 128)
         critic_hidden = arch.get("critic_hidden", [128, 128])
@@ -75,7 +76,7 @@ class ActorCriticListenerConvAblationReady(nn.Module):
 
         # Conv layers
         for features, kernel, stride in zip(conv_features, conv_kernels, conv_strides):
-            x = nn.Conv(features=features, kernel_size=(kernel, kernel), strides=(stride, stride), padding='SAME')(x)
+            x = nn.Conv(features=features, kernel_size=(kernel, kernel), strides=(stride, stride), padding=conv_padding)(x)
             x = nn.relu(x)
         
         x = x.reshape((x.shape[0], -1))
@@ -313,6 +314,93 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "conv_features": [32, 16, 16],
             "conv_kernels": [3, 3, 5],
             "conv_strides": [1, 3, 5],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+}
+
+class ActorCriticListenerConvSkipPoolReady(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        # Get architecture from config with defaults
+        arch = self.config.get("LISTENER_ARCH_SKIPPOOL_PARAMETERS", {})
+        conv_features = arch.get("conv_features", [24, 16, 8])
+        conv_kernels = arch.get("conv_kernels", [3, 7, 11])
+        conv_strides = arch.get("conv_strides", [])
+        embedding_dims = arch.get("embedding_dims", [128, 128, 128])
+        actor_hidden = arch.get("actor_hidden", 128)
+        critic_hidden = arch.get("critic_hidden", [128, 128])
+        
+        if conv_kernels == []:  # Default kernel size is 3
+            conv_kernels = [3] * len(conv_features)
+        
+        if conv_strides == []:  # Default stride is 1
+            conv_strides = [1] * len(conv_features)
+        
+        x = x.reshape(-1, self.image_dim, self.image_dim, 1)
+
+        # Fine scale
+        x1 = nn.Conv(features=conv_features[0], kernel_size=(conv_kernels[0], conv_kernels[0]), strides=(conv_strides[0], conv_strides[0]))(x)
+        x1 = nn.relu(x1)
+        x1 = jnp.mean(x1, axis=(1, 2))
+        
+        # Medium scale - larger kernel
+        x2 = nn.Conv(features=conv_features[1], kernel_size=(conv_kernels[1], conv_kernels[1]), strides=(conv_strides[1], conv_strides[1]))(x)
+        x2 = nn.relu(x2)
+        x2 = jnp.mean(x2, axis=(1, 2))
+        
+        # Coarse scale - even larger kernel
+        x3 = nn.Conv(features=conv_features[2], kernel_size=(conv_kernels[2], conv_kernels[2]), strides=(conv_strides[2], conv_strides[2]))(x)
+        x3 = nn.relu(x3)
+        x3 = jnp.mean(x3, axis=(1, 2))
+        
+        # Concatenate multi-scale features
+        x = jnp.concatenate([x1, x2, x3], axis=-1)     
+        
+        # Embedding
+        embedding = x
+        for i, dim in enumerate(embedding_dims):
+            embedding = nn.Dense(dim)(embedding)
+            embedding = nn.relu(embedding)
+            if i < len(embedding_dims) - 1:
+                embedding = nn.Dropout(rate=self.config["LISTENER_DROPOUT"], deterministic=False)(embedding)
+
+        # Actor
+        actor_mean = nn.Dense(actor_hidden)(embedding)
+        actor_mean = nn.relu(actor_mean)
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic
+        critic = embedding
+        for dim in critic_hidden:
+            critic = nn.Dense(dim)(critic)
+            critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+LISTENER_ARCH_SKIPPOOL_PARAMETERS = {
+    "conv-skippool-0": {
+        "LISTENER_ARCH_SKIPPOOL_PARAMETERS": {
+            "conv_features": [24, 16, 8],
+            "conv_kernels": [3, 7, 11],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-skippool-1": {
+        "LISTENER_ARCH_SKIPPOOL_PARAMETERS": {
+            "conv_features": [8, 8, 8],
+            "conv_kernels": [3, 7, 11],
             "embedding_dims": [8],
             "actor_hidden": 8,
             "critic_hidden": [8, 8]
