@@ -5,13 +5,13 @@
 #SBATCH -c 4
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=18:00:00
+#SBATCH --time=8:00:00
 #SBATCH --mem=12GB
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
 
-#SBATCH --array=1-1
+#SBATCH --array=3-5
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
@@ -132,7 +132,7 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 #### Skip Pool Litener Arch Sweeps ####
 
 # python3 -u ippo_ff.py WANDB_NOTES="phonology cifar10b 3 splines skippool no pretraining" PROJECT="phonology-study" WANDB_TAGS="[skippool]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 100" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 100" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True LISTENER_ARCH="conv-skippool-0" SPEAKER_ARCH="splines" LISTENER_LR_SCHEDULE=1e-4
-# python3 -u ippo_ff.py WANDB_NOTES="phonology cifar10b 3 splines skippool no pretraining" PROJECT="phonology-study" WANDB_TAGS="[skippool]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 100" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 100" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True LISTENER_ARCH="conv-skippool-0" SPEAKER_ARCH="splines" LISTENER_LR_SCHEDULE="1e-4 jump to 1e-5 at 100"
+python3 -u ippo_ff.py WANDB_NOTES="phonology cifar10b 3 splines skippool small pretraining slow learning" PROJECT="phonology-study" WANDB_TAGS="[skippool]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 100" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True LISTENER_ARCH="conv-skippool-$((SLURM_ARRAY_TASK_ID))" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-3 LISTENER_LR_SCHEDULE="1e-5"
 
 
 ########################################################################

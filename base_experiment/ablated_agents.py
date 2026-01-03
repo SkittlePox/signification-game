@@ -406,6 +406,42 @@ LISTENER_ARCH_SKIPPOOL_PARAMETERS = {
             "critic_hidden": [8, 8]
         }
     },
+    "conv-skippool-2": {
+        "LISTENER_ARCH_SKIPPOOL_PARAMETERS": {
+            "conv_features": [32, 24, 16],
+            "conv_kernels": [3, 7, 11],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-skippool-3": {
+        "LISTENER_ARCH_SKIPPOOL_PARAMETERS": {
+            "conv_features": [24, 16, 8],
+            "conv_kernels": [3, 7, 11],
+            "embedding_dims": [16, 16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-skippool-4": {
+        "LISTENER_ARCH_SKIPPOOL_PARAMETERS": {
+            "conv_features": [32, 24, 16],
+            "conv_kernels": [3, 7, 11],
+            "embedding_dims": [16, 16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-skippool-5": {
+        "LISTENER_ARCH_SKIPPOOL_PARAMETERS": {
+            "conv_features": [48, 48, 48],
+            "conv_kernels": [3, 7, 11],
+            "embedding_dims": [32, 16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
 }
 
 # This is a copy of ActorCriticSpeakerSplines from agents.py, placed here as a reference
