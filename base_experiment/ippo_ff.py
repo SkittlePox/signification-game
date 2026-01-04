@@ -1330,6 +1330,10 @@ def wandb_callback(metrics):
         speaker_avg = jnp.mean(speaker_naive_entropies)
         metric_dict.update({f"policy entropy/naive speaker {i} all referents": speaker_avg.item()})
     
+    # Global average entropy across all speakers
+    global_avg_entropy_naive = jnp.mean(naive_speaker_entropies)
+    metric_dict.update({"policy entropy/naive speaker global average": global_avg_entropy_naive.item()})
+    
     # Logging for tom speaker
     for i in range(num_speakers):
         speaker_tom_entropies = tom_speaker_entropies[:, i]
@@ -1345,6 +1349,10 @@ def wandb_callback(metrics):
         # Logging entropy per speaker
         speaker_avg = jnp.mean(speaker_tom_entropies)
         metric_dict.update({f"policy entropy/tom speaker {i} all referents": speaker_avg.item()})
+    
+    # Global average entropy across all speakers
+    global_avg_entropy_tom = jnp.mean(tom_speaker_entropies)
+    metric_dict.update({"policy entropy/tom speaker global average": global_avg_entropy_tom.item()})
 
     for j in range(num_classes):
         referent_mask = jnp.where(trimmed_transition_batch.speaker_obs == j, 1, 0)

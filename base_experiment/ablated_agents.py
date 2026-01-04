@@ -439,7 +439,88 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "critic_hidden": [8, 8]
         }
     },
+    "conv-ablate-micromlp-base": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-F0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [16],
+            "actor_hidden": 16,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-F1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [32],
+            "actor_hidden": 32,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-F2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [64],
+            "actor_hidden": 64,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-L0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [8, 8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-L1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [16, 16],
+            "actor_hidden": 16,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-L2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [32, 32],
+            "actor_hidden": 32,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-L3": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [64, 64],
+            "actor_hidden": 64,
+            "critic_hidden": [8, 8]
+        }
+    },
 }
+
 
 class ActorCriticListenerConvSkipPoolReady(nn.Module):
     action_dim: Sequence[int]
