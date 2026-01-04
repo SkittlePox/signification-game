@@ -669,8 +669,8 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
 
     def calculate_wasserstein_distance(mu1, sig1, mu2, sig2):
         mean_term = jnp.sum((mu1 - mu2) ** 2)
-        cov_term = jnp.sum(sig1**2 + sig2**2 - 2 * sig1 * sig2)
-        w2_squared = mean_term + cov_term
+        cov_term = jnp.sum((sig1 - sig2) ** 2)
+        w2_squared = jnp.maximum(mean_term + cov_term, 0.0)
         return jnp.sqrt(w2_squared)
 
     def calculate_wasserstein_distance_translation_invariant(mu1, sig1, mu2, sig2):
@@ -679,8 +679,8 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         translation_vector = jnp.tile(translation_params, 3)
         mu2_normed = mu2.at[:6].add(translation_vector)
         mean_term = jnp.sum((mu1 - mu2_normed) ** 2)
-        cov_term = jnp.sum(sig1**2 + sig2**2 - 2 * sig1 * sig2)
-        w2_squared = mean_term + cov_term
+        cov_term = jnp.sum((sig1 - sig2) ** 2)
+        w2_squared = jnp.maximum(mean_term + cov_term, 0.0)
         return jnp.sqrt(w2_squared)
 
     def calculate_variance_weighted_wasserstein(mu1, sig1, mu2, sig2, variance_weight=0.8):
@@ -697,8 +697,8 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         """
         # Standard Wasserstein distance
         mean_term = jnp.sum((mu1 - mu2) ** 2)
-        cov_term = jnp.sum(sig1**2 + sig2**2 - 2 * sig1 * sig2)
-        w2_squared = mean_term + cov_term
+        cov_term = jnp.sum((sig1 - sig2) ** 2)
+        w2_squared = jnp.maximum(mean_term + cov_term, 0.0)
         w2 = jnp.sqrt(w2_squared)
         # Calculate average variance
         avg_variance = jnp.mean(sig1**2 + sig2**2) / 2
@@ -1528,21 +1528,21 @@ def wandb_callback(metrics):
 
             ### Translation Invariant version
             # Heatmap image for each agent
-            phone_distance_speaker = wasserstein_spline_info_invariant[i]
+            phone_distance_speaker_inv = wasserstein_spline_info_invariant[i]
 
-            heatmap_image = wandb.Image(np.array(phone_distance_speaker)/7.0, caption=f"spline wasserstein distances speaker {i}")
-            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} heatmap": heatmap_image})
+            heatmap_image_inv = wandb.Image(np.array(phone_distance_speaker_inv)/7.0, caption=f"spline wasserstein distances speaker {i}")
+            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} heatmap": heatmap_image_inv})
 
 
             # Entropy calc and distribution images
-            probs = (phone_distance_speaker/(jnp.sum(phone_distance_speaker) + 1e-10)).flatten()
+            probs_inv = (phone_distance_speaker_inv/(jnp.sum(phone_distance_speaker_inv) + 1e-10)).flatten()
             
-            entropy = -jnp.sum(probs * jnp.log(probs + 1e-10))
-            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein entropy": entropy.item()})
+            entropy_inv = -jnp.sum(probs_inv * jnp.log(probs_inv + 1e-10))
+            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein entropy": entropy_inv.item()})
 
-            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein max": jnp.max(phone_distance_speaker.flatten())})
+            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein max": jnp.max(phone_distance_speaker_inv.flatten())})
 
-            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein mean": jnp.mean(phone_distance_speaker.flatten())})
+            metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein mean": jnp.mean(phone_distance_speaker_inv.flatten())})
 
             metric_dict.update({f"spline wasserstein distances invariant/speaker {i} wasserstein cv": cvs_invariant[i]})
 
@@ -1551,21 +1551,21 @@ def wandb_callback(metrics):
 
             ### Variance Weighted version
             # Heatmap image for each agent
-            phone_distance_speaker = wasserstein_spline_info_variance_weighted[i]
+            phone_distance_speaker_varw = wasserstein_spline_info_variance_weighted[i]
 
-            heatmap_image = wandb.Image(np.array(phone_distance_speaker)/7.0, caption=f"spline wasserstein distances speaker {i}")
-            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} heatmap": heatmap_image})
+            heatmap_image_varw = wandb.Image(np.array(phone_distance_speaker_varw)/7.0, caption=f"spline wasserstein distances speaker {i}")
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} heatmap": heatmap_image_varw})
 
 
             # Entropy calc and distribution images
-            probs = (phone_distance_speaker/(jnp.sum(phone_distance_speaker) + 1e-10)).flatten()
+            probs_varw = (phone_distance_speaker_varw/(jnp.sum(phone_distance_speaker_varw) + 1e-10)).flatten()
             
-            entropy = -jnp.sum(probs * jnp.log(probs + 1e-10))
-            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein entropy": entropy.item()})
+            entropy_varw = -jnp.sum(probs_varw * jnp.log(probs_varw + 1e-10))
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein entropy": entropy_varw.item()})
 
-            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein max": jnp.max(phone_distance_speaker.flatten())})
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein max": jnp.max(phone_distance_speaker_varw.flatten())})
 
-            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein mean": jnp.mean(phone_distance_speaker.flatten())})
+            metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein mean": jnp.mean(phone_distance_speaker_varw.flatten())})
 
             metric_dict.update({f"spline wasserstein distances variance weighted/speaker {i} wasserstein cv": cvs_variance_weighted[i]})
 
