@@ -579,6 +579,76 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "critic_hidden": [128, 128]
         }
     },
+    "conv-ablate-conv-A-0": {   # Nearly identical to micro-C-0 I think. Good results with this one
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 16],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-conv-A-1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 16],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [3, 3, 5],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-conv-A-2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16],
+            "conv_kernels": [3, 3],
+            "conv_strides": [1, 3],
+            "embedding_dims": [16, 8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-conv-A-3": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16],
+            "conv_kernels": [3, 5],
+            "conv_strides": [1, 5],
+            "embedding_dims": [16, 8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-conv-A-4": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 16],
+            "conv_kernels": [3, 3, 3],
+            "conv_strides": [1, 3, 3],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-conv-A-5": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 16],
+            "conv_kernels": [3, 3, 3],
+            "conv_strides": [1, 1, 3],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-conv-A-6": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 16],
+            "conv_kernels": [3, 5, 5],
+            "conv_strides": [1, 1, 5],
+            "embedding_dims": [8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
 }
 
 
