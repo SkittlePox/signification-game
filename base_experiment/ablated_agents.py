@@ -519,6 +519,66 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "critic_hidden": [8, 8]
         }
     },
+    "conv-ablate-micromlp-L4": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-LL0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [8, 8, 8],
+            "actor_hidden": 8,
+            "critic_hidden": [8, 8]
+        }
+    },
+    "conv-ablate-micromlp-LL1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [16, 16, 16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-micromlp-LL2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [32, 32, 32],
+            "actor_hidden": 32,
+            "critic_hidden": [32, 32]
+        }
+    },
+    "conv-ablate-micromlp-LL3": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [64, 64, 64],
+            "actor_hidden": 64,
+            "critic_hidden": [64, 64]
+        }
+    },
+    "conv-ablate-micromlp-LL4": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 16, 8],
+            "conv_kernels": [3, 3, 5],
+            "conv_strides": [1, 3, 5],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
 }
 
 
