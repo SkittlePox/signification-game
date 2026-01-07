@@ -780,6 +780,41 @@ LISTENER_ARCH_DENSE_PARAMETERS = {
             "critic_dims": [16, 16]
         }
     },
+    "dense-ablate-1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [16, 16],
+            "actor_dims": [16],
+            "critic_dims": [16, 16]
+        }
+    },
+    "dense-ablate-2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [16],
+            "actor_dims": [16],
+            "critic_dims": [16, 16]
+        }
+    },
+    "dense-ablate-3": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [32, 32, 32],
+            "actor_dims": [32],
+            "critic_dims": [32, 32]
+        }
+    },
+    "dense-ablate-4": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [32, 32],
+            "actor_dims": [32],
+            "critic_dims": [32, 32]
+        }
+    },
+    "dense-ablate-5": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [32],
+            "actor_dims": [32],
+            "critic_dims": [32, 32]
+        }
+    },
 }
 
 class ActorCriticListenerConvSkipPoolReady(nn.Module):

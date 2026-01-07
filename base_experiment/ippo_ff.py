@@ -244,6 +244,10 @@ def initialize_listener(env, rng, config, i):
     elif config["LISTENER_ARCH"].startswith("conv-skippool-"):
         config["LISTENER_ARCH_SKIPPOOL_PARAMETERS"] = LISTENER_ARCH_SKIPPOOL_PARAMETERS[config["LISTENER_ARCH"]]
         listener_network = ActorCriticListenerConvSkipPoolReady(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
+
+    elif config["LISTENER_ARCH"].startswith("dense-ablate-"):
+        config["LISTENER_ARCH_ABLATION_PARAMS"] = LISTENER_ARCH_DENSE_PARAMETERS[config["LISTENER_ARCH"]]
+        listener_network = ActorCriticListenerDenseAblationReady(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
