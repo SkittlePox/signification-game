@@ -11,7 +11,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
 
-##SBATCH --array=0-6
+#SBATCH --array=0-7
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
@@ -173,6 +173,11 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 # python3 -u ippo_ff.py WANDB_NOTES="phonology cifar10b 3 splines basic conv arch" PROJECT="phonology-study" WANDB_TAGS="[conv, epochsweep]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 1500" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 1500" UPDATE_EPOCHS=4250 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True LISTENER_ARCH="conv" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4"
 # python3 -u ippo_ff.py WANDB_NOTES="phonology cifar10b 3 splines basic conv arch" PROJECT="phonology-study" WANDB_TAGS="[conv, epochsweep]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 1500" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 1500" UPDATE_EPOCHS=4250 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True LISTENER_ARCH="conv" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 1500"
 
+
+#### Single layer conv arch sweep
+
+# python3 -u ippo_ff.py WANDB_NOTES="phonology cifar10b 3 splines 1conv" PROJECT="phonology-study" WANDB_TAGS="[1conv]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True LISTENER_ARCH="conv-ablate-1conv-$((SLURM_ARRAY_TASK_ID))" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 250"
+python3 -u ippo_ff.py WANDB_NOTES="phonology cifar10b 3 splines 1conv" PROJECT="phonology-study" WANDB_TAGS="[1conv]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online PICKLE_FINAL_AGENTS=False LOG_TOM_SPEAKER_EXAMPLES=True LISTENER_ARCH="conv-ablate-1conv-$((SLURM_ARRAY_TASK_ID))" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4"
 
 ########################################################################
 #################### Quantization Stuff Below ##########################

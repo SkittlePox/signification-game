@@ -649,8 +649,138 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "critic_hidden": [8, 8]
         }
     },
+    "conv-ablate-1conv-0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16],
+            "conv_kernels": [3],
+            "conv_strides": [1],
+            "embedding_dims": [16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-1conv-1": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16],
+            "conv_kernels": [5],
+            "conv_strides": [1],
+            "embedding_dims": [16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-1conv-2": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32],
+            "conv_kernels": [3],
+            "conv_strides": [1],
+            "embedding_dims": [16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-1conv-3": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32],
+            "conv_kernels": [5],
+            "conv_strides": [1],
+            "embedding_dims": [16],
+            "actor_hidden": 16,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-1conv-4": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32],
+            "conv_kernels": [3],
+            "conv_strides": [1],
+            "embedding_dims": [32],
+            "actor_hidden": 32,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-1conv-5": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32],
+            "conv_kernels": [5],
+            "conv_strides": [1],
+            "embedding_dims": [32],
+            "actor_hidden": 32,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-1conv-6": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32],
+            "conv_kernels": [3],
+            "conv_strides": [1],
+            "embedding_dims": [32, 32],
+            "actor_hidden": 32,
+            "critic_hidden": [16, 16]
+        }
+    },
+    "conv-ablate-1conv-7": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32],
+            "conv_kernels": [5],
+            "conv_strides": [1],
+            "embedding_dims": [32, 32],
+            "actor_hidden": 32,
+            "critic_hidden": [16, 16]
+        }
+    },
 }
 
+class ActorCriticListenerDenseAblationReady(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        # Get architecture from config with defaults
+        arch = self.config.get("LISTENER_ARCH_ABLATION_PARAMS", {})
+        embedding_dims = arch.get("embedding_dims", [128, 128, 128])
+        actor_dims = arch.get("actor_dims", [128])
+        critic_dims = arch.get("critic_dims", [128, 128])
+        
+        x = x.reshape((x.shape[0], -1))
+        
+        # Embedding
+        embedding = x
+        for dim in embedding_dims:
+            embedding = nn.Dense(dim)(embedding)
+            embedding = nn.relu(embedding)
+
+        # Actor
+        actor_mean = embedding
+        for dim in actor_dims:
+            actor_mean = nn.Dense(dim)(actor_mean)
+            actor_mean = nn.relu(actor_mean)
+
+        # squeeze to action space
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic
+        critic = embedding
+        for dim in critic_dims:
+            critic = nn.Dense(dim)(critic)
+            critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+LISTENER_ARCH_DENSE_PARAMETERS = {
+    "dense-ablate-0": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [16, 16, 16],
+            "actor_dims": [16],
+            "critic_dims": [16, 16]
+        }
+    },
+}
 
 class ActorCriticListenerConvSkipPoolReady(nn.Module):
     action_dim: Sequence[int]
