@@ -857,6 +857,20 @@ LISTENER_ARCH_DENSE_PARAMETERS = {
             "critic_dims": [128, 128]
         }
     },
+    "dense-ablate-12": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [256, 256, 256],
+            "actor_dims": [128],
+            "critic_dims": [128, 128]
+        }
+    },
+    "dense-ablate-13": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [256, 256, 256, 256],
+            "actor_dims": [128],
+            "critic_dims": [128, 128]
+        }
+    },
 }
 
 class ActorCriticListenerConvSkipPoolReady(nn.Module):
