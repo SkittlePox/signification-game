@@ -251,7 +251,7 @@ def initialize_listener(env, rng, config, i):
     
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
-            (config["ENV_KWARGS"]["image_dim"]**2,)
+            (1, config["ENV_KWARGS"]["image_dim"]**2,)
         )
     network_params = listener_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
     

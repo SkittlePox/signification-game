@@ -744,7 +744,7 @@ class ActorCriticListenerDenseAblationReady(nn.Module):
         actor_dims = arch.get("actor_dims", [128])
         critic_dims = arch.get("critic_dims", [128, 128])
         
-        x = x.reshape((x.shape[0], -1))
+        x = x.reshape((-1, self.image_dim**2))
         
         # Embedding
         embedding = x
