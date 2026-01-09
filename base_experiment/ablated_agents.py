@@ -871,6 +871,20 @@ LISTENER_ARCH_DENSE_PARAMETERS = {
             "critic_dims": [128, 128]
         }
     },
+    "dense-ablate-14": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [512, 512, 512],
+            "actor_dims": [128],
+            "critic_dims": [128, 128]
+        }
+    },
+    "dense-ablate-15": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "embedding_dims": [512, 512, 512, 512],
+            "actor_dims": [128],
+            "critic_dims": [128, 128]
+        }
+    },
 }
 
 class ActorCriticListenerConvSkipPoolReady(nn.Module):
@@ -1047,6 +1061,7 @@ class ActorCriticSpeakerSplinesAblationReady(nn.Module):
         arch = self.config.get("SPEAKER_ARCH_ABLATION_PARAMS", {})
         embedding_latent_dim = arch.get("embedding_latent_dim", 128)
         embedding_dims = arch.get("embedding_dims", [128, 128, 128])
+        critic_dims = arch.get("critic_dims", [128, 128, 32])
 
         y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
         z = y
@@ -1065,12 +1080,11 @@ class ActorCriticSpeakerSplinesAblationReady(nn.Module):
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
 
         # Critic
-        critic = nn.Dense(128)(z)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(128)(critic)
-        critic = nn.sigmoid(critic)
-        critic = nn.Dense(32)(critic)
-        critic = nn.sigmoid(critic)
+        critic = z
+        for i, dim in enumerate(critic_dims):
+            critic = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(critic)
+            critic = nn.sigmoid(critic)
+
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1) # Return policy function and value
@@ -1134,6 +1148,48 @@ SPEAKER_ARCH_ABLATION_PARAMETERS = {
         "SPEAKER_ARCH_ABLATION_PARAMETERS": {
             "embedding_latent_dim": 128,
             "embedding_dims": [128, 128, 32]
+        }
+    },
+    "splines-ablate-micro-A-0": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 8],
+            "critic_dims": [16, 16]
+        }
+    },
+    "splines-ablate-micro-A-1": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [16, 8, 4],
+            "critic_dims": [16, 16]
+        }
+    },
+    "splines-ablate-micro-A-2": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [8, 4, 2],
+            "critic_dims": [16, 16]
+        }
+    },
+    "splines-ablate-micro-A-3": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 16],
+            "critic_dims": [16, 16]
+        }
+    },
+    "splines-ablate-micro-A-4": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [16, 8, 8],
+            "critic_dims": [16, 16]
+        }
+    },
+    "splines-ablate-micro-A-5": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [8, 4, 4],
+            "critic_dims": [16, 16]
         }
     },
 }
