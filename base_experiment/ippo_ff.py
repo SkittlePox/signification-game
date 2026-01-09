@@ -752,17 +752,10 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     
     #######################
 
-    ### Spline affinity stuff that as of yet has not worked out ###
-
-    sigma = 1.3
-
-    spline_affinity_matrix = jnp.exp(-spline_wasserstein_matrix / sigma)
-    spline_affinity_matrix = spline_affinity_matrix.at[jnp.diag_indices(spline_wasserstein_matrix.shape[0])].set(0.0)
-
-    spline_affinity_matrix_invariant = jnp.exp(-spline_wasserstein_matrix_invariant / sigma)
-    spline_affinity_matrix_invariant = spline_affinity_matrix_invariant.at[jnp.diag_indices(spline_wasserstein_matrix_invariant.shape[0])].set(0.0)
+    ### Axis by axis comparison ###
     
-    return spline_wasserstein_matrix, spline_wasserstein_matrix_invariant, spline_wasserstein_matrix_variance_weighted
+    
+    return spline_wasserstein_matrix, spline_wasserstein_matrix_invariant, spline_wasserstein_matrix_variance_weighted, speaker_policy_locs, speaker_policy_scale_diags
 
 
 def get_phone_heatmap_distances(speaker_heatmaps_by_phone, config):
@@ -1109,7 +1102,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     return runner_state, total_loss
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, wasserstein_spline_info_variance_weighted, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, wasserstein_spline_info_variance_weighted, speaker_ex_policy_locs, speaker_ex_policy_scale_diags, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
     def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
@@ -1562,6 +1555,10 @@ def wandb_callback(metrics):
 
     #####
 
+    ##### Speaker Policy Axis by Axis comparison
+    # num_speakers, total_splines, _ = wasserstein_spline_info.shape
+    # if (update_step + 1 - speaker_example_debug_flag) % speaker_example_logging_iter == 0:
+
 
     ##### Phone Comparison via gut speaker heatmaps by phone
     num_speakers, total_splines, _ = phone_heatmap_matrix.shape
@@ -1912,11 +1909,13 @@ def make_train(config):
             ##
 
             ## Collect Wasserstein distance between splines
-            wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
+            wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, speaker_ex_policy_locs, speaker_ex_policy_scale_diags = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
                                             lambda _: get_speaker_spline_wasserstein_distances(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config),
                                             lambda _: (jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
                                              jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
-                                             jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign)))), operand=None)
+                                             jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
+                                             jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign))),
+                                             jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign)))), operand=None)
             ##
             
             ## Collect the last set of speaker-generated images for this epoch.
@@ -1962,7 +1961,7 @@ def make_train(config):
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
             ###
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, speaker_ex_policy_locs, speaker_ex_policy_scale_diags, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
