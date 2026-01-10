@@ -11,7 +11,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
 
-#SBATCH --array=0-0
+#SBATCH --array=5-10
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
@@ -203,5 +203,5 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 #### Speaker arch sweep
 
-# python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines 1conv micro speaker" PROJECT="phonology-study" WANDB_TAGS="[speakermicro, 1conv]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-1conv-1" SPEAKER_ARCH="splines-ablate-micro-A-$((SLURM_ARRAY_TASK_ID))" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=5e-5
-python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines dense micro speaker" PROJECT="phonology-study" WANDB_TAGS="[speakermicro, dense]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="dense-ablate-7" SPEAKER_ARCH="splines-ablate-micro-A-$((SLURM_ARRAY_TASK_ID))" L2_REG_COEF_LISTENER=5e-2 LISTENER_LR_SCHEDULE="4e-5 jump to 1e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=5e-5
+python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines 1conv micro speaker" PROJECT="phonology-study" WANDB_TAGS="[speakermicro, 1conv]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-1conv-1" SPEAKER_ARCH="splines-ablate-micro-A-$((SLURM_ARRAY_TASK_ID))" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=5e-5
+# python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines dense micro speaker" PROJECT="phonology-study" WANDB_TAGS="[speakermicro, dense]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="dense-ablate-7" SPEAKER_ARCH="splines-ablate-micro-A-$((SLURM_ARRAY_TASK_ID))" L2_REG_COEF_LISTENER=5e-2 LISTENER_LR_SCHEDULE="4e-5 jump to 1e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=5e-5

@@ -1707,7 +1707,7 @@ def wandb_callback(metrics):
             # Heatmap image for each agent
             phone_distance_speaker_w2_var = w2_variance_weighted_spline_info[i]
 
-            heatmap_image_w2_var = wandb.Image(np.array(phone_distance_speaker_w2_var)/10.0, caption=f"spline w2 distances speaker {i}")
+            heatmap_image_w2_var = wandb.Image(np.array(phone_distance_speaker_w2_var)/15.0, caption=f"spline w2 distances speaker {i}")
             metric_dict.update({f"spline w2 distances variance weighted/speaker {i} heatmap": heatmap_image_w2_var})
 
 
@@ -1730,7 +1730,7 @@ def wandb_callback(metrics):
             # Heatmap image for each agent
             phone_distance_speaker_w2_var_invariant = w2_variance_weighted_invariant_spline_info[i]
 
-            heatmap_image_w2_var_invariant = wandb.Image(np.array(phone_distance_speaker_w2_var_invariant)/10.0, caption=f"spline w2 distances speaker {i}")
+            heatmap_image_w2_var_invariant = wandb.Image(np.array(phone_distance_speaker_w2_var_invariant)/15.0, caption=f"spline w2 distances speaker {i}")
             metric_dict.update({f"spline w2 distances variance weighted invariant/speaker {i} heatmap": heatmap_image_w2_var_invariant})
 
 
