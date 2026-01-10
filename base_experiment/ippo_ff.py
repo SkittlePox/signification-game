@@ -815,15 +815,58 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
         
         return normalized
     
+    def create_gaussian_heatmap_lexsorted(means, std_devs, width=256, x_min=0.0, x_max=1.0):
+        """
+        Create a heatmap of Gaussian PDFs using JAX.
+        
+        Args:
+            means: shape (210,) - means of each Gaussian
+            variances: shape (210,) - variances of each Gaussian
+            width: number of pixels for x-axis (default 256)
+            x_min, x_max: range of x values (default 0 to 1)
+        
+        Returns:
+            heatmap: shape (210, 256) - normalized PDF values for visualization
+        """
+        # Convert to JAX arrays if needed
+        # means = jnp.asarray(means)
+        # std_devs = jnp.asarray(std_devs)
+
+        # **Key step: lexicographic sort by (means, std_devs)**
+        # jnp.lexsort uses the LAST key as primary, so give (std, mean).
+        perm = jnp.lexsort((std_devs, means))
+        means_s = means[perm]
+        stds_s = std_devs[perm]
+        
+        # Create x grid
+        x = jnp.linspace(x_min, x_max, width)
+        
+        # Reshape for broadcasting: x is (1, 256), means is (210, 1), etc.
+        x_expanded = x[None, :]  # (1, 256)
+        means_expanded = means_s[:, None]  # (210, 1)
+        stds_expanded = stds_s[:, None]  # (210, 1)
+        
+        # Compute all PDFs at once using broadcasting
+        pdfs = norm.pdf(x_expanded, loc=means_expanded, scale=stds_expanded)
+        
+        # Normalize each row to [0, 1] for better visualization
+        row_min = pdfs.min(axis=1, keepdims=True)
+        row_max = pdfs.max(axis=1, keepdims=True)
+        normalized = (pdfs - row_min) / (row_max - row_min + 1e-8)
+        
+        return normalized
+    
     create_gaussian_heatmap_vmapped = jax.vmap(create_gaussian_heatmap, in_axes=(0, 0, None, None, None))
+    create_gaussian_heatmap_lexsorted_vmapped = jax.vmap(create_gaussian_heatmap_lexsorted, in_axes=(0, 0, None, None, None))
     
     speaker_policy_locs = speaker_policy_locs.reshape((num_speakers, -1))
     speaker_policy_scale_diags = speaker_policy_scale_diags.reshape((num_speakers, -1))
 
     gaussian_heatmaps = create_gaussian_heatmap_vmapped(speaker_policy_locs, speaker_policy_scale_diags, 256, 0.0, 1.0)
+    gaussian_heatmaps_lexsorted = create_gaussian_heatmap_lexsorted_vmapped(speaker_policy_locs, speaker_policy_scale_diags, 256, 0.0, 1.0)
     
     
-    return spline_wasserstein_matrix, spline_wasserstein_matrix_invariant, spline_wasserstein_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, gaussian_heatmaps
+    return spline_wasserstein_matrix, spline_wasserstein_matrix_invariant, spline_wasserstein_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, gaussian_heatmaps, gaussian_heatmaps_lexsorted
 
 
 def get_phone_heatmap_distances(speaker_heatmaps_by_phone, config):
@@ -1170,7 +1213,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     return runner_state, total_loss
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, wasserstein_spline_info_variance_weighted, w2_variance_weighted_spline_info, w2_variance_weighted_invariant_spline_info, speaker_gaussian_heatmaps, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, wasserstein_spline_info_variance_weighted, w2_variance_weighted_spline_info, w2_variance_weighted_invariant_spline_info, speaker_gaussian_heatmaps, speaker_gaussian_heatmaps_lexsorted, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
     
     def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
@@ -1664,7 +1707,7 @@ def wandb_callback(metrics):
             # Heatmap image for each agent
             phone_distance_speaker_w2_var = w2_variance_weighted_spline_info[i]
 
-            heatmap_image_w2_var = wandb.Image(np.array(phone_distance_speaker_w2_var)/7.0, caption=f"spline w2 distances speaker {i}")
+            heatmap_image_w2_var = wandb.Image(np.array(phone_distance_speaker_w2_var)/10.0, caption=f"spline w2 distances speaker {i}")
             metric_dict.update({f"spline w2 distances variance weighted/speaker {i} heatmap": heatmap_image_w2_var})
 
 
@@ -1687,7 +1730,7 @@ def wandb_callback(metrics):
             # Heatmap image for each agent
             phone_distance_speaker_w2_var_invariant = w2_variance_weighted_invariant_spline_info[i]
 
-            heatmap_image_w2_var_invariant = wandb.Image(np.array(phone_distance_speaker_w2_var_invariant)/7.0, caption=f"spline w2 distances speaker {i}")
+            heatmap_image_w2_var_invariant = wandb.Image(np.array(phone_distance_speaker_w2_var_invariant)/10.0, caption=f"spline w2 distances speaker {i}")
             metric_dict.update({f"spline w2 distances variance weighted invariant/speaker {i} heatmap": heatmap_image_w2_var_invariant})
 
 
@@ -1714,6 +1757,10 @@ def wandb_callback(metrics):
             gaussian_heatmap = speaker_gaussian_heatmaps[i]
             gaussian_heatmap_image = wandb.Image(np.array(gaussian_heatmap)*256, caption=f"gaussian heatmap speaker {i}")
             metric_dict.update({f"speaker gaussian heatmap/speaker {i} heatmap": gaussian_heatmap_image})
+
+            gaussian_heatmap_lexsorted = speaker_gaussian_heatmaps_lexsorted[i]
+            gaussian_heatmap_image_lexsorted = wandb.Image(np.array(gaussian_heatmap_lexsorted)*256, caption=f"gaussian heatmap lexsorted speaker {i}")
+            metric_dict.update({f"speaker gaussian heatmap lexsorted/speaker {i} heatmap": gaussian_heatmap_image_lexsorted})
 
 
     ##### Phone Comparison via gut speaker heatmaps by phone
@@ -2065,13 +2112,14 @@ def make_train(config):
             ##
 
             ## Collect Wasserstein distance between splines
-            wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, speaker_gaussian_heatmaps = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
+            wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, speaker_gaussian_heatmaps, gaussian_heatmaps_lexsorted = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
                                             lambda _: get_speaker_spline_wasserstein_distances(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform, config),
                                             lambda _: (jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
                                              jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
                                              jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
                                              jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
                                              jnp.zeros((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*num_splines_per_sign), int(env_kwargs["num_classes"]*num_splines_per_sign))),
+                                             jnp.ones((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*env_kwargs["speaker_action_dim"]), 256)),
                                              jnp.ones((env_kwargs["num_speakers"], int(env_kwargs["num_classes"]*env_kwargs["speaker_action_dim"]), 256))), operand=None) # The 256 is the image dimension for the gaussian heatmaps. It's adjustable.
             ##
             
@@ -2118,7 +2166,7 @@ def make_train(config):
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
             ###
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, speaker_gaussian_heatmaps, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, speaker_gaussian_heatmaps, gaussian_heatmaps_lexsorted, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
