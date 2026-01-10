@@ -17,6 +17,7 @@
 "ENV_NUM_DATAPOINTS": 5000
 
 "PROBE_NUM_EXAMPLES": 512 # 512 # This must be less than or equal to "NUM_STEPS"
+"SPEAKER_EXAMPLE_DEBUG": False
 
 "ENV_KWARGS":
   # ${ENV_KWARGS}:  # This doesn't look right

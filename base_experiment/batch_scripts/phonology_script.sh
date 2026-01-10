@@ -11,7 +11,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH -C quadrortx
 
-#SBATCH --array=2-5
+#SBATCH --array=0-0
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END

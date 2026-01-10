@@ -39,10 +39,20 @@ def create_gaussian_heatmap(means, variances, width=256, x_min=0.0, x_max=1.0):
     
     return normalized
 
+# Create a vmapped version that works on batches
+create_gaussian_heatmap_batch = jax.vmap(
+    create_gaussian_heatmap,
+    in_axes=(0, 0, None, None, None),  # vmap over means and variances, keep other args fixed
+    out_axes=0  # stack outputs along axis 0
+)
+
 def save_heatmap_as_image(heatmap, filename='gaussian_heatmap.png'):
     """Save the heatmap as a PNG image."""
+    # Convert JAX array to NumPy first
+    heatmap_np = np.array(heatmap)
+    
     # Convert to uint8 (0-255 range)
-    img_array = (heatmap * 255).astype(np.uint8)
+    img_array = (heatmap_np * 255).astype(np.uint8)
     
     # Create PIL image in grayscale
     img = Image.fromarray(img_array, mode='L')
@@ -83,10 +93,6 @@ if __name__ == "__main__":
     assert jnp.all(heatmap >= 0) and jnp.all(heatmap <= 1), "Values should be normalized to [0,1]"
     print(f"✓ Shape correct: {heatmap.shape}")
     print(f"✓ Values normalized: min={heatmap.min():.4f}, max={heatmap.max():.4f}")
-    
-    # Save the image
-    # img = save_heatmap_as_image(heatmap, 'test_gaussians.png')
-    # print(f"✓ Saved test image to 'test_gaussians.png'")
     
     # Test 2: Edge cases
     print("\nTesting edge cases...")
@@ -144,5 +150,79 @@ if __name__ == "__main__":
     print(f"✓ Peak location: {peak_x:.3f} (expected near {test_mean})")
     assert abs(peak_x - test_mean) < 0.05, "Peak should be near the mean"
     
+    # Test 5: VMAP BATCH PROCESSING
+    print("\n=== Testing vmap batch processing ===")
+    
+    # Create multiple batches of Gaussian parameters
+    batch_size = 5
+    n_gaussians = 210
+    
+    key, subkey = jax.random.split(key)
+    # Shape: (batch_size, n_gaussians)
+    batch_means = jax.random.uniform(subkey, shape=(batch_size, n_gaussians), minval=0.1, maxval=0.9)
+    
+    key, subkey = jax.random.split(key)
+    batch_variances = jax.random.uniform(subkey, shape=(batch_size, n_gaussians), minval=0.001, maxval=0.05)
+    
+    print(f"Input batch shapes:")
+    print(f"  Means: {batch_means.shape}")
+    print(f"  Variances: {batch_variances.shape}")
+    
+    # Process all batches at once using vmap
+    start = time.time()
+    batch_heatmaps = create_gaussian_heatmap_batch(batch_means, batch_variances, 256, 0.0, 1.0)
+    vmap_time = time.time() - start
+    
+    print(f"✓ Vmapped output shape: {batch_heatmaps.shape}")
+    assert batch_heatmaps.shape == (batch_size, n_gaussians, 256), \
+        f"Expected shape ({batch_size}, {n_gaussians}, 256), got {batch_heatmaps.shape}"
+    
+    # Verify each batch is properly normalized
+    for i in range(batch_size):
+        batch_min = batch_heatmaps[i].min()
+        batch_max = batch_heatmaps[i].max()
+        assert batch_min >= 0 and batch_max <= 1, \
+            f"Batch {i} not normalized: min={batch_min}, max={batch_max}"
+    print(f"✓ All batches properly normalized")
+    
+    # Compare with sequential processing
+    start = time.time()
+    sequential_results = []
+    for i in range(batch_size):
+        result = create_gaussian_heatmap(batch_means[i], batch_variances[i])
+        sequential_results.append(result)
+    sequential_results = jnp.stack(sequential_results)
+    sequential_time = time.time() - start
+    
+    # Check that results match
+    assert jnp.allclose(batch_heatmaps, sequential_results, atol=1e-6), \
+        "Vmapped results don't match sequential processing"
+    print(f"✓ Vmapped results match sequential processing")
+    
+    print(f"\nPerformance comparison:")
+    print(f"  Vmapped time: {vmap_time:.4f} seconds")
+    print(f"  Sequential time: {sequential_time:.4f} seconds")
+    print(f"  Speedup: {sequential_time/vmap_time:.2f}x")
+    
+    # Save one batch as an example
+    save_heatmap_as_image(batch_heatmaps[0], 'batch_example.png')
+    print(f"\n✓ Saved first batch to 'batch_example.png'")
+    
+    # Test 6: Different batch configurations
+    print("\n=== Testing different batch configurations ===")
+    
+    # Small batch, many Gaussians
+    small_batch_means = jax.random.uniform(key, shape=(2, 500), minval=0.1, maxval=0.9)
+    small_batch_vars = jax.random.uniform(key, shape=(2, 500), minval=0.001, maxval=0.05)
+    small_batch_result = create_gaussian_heatmap_batch(small_batch_means, small_batch_vars, 256, 0.0, 1.0)
+    assert small_batch_result.shape == (2, 500, 256)
+    print(f"✓ Small batch (2x500): {small_batch_result.shape}")
+    
+    # Large batch, few Gaussians
+    large_batch_means = jax.random.uniform(key, shape=(20, 50), minval=0.1, maxval=0.9)
+    large_batch_vars = jax.random.uniform(key, shape=(20, 50), minval=0.001, maxval=0.05)
+    large_batch_result = create_gaussian_heatmap_batch(large_batch_means, large_batch_vars, 256, 0.0, 1.0)
+    assert large_batch_result.shape == (20, 50, 256)
+    print(f"✓ Large batch (20x50): {large_batch_result.shape}")
+    
     print("\nAll tests passed! ✓")
-    # print(f"Generated test image has shape {img.size} (width, height)")
