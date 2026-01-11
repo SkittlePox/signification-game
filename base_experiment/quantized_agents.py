@@ -546,9 +546,9 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
 
         for i in range(self.num_splines):
             # Option A: Use position encoding as input
-            position = jnp.full((z.shape[0], 1), i / self.num_splines)
-            inputs = jnp.concatenate([z, position], axis=-1)
-            inputs = nn.Dense(rnn_hidden_dim, name=f'input_proj_{i}')(inputs)
+            # position = jnp.full((z.shape[0], 1), i / self.num_splines)
+            # inputs = jnp.concatenate([z, position], axis=-1)
+            # inputs = nn.Dense(rnn_hidden_dim, name=f'input_proj_{i}')(inputs)
             
             # Option B: Use previous output as input (uncomment if preferred)
             # if i == 0:
@@ -560,7 +560,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
             # inputs = jnp.zeros((batch_size, hidden_dim))
 
             # Option D: just use z
-            # inputs = z
+            inputs = z
             
             carry, _ = cell(carry, inputs)
 
