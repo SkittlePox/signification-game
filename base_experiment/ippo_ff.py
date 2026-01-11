@@ -321,7 +321,7 @@ def initialize_speaker(env, rng, config, i):
     elif config["SPEAKER_ARCH"].startswith("splines-ablate-"):
         config["SPEAKER_ARCH_ABLATION_PARAMS"] = SPEAKER_ARCH_ABLATION_PARAMETERS[config["SPEAKER_ARCH"]]
         speaker_network = ActorCriticSpeakerSplinesAblationReady(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
-    elif config["SPEAKER_ARCH"].startswith("speaker-quantize-"):
+    elif config["SPEAKER_ARCH"].startswith("splines-quantized-"):
         config["SPEAKER_ARCH_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
         speaker_network = ActorCriticSpeakerDenseQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
 

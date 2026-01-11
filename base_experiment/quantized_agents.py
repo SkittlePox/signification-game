@@ -298,71 +298,90 @@ class ActorCriticListenerConvQuantization(nn.Module):
 
 
 class ActorCriticSpeakerDenseQuantized(nn.Module):
+    num_classes: int
     action_dim: Sequence[int]
-    image_dim: Sequence[int]
     config: Dict
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, obs):
         # Get architecture from config with defaults
-        arch = self.config.get("SPEAKER_ARCH_QUANTIZATION_PARAMETERS", {})
+        arch = self.config.get("SPEAKER_ARCH_ABLATION_PARAMS", {})
+        embedding_latent_dim = arch.get("embedding_latent_dim", 128)
         embedding_dims = arch.get("embedding_dims", [128, 128, 128])
-        actor_dims = arch.get("actor_dims", [128])
-        critic_dims = arch.get("critic_dims", [128, 128])
+        critic_dims = arch.get("critic_dims", [128, 128, 32])
 
         # VQ parameters from config
         vq_num_embeddings = arch.get("vq_num_embeddings", 512)
         vq_embedding_dim = arch.get("vq_embedding_dim", 64)
         vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
-        
-        x = x.reshape((-1, self.image_dim**2))
-        
-        # Embedding
-        embedding = x
-        for dim in embedding_dims:
-            embedding = nn.Dense(dim)(embedding)
-            embedding = nn.relu(embedding)
+
+        y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
+        z = y
+        for i, dim in enumerate(embedding_dims):
+            z = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(z)
+            z = nn.relu(z)
 
         # Quantization
         # Project to VQ embedding dimension if needed
-        if x.shape[-1] != vq_embedding_dim:
-            x = nn.Dense(features=vq_embedding_dim)(x)
+        if z.shape[-1] != vq_embedding_dim:
+            z = nn.Dense(features=vq_embedding_dim)(z)
         
-        x, vq_loss, encoding_indices = VectorQuantizer()(
-            x,
+        z, vq_loss, encoding_indices = VectorQuantizer()(
+            z,
             num_embeddings=vq_num_embeddings,
             embedding_dim=vq_embedding_dim,
             commitment_cost=vq_commitment_cost,
         )
 
-        # Actor
-        actor_mean = embedding
-        for dim in actor_dims:
-            actor_mean = nn.Dense(dim)(actor_mean)
-            actor_mean = nn.relu(actor_mean)
+        # Actor Mean
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        # squeeze to action space
-        actor_mean = nn.Dense(self.action_dim)(actor_mean)
-        actor_mean = nn.softmax(actor_mean)
-        pi = distrax.Categorical(probs=actor_mean)
+        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(z)
+        scale_diag = nn.sigmoid(scale_diag) * self.config["SPEAKER_SQUISH"] + 1e-8
+        
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
 
         # Critic
-        critic = embedding
-        for dim in critic_dims:
-            critic = nn.Dense(dim)(critic)
-            critic = nn.relu(critic)
+        critic = z
+        for i, dim in enumerate(critic_dims):
+            critic = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(critic)
+            critic = nn.sigmoid(critic)
+
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1), vq_loss, encoding_indices
 
+
 SPEAKER_ARCH_QUANTIZATION_PARAMETERS = {
-    "speaker-quantize-0": {
-        "SPEAKER_ARCH_QUANTIZATION_PARAMETERS": {
-            "embedding_dims": [64, 64, 64],
-            "actor_dims": [64],
-            "critic_dims": [64, 64],
+    "splines-quantized-A9-0": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25
+        }
+    },
+    "splines-quantized-A9-1": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "vq_num_embeddings": 8,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25
+        }
+    },
+    "splines-quantized-A9-2": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
             "vq_num_embeddings": 4,
-            "vq_embedding_dim": 64,
+            "vq_embedding_dim": 16,
             "vq_commitment_cost": 0.25
         }
     },
