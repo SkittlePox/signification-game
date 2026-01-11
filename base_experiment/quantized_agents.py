@@ -515,6 +515,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         vq_num_embeddings = arch.get("vq_num_embeddings", 512)
         vq_embedding_dim = arch.get("vq_embedding_dim", 64)
         vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
+        use_vq = arch.get("use_vq", False)
 
         y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
         z = y
@@ -591,9 +592,47 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "embedding_latent_dim": 8,
             "embedding_dims": [4, 4],
             "critic_dims": [8, 8],
+            "rnn_hidden_dim": 16,
             "vq_num_embeddings": 16,
             "vq_embedding_dim": 16,
-            "vq_commitment_cost": 0.25
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A9-1": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 8,
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A9-2": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 4,
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A9-3": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
         }
     },
 }
