@@ -635,4 +635,40 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "use_vq": False
         }
     },
+    "splines-rnn-quantized-B-0": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 12,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-B-1": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 6,
+            "embedding_dims": [4, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-B-2": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
+        }
+    },
 }
