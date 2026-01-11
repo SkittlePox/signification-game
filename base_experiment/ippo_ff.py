@@ -327,6 +327,9 @@ def initialize_speaker(env, rng, config, i):
     elif config["SPEAKER_ARCH"].startswith("splines-perspline-quantized-"):
         config["SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
         speaker_network = ActorCriticSpeakerDensePerSplineQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, num_splines=config["NUM_SPLINES_PER_SIGN"], spline_action_dim=config["SPEAKER_SPLINE_PARAM_SIZE"], config=config)
+    elif config["SPEAKER_ARCH"].startswith("splines-rnn-quantized-"):
+        config["SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        speaker_network = ActorCriticSpeakerRNNQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, num_splines=config["NUM_SPLINES_PER_SIGN"], spline_action_dim=config["SPEAKER_SPLINE_PARAM_SIZE"], config=config)
 
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(

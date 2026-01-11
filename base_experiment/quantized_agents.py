@@ -434,7 +434,7 @@ class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
             z = nn.relu(z)
 
         # Get action parameters spline by spline and quantize
-        def decode_spline(_x, _):
+        def decode_spline(_x):
 
             # Quantization
             # Project to VQ embedding dimension if needed
@@ -456,18 +456,18 @@ class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
             scale_diag_i = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(_x)
             scale_diag_i = nn.sigmoid(scale_diag_i) * self.config["SPEAKER_SQUISH"] + 1e-8
 
-            return _x, (actor_mean_i, scale_diag_i)
+            return (actor_mean_i, scale_diag_i)
 
-        # Run scan over num_splines steps
-        _, (spline_means, spline_scale_diags) = jax.lax.scan(
-            decode_spline,
-            z,
-            None,
-            length=self.num_splines
-        )
+        actor_means = []
+        actor_scale_diags = []
 
-        actor_mean = spline_means.reshape(-1, self.spline_action_dim * self.num_splines)
-        actor_scale_diag = spline_scale_diags.reshape(-1, self.spline_action_dim * self.num_splines)
+        for _ in range(self.num_splines):
+            actor_mean_i, scale_diag_i = decode_spline(z)
+            actor_means.append(actor_mean_i)
+            actor_scale_diags.append(scale_diag_i)
+        
+        actor_mean = jnp.concatenate(actor_means, axis=1)
+        actor_scale_diag = jnp.concatenate(actor_scale_diags, axis=1)
         
         # Create a multivariate normal distribution with diagonal covariance matrix
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_scale_diag)
@@ -485,6 +485,109 @@ class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
 SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS = {
     "splines-perspline-quantized-A9-0": {
         "SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25
+        }
+    },
+}
+
+
+class ActorCriticSpeakerRNNQuantized(nn.Module):
+    num_classes: int
+    num_splines: int
+    spline_action_dim: int
+    config: Dict
+
+    @nn.compact
+    def __call__(self, obs):
+        # Get architecture from config with defaults
+        arch = self.config.get("SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS", {})
+        embedding_latent_dim = arch.get("embedding_latent_dim", 128)
+        embedding_dims = arch.get("embedding_dims", [128, 128, 128])
+        critic_dims = arch.get("critic_dims", [128, 128, 32])
+        rnn_hidden_dim = arch.get("rnn_hidden_dim", 16)
+
+        # VQ parameters from config
+        vq_num_embeddings = arch.get("vq_num_embeddings", 512)
+        vq_embedding_dim = arch.get("vq_embedding_dim", 64)
+        vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
+
+        y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
+        z = y
+        for i, dim in enumerate(embedding_dims):
+            z = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(z)
+            z = nn.relu(z)
+
+        # Create the SimpleCell
+        cell = nn.SimpleCell(features=rnn_hidden_dim)
+        actor_mean_dense = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))
+        actor_scale_diag_dense = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))
+
+        # Get action parameters spline by spline and quantize
+        def decode_spline(_x):
+            actor_mean_i = actor_mean_dense(_x)
+            actor_mean_i = nn.sigmoid(actor_mean_i)  # Apply sigmoid to squash outputs between 0 and 1
+
+            scale_diag_i = actor_scale_diag_dense(_x)
+            scale_diag_i = nn.sigmoid(scale_diag_i) * self.config["SPEAKER_SQUISH"] + 1e-8
+
+            return (actor_mean_i, scale_diag_i)
+
+        initial_carry = nn.Dense(rnn_hidden_dim, name='carry_init')(z)
+
+        carry = initial_carry
+        actor_means = []
+        actor_scale_diags = []
+
+        for i in range(self.num_splines):
+            # Option A: Use position encoding as input
+            position = jnp.full((z.shape[0], 1), i / self.num_splines)
+            inputs = jnp.concatenate([z, position], axis=-1)
+            inputs = nn.Dense(rnn_hidden_dim, name=f'input_proj_{i}')(inputs)
+            
+            # Option B: Use previous output as input (uncomment if preferred)
+            # if i == 0:
+            #     inputs = z
+            # else:
+            #     inputs = spline_params_list[-1]
+            
+            # Option C: No input, just evolve the hidden state
+            # inputs = jnp.zeros((batch_size, hidden_dim))
+
+            # Option D: just use z
+            # inputs = z
+            
+            carry, _ = cell(carry, inputs)
+
+            ####
+
+            actor_mean_i, scale_diag_i = decode_spline(carry)
+            actor_means.append(actor_mean_i)
+            actor_scale_diags.append(scale_diag_i)
+        
+        actor_mean = jnp.concatenate(actor_means, axis=1)
+        actor_scale_diag = jnp.concatenate(actor_scale_diags, axis=1)
+        
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_scale_diag)
+
+        # Critic
+        critic = z
+        for i, dim in enumerate(critic_dims):
+            critic = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(critic)
+            critic = nn.sigmoid(critic)
+
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
+    "splines-rnn-quantized-A9-0": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
             "embedding_latent_dim": 8,
             "embedding_dims": [4, 4],
             "critic_dims": [8, 8],
