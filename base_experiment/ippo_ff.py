@@ -324,6 +324,9 @@ def initialize_speaker(env, rng, config, i):
     elif config["SPEAKER_ARCH"].startswith("splines-quantized-"):
         config["SPEAKER_ARCH_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
         speaker_network = ActorCriticSpeakerDenseQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+    elif config["SPEAKER_ARCH"].startswith("splines-perspline-quantized-"):
+        config["SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        speaker_network = ActorCriticSpeakerDensePerSplineQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, num_splines=config["NUM_SPLINES_PER_SIGN"], spline_action_dim=config["SPEAKER_SPLINE_PARAM_SIZE"], config=config)
 
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
@@ -1848,6 +1851,7 @@ def make_train(config):
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
     config["SPEAKER_SPLINE_PARAM_SIZE"] = 7 if env_kwargs["speaker_action_transform"] == 'splines_weight' else None
+    config["NUM_SPLINES_PER_SIGN"] = env_kwargs["speaker_action_dim"] // config["SPEAKER_SPLINE_PARAM_SIZE"]
     speaker_action_transform_by_phone = get_speaker_action_transform("splines_weight_by_phone", env_kwargs['image_dim'])
     
     def train(rng):
@@ -2111,7 +2115,7 @@ def make_train(config):
             ##
 
             ## Collect speaker heatmap by phone
-            num_splines_per_sign = env_kwargs["speaker_action_dim"] // config["SPEAKER_SPLINE_PARAM_SIZE"]
+            num_splines_per_sign = config["NUM_SPLINES_PER_SIGN"]
             gut_speaker_heatmaps_by_phone = jax.lax.cond((update_step + 1 - config["SPEAKER_EXAMPLE_DEBUG"]) % config["SPEAKER_EXAMPLE_LOGGING_ITER"] == 0, 
                                             lambda _: get_speaker_heatmap_by_phone(next_rng, speaker_apply_fn, batched_speaker_params, speaker_action_transform_by_phone, config), 
                                             lambda _: jnp.zeros((env_kwargs["num_speakers"]*env_kwargs["num_classes"], num_splines_per_sign, env_kwargs["image_dim"], env_kwargs["image_dim"])), operand=None)

@@ -385,4 +385,112 @@ SPEAKER_ARCH_QUANTIZATION_PARAMETERS = {
             "vq_commitment_cost": 0.25
         }
     },
+    "splines-quantized-A9-3": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "vq_num_embeddings": 64,
+            "vq_embedding_dim": 8,
+            "vq_commitment_cost": 0.25
+        }
+    },
+    "splines-quantized-A9-4": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "vq_num_embeddings": 128,
+            "vq_embedding_dim": 8,
+            "vq_commitment_cost": 0.25
+        }
+    },
+}
+
+
+class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
+    num_classes: int
+    num_splines: int
+    spline_action_dim: int
+    config: Dict
+
+    @nn.compact
+    def __call__(self, obs):
+        # Get architecture from config with defaults
+        arch = self.config.get("SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS", {})
+        embedding_latent_dim = arch.get("embedding_latent_dim", 128)
+        embedding_dims = arch.get("embedding_dims", [128, 128, 128])
+        critic_dims = arch.get("critic_dims", [128, 128, 32])
+
+        # VQ parameters from config
+        vq_num_embeddings = arch.get("vq_num_embeddings", 512)
+        vq_embedding_dim = arch.get("vq_embedding_dim", 64)
+        vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
+
+        y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
+        z = y
+        for i, dim in enumerate(embedding_dims):
+            z = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(z)
+            z = nn.relu(z)
+
+        # Get action parameters spline by spline and quantize
+        def decode_spline(_x, _):
+
+            # Quantization
+            # Project to VQ embedding dimension if needed
+            # if z.shape[-1] != vq_embedding_dim:
+            #     z = nn.Dense(features=vq_embedding_dim)(z)
+
+            # vq_layer = VectorQuantizer()
+            
+            # z, vq1_loss, encoding1_indices = vq_layer(
+            #     z,
+            #     num_embeddings=vq_num_embeddings,
+            #     embedding_dim=vq_embedding_dim,
+            #     commitment_cost=vq_commitment_cost,
+            # )
+
+            actor_mean_i = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(_x)
+            actor_mean_i = nn.sigmoid(actor_mean_i)  # Apply sigmoid to squash outputs between 0 and 1
+
+            scale_diag_i = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(_x)
+            scale_diag_i = nn.sigmoid(scale_diag_i) * self.config["SPEAKER_SQUISH"] + 1e-8
+
+            return _x, (actor_mean_i, scale_diag_i)
+
+        # Run scan over num_splines steps
+        _, (spline_means, spline_scale_diags) = jax.lax.scan(
+            decode_spline,
+            z,
+            None,
+            length=self.num_splines
+        )
+
+        actor_mean = spline_means.reshape(-1, self.spline_action_dim * self.num_splines)
+        actor_scale_diag = spline_scale_diags.reshape(-1, self.spline_action_dim * self.num_splines)
+        
+        # Create a multivariate normal distribution with diagonal covariance matrix
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_scale_diag)
+
+        # Critic
+        critic = z
+        for i, dim in enumerate(critic_dims):
+            critic = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(critic)
+            critic = nn.sigmoid(critic)
+
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1)
+
+SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS = {
+    "splines-perspline-quantized-A9-0": {
+        "SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 8,
+            "embedding_dims": [4, 4],
+            "critic_dims": [8, 8],
+            "vq_num_embeddings": 16,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25
+        }
+    },
 }
