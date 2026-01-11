@@ -318,10 +318,12 @@ def initialize_speaker(env, rng, config, i):
         speaker_network = ActorCriticSpeakerSplines(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"] == 'splinesnoise':
         speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
-
     elif config["SPEAKER_ARCH"].startswith("splines-ablate-"):
         config["SPEAKER_ARCH_ABLATION_PARAMS"] = SPEAKER_ARCH_ABLATION_PARAMETERS[config["SPEAKER_ARCH"]]
         speaker_network = ActorCriticSpeakerSplinesAblationReady(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
+    elif config["SPEAKER_ARCH"].startswith("speaker-quantize-"):
+        config["SPEAKER_ARCH_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        speaker_network = ActorCriticSpeakerDenseQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
 
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)
     init_x = jnp.zeros(
@@ -379,7 +381,8 @@ def execute_individual_listener(__rng, _listener_apply_fn, _listener_params_i, _
 def execute_individual_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
     __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
     _speaker_obs_i = _speaker_obs_i.ravel()
-    policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+    speaker_outputs = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+    policy, value = speaker_outputs[0], speaker_outputs[1]
     action, log_prob = policy.sample_and_log_prob(seed=__rng)
     scale_diag = policy.scale_diag
     return jnp.clip(action, a_min=0.0, a_max=1.0), log_prob, value, scale_diag
@@ -474,7 +477,8 @@ def execute_tom_speaker(__rng, _speaker_apply_fn, _speaker_params_i, _listener_a
     ###### Generate candidate stimuli
 
     # Sample lots of possible signals.
-    search_signal_gut_policy, values = _speaker_apply_fn(_speaker_params_i, jnp.array([_speaker_obs_i], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})    # This is a distrax distribution. Index 1 is values. Using speaker index _speaker_obs_i, for generating pictograms of that class
+    speaker_outputs = _speaker_apply_fn(_speaker_params_i, jnp.array([_speaker_obs_i], dtype=jnp.int32), rngs={'dropout': speaker_dropout_key, 'noise': speaker_noise_key})    # This is a distrax distribution. Index 1 is values. Using speaker index _speaker_obs_i, for generating pictograms of that class
+    search_signal_gut_policy, values = speaker_outputs[0], speaker_outputs[1]
     search_signal_param_samples = search_signal_gut_policy.sample(seed=numer_key, sample_shape=(speaker_action_dim, max_speaker_n_search))[0]    # This is shaped (speaker_n_search, 1, speaker_action_size)
     search_signal_param_samples = jnp.clip(search_signal_param_samples, a_min=0.0, a_max=1.0)
     
@@ -549,7 +553,8 @@ def get_speaker_heatmap(rng, speaker_apply_fn, speaker_params, speaker_action_tr
     def execute_individual_speaker_and_sample(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
         __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
         _speaker_obs_i = _speaker_obs_i.ravel()
-        policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        speaker_outputs = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        policy, value = speaker_outputs[0], speaker_outputs[1]
         actions = policy.sample(seed=__rng, sample_shape=config["SPEAKER_HEATMAP_NUM"])
         return actions.reshape(-1, sp_action_dim)
     
@@ -576,7 +581,8 @@ def get_speaker_heatmap_by_phone(rng, speaker_apply_fn, speaker_params, speaker_
     def execute_individual_speaker_and_sample(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
         __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
         _speaker_obs_i = _speaker_obs_i.ravel()
-        policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        speaker_outputs = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        policy, value = speaker_outputs[0], speaker_outputs[1]
         actions = policy.sample(seed=__rng, sample_shape=config["SPEAKER_HEATMAP_NUM"])
         return actions.reshape(-1, sp_action_dim)
     
@@ -628,7 +634,8 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
     def get_individual_speaker_policy_params(__rng, _speaker_apply_fn, _speaker_params_i, _speaker_obs_i):
         __rng, dropout_key, noise_key = jax.random.split(__rng, 3)
         _speaker_obs_i = _speaker_obs_i.ravel()
-        policy, value = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        speaker_outputs = _speaker_apply_fn(_speaker_params_i, _speaker_obs_i, rngs={'dropout': dropout_key, 'noise': noise_key})
+        policy, value = speaker_outputs[0], speaker_outputs[1]
         # action, log_prob = policy.sample_and_log_prob(seed=__rng)
         # scale_diag = policy.scale_diag
         policy_loc_clipped = jnp.clip(policy.loc, 0.0, 1.0)
@@ -1142,7 +1149,10 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     def _loss_fn(params, _obs, _actions, values, log_probs, log_q, advantages, targets, alive):
         # COLLECT ACTIONS AND LOG_PROBS FOR TRAJ ACTIONS
         dropout_key, noise_key = jax.random.split(__rng)
-        _i_policy, _i_value = speaker_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
+        speaker_outputs = speaker_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
+        _i_policy, _i_value = speaker_outputs[0], speaker_outputs[1]
+        vq_loss = speaker_outputs[2] if len(speaker_outputs) > 2 else 0.0
+        vq_coef = 0.25
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
         _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -1e8, 1e8)
         log_probs = jnp.clip(log_probs, -1e8, 1e8)
@@ -1187,6 +1197,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
                 + vf_coef * value_loss
                 - ent_coef_speaker * entropy
                 + l2_penalty
+                + vq_coef * vq_loss
         )
         return total_loss, (value_loss, loss_actor, entropy)
     

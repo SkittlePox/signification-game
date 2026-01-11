@@ -295,3 +295,75 @@ class ActorCriticListenerConvQuantization(nn.Module):
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1), vq_loss, encoding_indices
+
+
+class ActorCriticSpeakerDenseQuantized(nn.Module):
+    action_dim: Sequence[int]
+    image_dim: Sequence[int]
+    config: Dict
+
+    @nn.compact
+    def __call__(self, x):
+        # Get architecture from config with defaults
+        arch = self.config.get("SPEAKER_ARCH_QUANTIZATION_PARAMETERS", {})
+        embedding_dims = arch.get("embedding_dims", [128, 128, 128])
+        actor_dims = arch.get("actor_dims", [128])
+        critic_dims = arch.get("critic_dims", [128, 128])
+
+        # VQ parameters from config
+        vq_num_embeddings = arch.get("vq_num_embeddings", 512)
+        vq_embedding_dim = arch.get("vq_embedding_dim", 64)
+        vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
+        
+        x = x.reshape((-1, self.image_dim**2))
+        
+        # Embedding
+        embedding = x
+        for dim in embedding_dims:
+            embedding = nn.Dense(dim)(embedding)
+            embedding = nn.relu(embedding)
+
+        # Quantization
+        # Project to VQ embedding dimension if needed
+        if x.shape[-1] != vq_embedding_dim:
+            x = nn.Dense(features=vq_embedding_dim)(x)
+        
+        x, vq_loss, encoding_indices = VectorQuantizer()(
+            x,
+            num_embeddings=vq_num_embeddings,
+            embedding_dim=vq_embedding_dim,
+            commitment_cost=vq_commitment_cost,
+        )
+
+        # Actor
+        actor_mean = embedding
+        for dim in actor_dims:
+            actor_mean = nn.Dense(dim)(actor_mean)
+            actor_mean = nn.relu(actor_mean)
+
+        # squeeze to action space
+        actor_mean = nn.Dense(self.action_dim)(actor_mean)
+        actor_mean = nn.softmax(actor_mean)
+        pi = distrax.Categorical(probs=actor_mean)
+
+        # Critic
+        critic = embedding
+        for dim in critic_dims:
+            critic = nn.Dense(dim)(critic)
+            critic = nn.relu(critic)
+        critic = nn.Dense(1)(critic)
+
+        return pi, jnp.squeeze(critic, axis=-1), vq_loss, encoding_indices
+
+SPEAKER_ARCH_QUANTIZATION_PARAMETERS = {
+    "speaker-quantize-0": {
+        "SPEAKER_ARCH_QUANTIZATION_PARAMETERS": {
+            "embedding_dims": [64, 64, 64],
+            "actor_dims": [64],
+            "critic_dims": [64, 64],
+            "vq_num_embeddings": 4,
+            "vq_embedding_dim": 64,
+            "vq_commitment_cost": 0.25
+        }
+    },
+}

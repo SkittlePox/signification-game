@@ -1227,4 +1227,32 @@ SPEAKER_ARCH_ABLATION_PARAMETERS = {
             "critic_dims": [8, 8]
         }
     },
+    "splines-ablate-micro-A-11": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [4],
+            "critic_dims": [8, 8]
+        }
+    },
+    "splines-ablate-micro-A-12": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2],
+            "critic_dims": [8, 8]
+        }
+    },
+    "splines-ablate-micro-A-13": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 2,
+            "embedding_dims": [2],
+            "critic_dims": [8, 8]
+        }
+    },
+    "splines-ablate-micro-A-14": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [4],
+            "critic_dims": [32, 32]
+        }
+    },
 }
