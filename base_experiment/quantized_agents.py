@@ -528,7 +528,11 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         actor_mean_dense = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))
         actor_scale_diag_dense = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))
 
-        # Get action parameters spline by spline and quantize
+        # Create the vq layer and dense adapter if needed
+        vq_layer = VectorQuantizer()
+        vq_adapter = nn.Dense(features=vq_embedding_dim)
+
+        # Get action parameters spline by spline
         def decode_spline(_x):
             actor_mean_i = actor_mean_dense(_x)
             actor_mean_i = nn.sigmoid(actor_mean_i)  # Apply sigmoid to squash outputs between 0 and 1
@@ -543,8 +547,12 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         carry = initial_carry
         actor_means = []
         actor_scale_diags = []
+        total_vq_loss = 0.0
+        encoding_indices = []
 
         for i in range(self.num_splines):
+            ### Decide whether to mess with the carry
+
             # Option A: Use position encoding as input
             # position = jnp.full((z.shape[0], 1), i / self.num_splines)
             # inputs = jnp.concatenate([z, position], axis=-1)
@@ -564,7 +572,23 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
             
             carry, _ = cell(carry, inputs)
 
-            ####
+
+            ### Optional Quantization
+            
+            if self.use_vq:
+                # Project to VQ embedding dimension if needed
+                if carry.shape[-1] != vq_embedding_dim:
+                    carry = vq_adapter(carry)
+                
+                carry, vq_i_loss, encoding_i_indices = vq_layer(
+                    carry,
+                    num_embeddings=vq_num_embeddings,
+                    embedding_dim=vq_embedding_dim,
+                    commitment_cost=vq_commitment_cost,
+                )
+
+                total_vq_loss += vq_i_loss
+                encoding_indices.append(encoding_i_indices)
 
             actor_mean_i, scale_diag_i = decode_spline(carry)
             actor_means.append(actor_mean_i)
@@ -584,7 +608,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
 
         critic = nn.Dense(1)(critic)
 
-        return pi, jnp.squeeze(critic, axis=-1)
+        return pi, jnp.squeeze(critic, axis=-1), total_vq_loss, encoding_indices
 
 SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
     "splines-rnn-quantized-A9-0": {
@@ -671,4 +695,53 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "use_vq": False
         }
     },
+    "splines-rnn-quantized-C-0": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 128,
+            "vq_embedding_dim": 2,
+            "vq_commitment_cost": 0.15,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-C-1": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 32,
+            "vq_embedding_dim": 2,
+            "vq_commitment_cost": 0.15,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-C-2": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 8,
+            "vq_embedding_dim": 2,
+            "vq_commitment_cost": 0.15,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-C-3": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 4,
+            "vq_embedding_dim": 2,
+            "vq_commitment_cost": 0.15,
+            "use_vq": True
+        }
+    },
+    
 }
