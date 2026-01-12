@@ -512,7 +512,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         rnn_hidden_dim = arch.get("rnn_hidden_dim", 16)
 
         # VQ parameters from config
-        vq_num_embeddings = arch.get("vq_num_embeddings", 512)
+        vq_num_embeddings = arch.get("vq_num_embeddings", 64)
         vq_embedding_dim = arch.get("vq_embedding_dim", 64)
         vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
         use_vq = arch.get("use_vq", False)
@@ -529,7 +529,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         actor_scale_diag_dense = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))
 
         # Create the vq layer and dense adapter if needed
-        vq_layer = VectorQuantizer()
+        vq_layer = VectorQuantizer(vq_num_embeddings, vq_embedding_dim, vq_commitment_cost)
         vq_adapter = nn.Dense(features=vq_embedding_dim)
 
         # Get action parameters spline by spline
