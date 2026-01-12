@@ -575,7 +575,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
 
             ### Optional Quantization
             
-            if self.use_vq:
+            if use_vq:
                 # Project to VQ embedding dimension if needed
                 if carry.shape[-1] != vq_embedding_dim:
                     carry = vq_adapter(carry)
