@@ -10,10 +10,12 @@ from typing import Sequence, Tuple, Dict
 
 class VectorQuantizer(nn.Module):
     """Vector Quantization layer."""
+    num_embeddings: int = 64
+    embedding_dim: int = 64
+    commitment_cost: float = 0.25
     
     @nn.compact
-    def __call__(self, inputs, num_embeddings: int = 64, embedding_dim: int = 64, 
-                 commitment_cost: float = 0.25):
+    def __call__(self, inputs):
         # inputs shape: (batch, height, width, channels)
         
         embedding = self.param(
@@ -21,12 +23,12 @@ class VectorQuantizer(nn.Module):
             nn.initializers.variance_scaling(
                 scale=1.0, mode='fan_in', distribution='uniform'
             ),
-            (num_embeddings, embedding_dim)
+            (self.num_embeddings, self.embedding_dim)
         )
         
         # Flatten spatial dimensions
         input_shape = inputs.shape
-        flat_inputs = jnp.reshape(inputs, (-1, embedding_dim))
+        flat_inputs = jnp.reshape(inputs, (-1, self.embedding_dim))
         
         # Calculate distances to codebook entries
         distances = (
@@ -37,7 +39,7 @@ class VectorQuantizer(nn.Module):
         
         # Find nearest codebook entry
         encoding_indices = jnp.argmin(distances, axis=1)
-        encodings = jax.nn.one_hot(encoding_indices, num_embeddings)
+        encodings = jax.nn.one_hot(encoding_indices, self.num_embeddings)
         
         # Quantize
         quantized = jnp.matmul(encodings, embedding)
@@ -49,7 +51,7 @@ class VectorQuantizer(nn.Module):
         # Calculate VQ loss (only used during training)
         e_latent_loss = jnp.mean((jax.lax.stop_gradient(quantized) - inputs) ** 2)
         q_latent_loss = jnp.mean((quantized - jax.lax.stop_gradient(inputs)) ** 2)
-        vq_loss = q_latent_loss + commitment_cost * e_latent_loss
+        vq_loss = q_latent_loss + self.commitment_cost * e_latent_loss
 
         # if not deterministic:
         #     e_latent_loss = jnp.mean((jax.lax.stop_gradient(quantized) - inputs) ** 2)
@@ -97,12 +99,11 @@ class ActorCriticListenerConvAblationQuantizeReady(nn.Module):
                 if x.shape[-1] != vq_embedding_dim:
                     x = nn.Dense(features=vq_embedding_dim)(x)
                 
-                x, vq_loss, encoding_indices = VectorQuantizer()(
-                    x,
+                x, vq_loss, encoding_indices = VectorQuantizer(
                     num_embeddings=vq_num_embeddings,
                     embedding_dim=vq_embedding_dim,
                     commitment_cost=vq_commitment_cost,
-                )
+                )(x)
         
         # VQ after all conv layers (if vq_after_layer == -1 or >= len(conv_features))
         if use_vq and (vq_after_layer == -1 or vq_after_layer >= len(conv_features)):
@@ -110,12 +111,11 @@ class ActorCriticListenerConvAblationQuantizeReady(nn.Module):
             if x.shape[-1] != vq_embedding_dim:
                 x = nn.Dense(features=vq_embedding_dim)(x)
             
-            x, vq_loss, encoding_indices = VectorQuantizer()(
-                x,
+            x, vq_loss, encoding_indices = VectorQuantizer(
                 num_embeddings=vq_num_embeddings,
                 embedding_dim=vq_embedding_dim,
                 commitment_cost=vq_commitment_cost,
-            )
+            )(x)
         
         x = x.reshape((x.shape[0], -1))
         
@@ -252,12 +252,11 @@ class ActorCriticListenerConvQuantization(nn.Module):
                 if x.shape[-1] != vq_embedding_dim:
                     x = nn.Dense(features=vq_embedding_dim)(x)
                 
-                x, vq_loss, encoding_indices = VectorQuantizer()(
-                    x,
+                x, vq_loss, encoding_indices = VectorQuantizer(
                     num_embeddings=vq_num_embeddings,
                     embedding_dim=vq_embedding_dim,
                     commitment_cost=vq_commitment_cost,
-                )
+                )(x)
         
         # VQ after all conv layers (if vq_after_layer == -1 or >= len(conv_features))
         if use_vq and (vq_after_layer == -1 or vq_after_layer >= len(conv_features)):
@@ -265,12 +264,11 @@ class ActorCriticListenerConvQuantization(nn.Module):
             if x.shape[-1] != vq_embedding_dim:
                 x = nn.Dense(features=vq_embedding_dim)(x)
             
-            x, vq_loss, encoding_indices = VectorQuantizer()(
-                x,
+            x, vq_loss, encoding_indices = VectorQuantizer(
                 num_embeddings=vq_num_embeddings,
                 embedding_dim=vq_embedding_dim,
                 commitment_cost=vq_commitment_cost,
-            )
+            )(x)
         
         x = x.reshape((x.shape[0], -1))
         
@@ -326,12 +324,10 @@ class ActorCriticSpeakerDenseQuantized(nn.Module):
         if z.shape[-1] != vq_embedding_dim:
             z = nn.Dense(features=vq_embedding_dim)(z)
         
-        z, vq_loss, encoding_indices = VectorQuantizer()(
-            z,
+        z, vq_loss, encoding_indices = VectorQuantizer(
             num_embeddings=vq_num_embeddings,
             embedding_dim=vq_embedding_dim,
-            commitment_cost=vq_commitment_cost,
-        )
+            commitment_cost=vq_commitment_cost,)(z)
 
         # Actor Mean
         actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)
@@ -426,6 +422,7 @@ class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
         vq_num_embeddings = arch.get("vq_num_embeddings", 512)
         vq_embedding_dim = arch.get("vq_embedding_dim", 64)
         vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
+        use_vq = arch.get("use_vq", False)
 
         y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
         z = y
@@ -433,23 +430,12 @@ class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
             z = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(z)
             z = nn.relu(z)
 
+        # Create the vq layer and dense adapter if needed
+        vq_layer = VectorQuantizer(num_embeddings=vq_num_embeddings, embedding_dim=vq_embedding_dim, commitment_cost=vq_commitment_cost,)
+        vq_adapter = nn.Dense(features=vq_embedding_dim)
+
         # Get action parameters spline by spline and quantize
         def decode_spline(_x):
-
-            # Quantization
-            # Project to VQ embedding dimension if needed
-            # if z.shape[-1] != vq_embedding_dim:
-            #     z = nn.Dense(features=vq_embedding_dim)(z)
-
-            # vq_layer = VectorQuantizer()
-            
-            # z, vq1_loss, encoding1_indices = vq_layer(
-            #     z,
-            #     num_embeddings=vq_num_embeddings,
-            #     embedding_dim=vq_embedding_dim,
-            #     commitment_cost=vq_commitment_cost,
-            # )
-
             actor_mean_i = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(_x)
             actor_mean_i = nn.sigmoid(actor_mean_i)  # Apply sigmoid to squash outputs between 0 and 1
 
@@ -461,6 +447,7 @@ class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
         actor_means = []
         actor_scale_diags = []
 
+        # NOTE: I'm pretty sure this is basically useless since it's decoding the same value for each spline. This was a practice agent
         for _ in range(self.num_splines):
             actor_mean_i, scale_diag_i = decode_spline(z)
             actor_means.append(actor_mean_i)
@@ -490,7 +477,8 @@ SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS = {
             "critic_dims": [8, 8],
             "vq_num_embeddings": 16,
             "vq_embedding_dim": 16,
-            "vq_commitment_cost": 0.25
+            "vq_commitment_cost": 0.25,
+            "use_vq": False
         }
     },
 }
@@ -529,7 +517,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         actor_scale_diag_dense = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))
 
         # Create the vq layer and dense adapter if needed
-        vq_layer = VectorQuantizer(vq_num_embeddings, vq_embedding_dim, vq_commitment_cost)
+        vq_layer = VectorQuantizer(num_embeddings=vq_num_embeddings, embedding_dim=vq_embedding_dim, commitment_cost=vq_commitment_cost,)
         vq_adapter = nn.Dense(features=vq_embedding_dim)
 
         # Get action parameters spline by spline
@@ -572,21 +560,13 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
             
             carry, _ = cell(carry, inputs)
 
-
             ### Optional Quantization
-            
             if use_vq:
                 # Project to VQ embedding dimension if needed
                 if carry.shape[-1] != vq_embedding_dim:
                     carry = vq_adapter(carry)
                 
-                carry, vq_i_loss, encoding_i_indices = vq_layer(
-                    carry,
-                    num_embeddings=vq_num_embeddings,
-                    embedding_dim=vq_embedding_dim,
-                    commitment_cost=vq_commitment_cost,
-                )
-
+                carry, vq_i_loss, encoding_i_indices = vq_layer(carry)
                 total_vq_loss += vq_i_loss
                 encoding_indices.append(encoding_i_indices)
 
