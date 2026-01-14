@@ -235,7 +235,7 @@ def initialize_listener(env, rng, config, i):
     elif config["LISTENER_ARCH"] == 'dense-batchnorm':
         listener_network = ActorCriticListenerDenseBatchnorm(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
     elif config["LISTENER_ARCH"].startswith("conv-ablate-"):
-        config["LISTENER_ARCH_ABLATION_PARAMS"] = LISTENER_ARCH_ABLATION_PARAMETERS[config["LISTENER_ARCH"]]
+        config["LISTENER_ARCH_ABLATION_PARAMS"] = LISTENER_ARCH_ABLATION_PARAMETERS[config["LISTENER_ARCH"]]["LISTENER_ARCH_ABLATION_PARAMS"]
         listener_network = ActorCriticListenerConvAblationReady(action_dim=config["ENV_KWARGS"]["num_classes"], image_dim=config["ENV_KWARGS"]["image_dim"], config=config)
 
     elif config["LISTENER_ARCH"].startswith("conv-quantize-"):

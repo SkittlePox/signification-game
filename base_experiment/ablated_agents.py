@@ -661,12 +661,12 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
     },
     "conv-ablate-1conv-1": {
         "LISTENER_ARCH_ABLATION_PARAMS": {
-            "conv_features": [16],
-            "conv_kernels": [5],
-            "conv_strides": [1],
-            "embedding_dims": [16],
-            "actor_hidden": 16,
-            "critic_hidden": [16, 16]
+            # "conv_features": [16],
+            # "conv_kernels": [5],
+            # "conv_strides": [1],
+            # "embedding_dims": [16],
+            # "actor_hidden": 16,
+            # "critic_hidden": [16, 16]
         }
     },
     "conv-ablate-1conv-2": {
