@@ -23,6 +23,7 @@ echo $LD_LIBRARY_PATH
 
 export HYDRA_FULL_ERROR=1
 # export JAX_DEBUG_NANS=True
+export NVIDIA_TF32_OVERRIDE=0
 
 export WANDB_DIR=/oscar/data/gdk/bspiegel/signification-game-wandb/
 
