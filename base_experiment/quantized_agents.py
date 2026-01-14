@@ -681,9 +681,9 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "embedding_dims": [2, 2],
             "critic_dims": [8, 8],
             "rnn_hidden_dim": 2,
-            "vq_num_embeddings": 128,
+            "vq_num_embeddings": 32,
             "vq_embedding_dim": 2,
-            "vq_commitment_cost": 0.15,
+            "vq_commitment_cost": 0.25,
             "use_vq": True
         }
     },
@@ -693,9 +693,9 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "embedding_dims": [2, 2],
             "critic_dims": [8, 8],
             "rnn_hidden_dim": 2,
-            "vq_num_embeddings": 32,
+            "vq_num_embeddings": 8,
             "vq_embedding_dim": 2,
-            "vq_commitment_cost": 0.15,
+            "vq_commitment_cost": 0.25,
             "use_vq": True
         }
     },
@@ -705,9 +705,9 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "embedding_dims": [2, 2],
             "critic_dims": [8, 8],
             "rnn_hidden_dim": 2,
-            "vq_num_embeddings": 8,
+            "vq_num_embeddings": 2,
             "vq_embedding_dim": 2,
-            "vq_commitment_cost": 0.15,
+            "vq_commitment_cost": 0.25,
             "use_vq": True
         }
     },
@@ -717,9 +717,33 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "embedding_dims": [2, 2],
             "critic_dims": [8, 8],
             "rnn_hidden_dim": 2,
-            "vq_num_embeddings": 4,
+            "vq_num_embeddings": 34,
             "vq_embedding_dim": 2,
-            "vq_commitment_cost": 0.15,
+            "vq_commitment_cost": 0.1,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-C-4": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 8,
+            "vq_embedding_dim": 8,
+            "vq_commitment_cost": 0.1,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-C-5": {
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 4,
+            "embedding_dims": [2, 2],
+            "critic_dims": [8, 8],
+            "rnn_hidden_dim": 2,
+            "vq_num_embeddings": 2,
+            "vq_embedding_dim": 8,
+            "vq_commitment_cost": 0.1,
             "use_vq": True
         }
     },
