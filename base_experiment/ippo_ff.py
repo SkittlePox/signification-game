@@ -319,16 +319,16 @@ def initialize_speaker(env, rng, config, i):
     elif config["SPEAKER_ARCH"] == 'splinesnoise':
         speaker_network = ActorCriticSpeakerSplinesNoise(latent_dim=config["SPEAKER_LATENT_DIM"], num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], noise_dim=config["SPEAKER_NOISE_LATENT_DIM"], noise_stddev=config["SPEAKER_NOISE_LATENT_STDDEV"], config=config)
     elif config["SPEAKER_ARCH"].startswith("splines-ablate-"):
-        config["SPEAKER_ARCH_ABLATION_PARAMS"] = SPEAKER_ARCH_ABLATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        config["SPEAKER_ARCH_ABLATION_PARAMS"] = SPEAKER_ARCH_ABLATION_PARAMETERS[config["SPEAKER_ARCH"]]["SPEAKER_ARCH_ABLATION_PARAMETERS"]
         speaker_network = ActorCriticSpeakerSplinesAblationReady(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"].startswith("splines-quantized-"):
-        config["SPEAKER_ARCH_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        config["SPEAKER_ARCH_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]["SPEAKER_ARCH_QUANTIZATION_PARAMETERS"]
         speaker_network = ActorCriticSpeakerDenseQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, action_dim=config["ENV_KWARGS"]["speaker_action_dim"], config=config)
     elif config["SPEAKER_ARCH"].startswith("splines-perspline-quantized-"):
-        config["SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        config["SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]["SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS"]
         speaker_network = ActorCriticSpeakerDensePerSplineQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, num_splines=config["NUM_SPLINES_PER_SIGN"], spline_action_dim=config["SPEAKER_SPLINE_PARAM_SIZE"], config=config)
     elif config["SPEAKER_ARCH"].startswith("splines-rnn-quantized-"):
-        config["SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]
+        config["SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS[config["SPEAKER_ARCH"]]['SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS']
         speaker_network = ActorCriticSpeakerRNNQuantized(num_classes=config["ENV_KWARGS"]["num_classes"]+1, num_splines=config["NUM_SPLINES_PER_SIGN"], spline_action_dim=config["SPEAKER_SPLINE_PARAM_SIZE"], config=config)
 
     rng, p_rng, d_rng, n_rng = jax.random.split(rng, 4)

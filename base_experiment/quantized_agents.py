@@ -10,9 +10,9 @@ from typing import Sequence, Tuple, Dict
 
 class VectorQuantizer(nn.Module):
     """Vector Quantization layer."""
-    num_embeddings: int = 64
-    embedding_dim: int = 64
-    commitment_cost: float = 0.25
+    num_embeddings: int
+    embedding_dim: int
+    commitment_cost: float
     
     @nn.compact
     def __call__(self, inputs):
