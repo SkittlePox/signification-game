@@ -1149,7 +1149,7 @@ def update_minibatch_listener(runner_state, listener_apply_fn, listener_optimize
 
     return runner_state, total_loss
 
-def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_tx, clip_eps, l2_reg_coef_speaker, vf_coef, ent_coef_speaker):
+def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_tx, clip_eps, l2_reg_coef_speaker, vf_coef, ent_coef_speaker, vq_coef):
     __rng, trans_batch_i, advantages_i, targets_i, speaker_params_i, speaker_opt_state_i = runner_state
 
     def _loss_fn(params, _obs, _actions, values, log_probs, log_q, advantages, targets, alive):
@@ -1158,7 +1158,6 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         speaker_outputs = speaker_apply_fn(params, _obs, rngs={'dropout': dropout_key, 'noise': noise_key})
         _i_policy, _i_value = speaker_outputs[0], speaker_outputs[1]
         vq_loss = speaker_outputs[2] if len(speaker_outputs) > 2 else 0.0
-        vq_coef = 0.25
         # _i_log_prob = jnp.sum(_i_policy.log_prob(_actions), axis=1) # Sum log-probs for individual pixels to get log-probs of whole image
         _i_log_prob = jnp.clip(_i_policy.log_prob(_actions), -1e8, 1e8)
         log_probs = jnp.clip(log_probs, -1e8, 1e8)
@@ -1205,7 +1204,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
                 + l2_penalty
                 + vq_coef * vq_loss
         )
-        return total_loss, (value_loss, loss_actor, entropy)
+        return total_loss, (value_loss, loss_actor, entropy, vq_loss)
     
     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True, allow_int=False)
 
@@ -1263,16 +1262,19 @@ def wandb_callback(metrics):
     metric_dict.update({"env/speaker_tom_com_ratio": speaker_tom_com_ratio})
     metric_dict.update({"env/speaker_tom_n_search": tom_speaker_n_search})
 
-    speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy) = speaker_loss_for_logging
+    speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy, speaker_vq_loss) = speaker_loss_for_logging
     metric_dict.update({f"loss/total loss/speaker {i}": speaker_loss_total[i] for i in range(len(speaker_loss_total))})
     metric_dict.update({f"loss/value loss/speaker {i}": speaker_loss_value[i] for i in range(len(speaker_loss_value))})
     metric_dict.update({f"loss/actor loss/speaker {i}": speaker_loss_actor[i] for i in range(len(speaker_loss_actor))})
     metric_dict.update({f"loss/entropy/speaker {i}": speaker_entropy[i] for i in range(len(speaker_entropy))})
+    metric_dict.update({f"loss/vq loss/speaker {i}": speaker_vq_loss[i] for i in range(len(speaker_vq_loss))})
+    
     
     metric_dict.update({"loss averages/total loss speakers": jnp.mean(speaker_loss_total).item()})
     metric_dict.update({"loss averages/value loss speakers": jnp.mean(speaker_loss_value).item()})
     metric_dict.update({"loss averages/actor loss speakers": jnp.mean(speaker_loss_actor).item()})
     metric_dict.update({"loss averages/entropy speakers": jnp.mean(speaker_entropy).item()})
+    metric_dict.update({"loss averages/vq loss speakers": jnp.mean(speaker_vq_loss).item()})
 
     listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy) = listener_loss_for_logging
     metric_dict.update({f"loss/total loss/listener {i}": listener_loss_total[i] for i in range(len(listener_loss_total))})
@@ -1916,7 +1918,7 @@ def make_train(config):
             carry_state = (_rng, speaker_params_i, speaker_opt_state_i)
             step_data = (trans_batch_for_speaker_i, advantages_for_speaker_i, targets_for_speaker_i)
             
-            partial_update_speaker = partial(update_minibatch_speaker, speaker_apply_fn=speaker_apply_fn, speaker_optimizer_tx=speaker_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_speaker=config["L2_REG_COEF_SPEAKER"], vf_coef=config["VF_COEF"], ent_coef_speaker=config["ENT_COEF_SPEAKER"])
+            partial_update_speaker = partial(update_minibatch_speaker, speaker_apply_fn=speaker_apply_fn, speaker_optimizer_tx=speaker_optimizer_tx, clip_eps=config["CLIP_EPS"], l2_reg_coef_speaker=config["L2_REG_COEF_SPEAKER"], vf_coef=config["VF_COEF"], ent_coef_speaker=config["ENT_COEF_SPEAKER"], vq_coef=config["VQ_COEF_SPEAKER"])
             
             def scan_step(carry, step_input):
                 _rng, speaker_params_i, speaker_opt_state_i = carry
@@ -2084,10 +2086,10 @@ def make_train(config):
                                                   lambda _: ((batched_listener_params, batched_listener_opt_states), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches))))), None)
             final_speaker_outputs = jax.lax.cond(train_speaker,
                                                  lambda _: vmap_update_speaker(update_speaker_rngs, speaker_transition_batch, speaker_advantages, speaker_targets, batched_speaker_params, batched_speaker_opt_states),
-                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches))))), None)
+                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches))))), None)
             ## Unpack the outputs
             (final_listener_params, final_listener_opt_states), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)) = final_listener_outputs
-            (final_speaker_params, final_speaker_opt_states), (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy)) = final_speaker_outputs
+            (final_speaker_params, final_speaker_opt_states), (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy, speaker_vq_loss)) = final_speaker_outputs
             ########################################################
 
             ## Update the runner_state for the next scan loop
@@ -2098,7 +2100,7 @@ def make_train(config):
             #######################  BELOW  ########################
             ########################################################
 
-            speaker_loss_for_logging = jax.tree.map(lambda x: jnp.mean(x, axis=1), (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy)))
+            speaker_loss_for_logging = jax.tree.map(lambda x: jnp.mean(x, axis=1), (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy, speaker_vq_loss)))
             listener_loss_for_logging = jax.tree.map(lambda x: jnp.mean(x, axis=1), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)))
             
             ## Collect speaker examples            

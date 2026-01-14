@@ -498,6 +498,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         embedding_dims = arch.get("embedding_dims", [128, 128, 128])
         critic_dims = arch.get("critic_dims", [128, 128, 32])
         rnn_hidden_dim = arch.get("rnn_hidden_dim", 16)
+        use_pos_encs = arch.get("use_pos_encs", False)
 
         # VQ parameters from config
         vq_num_embeddings = arch.get("vq_num_embeddings", 64)
@@ -519,6 +520,9 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         # Create the vq layer and dense adapter if needed
         vq_layer = VectorQuantizer(num_embeddings=vq_num_embeddings, embedding_dim=vq_embedding_dim, commitment_cost=vq_commitment_cost,)
         vq_adapter = nn.Dense(features=vq_embedding_dim)
+
+        # Create a positional encoding dense adapter if needed
+        pos_enc_adapter = nn.Dense(features=rnn_hidden_dim)
 
         # Get action parameters spline by spline
         def decode_spline(_x):
@@ -542,9 +546,10 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
             ### Decide whether to mess with the carry
 
             # Option A: Use position encoding as input
-            # position = jnp.full((z.shape[0], 1), i / self.num_splines)
-            # inputs = jnp.concatenate([z, position], axis=-1)
-            # inputs = nn.Dense(rnn_hidden_dim, name=f'input_proj_{i}')(inputs)
+            if use_pos_encs:
+                position = jnp.full((z.shape[0], 1), i / self.num_splines)
+                inputs = jnp.concatenate([z, position], axis=-1)
+                inputs = pos_enc_adapter(inputs)
             
             # Option B: Use previous output as input (uncomment if preferred)
             # if i == 0:
@@ -554,9 +559,10 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
             
             # Option C: No input, just evolve the hidden state
             # inputs = jnp.zeros((batch_size, hidden_dim))
-
+            
             # Option D: just use z
-            inputs = z
+            else:
+                inputs = z
             
             carry, _ = cell(carry, inputs)
 
@@ -871,6 +877,16 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "vq_embedding_dim": 16,
             "vq_commitment_cost": 0.25,
             "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-A0P-1": {     # Base is micro-A-3, with positional encodings
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 16],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "use_vq": False,
+            "use_pos_encs": True
         }
     },
 }
