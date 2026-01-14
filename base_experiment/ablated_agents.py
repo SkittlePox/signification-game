@@ -1255,4 +1255,12 @@ SPEAKER_ARCH_ABLATION_PARAMETERS = {
             "critic_dims": [32, 32]
         }
     },
+    "splines-ablate-micro-AA-0": {  # Same as micro-A-0
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 8],
+            "critic_dims": [16, 16]
+        }
+    },
+    
 }
