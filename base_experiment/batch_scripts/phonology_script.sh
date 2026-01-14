@@ -9,9 +9,10 @@
 #SBATCH --mem=12GB
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
-#SBATCH -C quadrortx
+##SBATCH -C quadrortx
+#SBATCH -C ampere
 
-#SBATCH --array=0-2
+#SBATCH --array=0-7
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
@@ -23,7 +24,7 @@ echo $LD_LIBRARY_PATH
 
 export HYDRA_FULL_ERROR=1
 # export JAX_DEBUG_NANS=True
-export NVIDIA_TF32_OVERRIDE=0
+# export NVIDIA_TF32_OVERRIDE=0
 
 export WANDB_DIR=/oscar/data/gdk/bspiegel/signification-game-wandb/
 
@@ -221,7 +222,7 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 
 ## Sweep over weight initializations and rnn archs *with* quantization
-# python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines rnn speaker quantized" PROJECT="phonology-study" WANDB_TAGS="[rnn_quantized, 1conv]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-1conv-1" SPEAKER_ARCH="splines-rnn-quantized-C-$((SLURM_ARRAY_TASK_ID))" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="2e-5" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=5e-5 SPEAKER_SQUISH=0.2 SPEAKER_STDDEV=1.0 PRETRAINED_LISTENERS=agents-cifar10b-fine-snow-668-250e-5000dp-9ed3
+python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines rnn speaker quantized" PROJECT="phonology-study" WANDB_TAGS="[rnn_quantized, 1conv]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-1conv-1" SPEAKER_ARCH="splines-rnn-quantized-C-$((SLURM_ARRAY_TASK_ID))" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="2e-5" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=5e-5 SPEAKER_SQUISH=0.2 SPEAKER_STDDEV=1.0 PRETRAINED_LISTENERS=agents-cifar10b-fine-snow-668-250e-5000dp-9ed3
 # python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines rnn speaker quantized" PROJECT="phonology-study" WANDB_TAGS="[rnn_quantized, 1conv]" +dataset=cifar10b ENV_KWARGS.channel_ratio_fn="1.0" ENV_KWARGS.speaker_action_dim=21 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="on" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-1conv-1" SPEAKER_ARCH="splines-rnn-quantized-C-$((SLURM_ARRAY_TASK_ID))" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="2e-5" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=5e-5 SPEAKER_SQUISH=0.3 SPEAKER_STDDEV=0.7 PRETRAINED_LISTENERS=agents-cifar10b-fine-snow-668-250e-5000dp-9ed3
 
 
