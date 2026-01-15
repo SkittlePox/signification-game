@@ -13,6 +13,7 @@ class VectorQuantizer(nn.Module):
     num_embeddings: int
     embedding_dim: int
     commitment_cost: float
+    straight_through_estimator: bool = True
     
     @nn.compact
     def __call__(self, inputs):
@@ -44,9 +45,15 @@ class VectorQuantizer(nn.Module):
         # Quantize
         quantized = jnp.matmul(encodings, embedding)
         quantized = jnp.reshape(quantized, input_shape)
-        
-        # Straight-through estimator for gradient flow
-        quantized = inputs + jax.lax.stop_gradient(quantized - inputs)
+
+        if self.straight_through_estimator:
+            # Straight-through estimator for gradient flow
+            quantized = inputs + jax.lax.stop_gradient(quantized - inputs)
+            # Encoder gets gradients as if no quantization happened
+        else:
+            # Without STE
+            quantized = jax.lax.stop_gradient(quantized)
+            # Encoder only gets gradients from commitment loss
         
         # Calculate VQ loss (only used during training)
         e_latent_loss = jnp.mean((jax.lax.stop_gradient(quantized) - inputs) ** 2)
@@ -505,6 +512,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         vq_embedding_dim = arch.get("vq_embedding_dim", 64)
         vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
         use_vq = arch.get("use_vq", False)
+        straight_through_estimator = arch.get("straight_through_estimator", True)
 
         y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
         z = y
@@ -518,7 +526,7 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         actor_scale_diag_dense = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))
 
         # Create the vq layer and dense adapter if needed
-        vq_layer = VectorQuantizer(num_embeddings=vq_num_embeddings, embedding_dim=vq_embedding_dim, commitment_cost=vq_commitment_cost,)
+        vq_layer = VectorQuantizer(num_embeddings=vq_num_embeddings, embedding_dim=vq_embedding_dim, commitment_cost=vq_commitment_cost, straight_through_estimator=straight_through_estimator)
         vq_adapter = nn.Dense(features=vq_embedding_dim)
 
         # Create a positional encoding dense adapter if needed
@@ -879,6 +887,64 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "use_vq": True
         }
     },
+    "splines-rnn-quantized-A3Q-7": {     # Base is micro-A-3, quantized. has different commitment cost
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 16],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "vq_num_embeddings": 64,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.05,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-A3Q-8": {     # Base is micro-A-3, quantized. has different commitment cost
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 16],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "vq_num_embeddings": 64,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.01,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-A3Q-9": {     # Base is micro-A-3, quantized. has different commitment cost
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 16],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "vq_num_embeddings": 64,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 1.0,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-A3Q-10": {     # Base is micro-A-3, quantized. has different commitment cost
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 16],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "vq_num_embeddings": 64,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 3.0,
+            "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-A0P-0": {     # Base is micro-A-3, with positional encodings
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 8],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 8,
+            "use_vq": False,
+            "use_pos_encs": True
+        }
+    },
     "splines-rnn-quantized-A0P-1": {     # Base is micro-A-3, with positional encodings
         "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
             "embedding_latent_dim": 32,
@@ -887,6 +953,19 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "rnn_hidden_dim": 16,
             "use_vq": False,
             "use_pos_encs": True
+        }
+    },
+    "splines-rnn-quantized-A3Q-NoSTE-0": {     # Base is micro-A-3, quantized
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 16],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "vq_num_embeddings": 32,
+            "vq_embedding_dim": 16,
+            "vq_commitment_cost": 0.25,
+            "use_vq": True,
+            "straight_through_estimator": False
         }
     },
 }
