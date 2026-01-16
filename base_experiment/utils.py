@@ -771,7 +771,7 @@ def get_speaker_action_transform(fn_name, image_dim):
     
     @jax.vmap
     def paint_multiple_splines_with_intensity_by_phone(all_spline_params: jnp.array):
-        """Paint multiple splines on a single canvas. Requires speaker_action_dim be a multiple of 7."""
+        """Paint multiple splines on a single canvas. Requires speaker_action_dim be a multiple of 7. This is for a heatmap"""
 
         @jax.vmap
         def paint_spline_on_canvas(spline_params: jnp.array):
@@ -818,6 +818,54 @@ def get_speaker_action_transform(fn_name, image_dim):
 
         return canvases
     
+    @jax.vmap
+    def paint_multiple_splines_by_phone(all_spline_params: jnp.array):
+        """Paint multiple splines on a single canvas. Requires speaker_action_dim be a multiple of 6. This is for a heatmap"""
+
+        @jax.vmap
+        def paint_spline_on_canvas(spline_params: jnp.array):
+            """Paint a single spline on the canvas with specified thickness using advanced indexing."""
+
+            def bezier_spline(t, P0, P1, P2):
+                """Compute points on a quadratic Bézier spline for a given t."""
+                t = t[:, None]  # Shape (N, 1) to broadcast with P0, P1, P2 of shape (2,)
+                P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
+                return P  # Returns shape (N, 2), a list of points on the spline
+
+            brush_size = 1
+
+            spline_params *= image_dim
+            
+            # P0, P1, P2 = spline_params.reshape((3, 2)) 
+            P0, P1, P2 = spline_params[0:2], spline_params[2:4], spline_params[4:6]
+            t_values = jnp.linspace(0, 1, num=50)
+            spline_points = bezier_spline(t_values, P0, P1, P2)
+            x_points, y_points = jnp.round(spline_points).astype(int).T
+
+            # Generate brush offsets
+            brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size + 1)    # brush_size + 1 for thicker splines. brush_size for normal thickness.
+                                                for dy in range(-brush_size, brush_size + 1)])  # brush_size + 1 for thicker splines. brush_size for normal thickness.
+            x_offsets, y_offsets = brush_offsets.T
+
+            # Calculate all indices to update for each point (broadcasting magic)
+            all_x_indices = x_points[:, None] + x_offsets
+            all_y_indices = y_points[:, None] + y_offsets
+
+            # Flatten indices and filter out-of-bound ones
+            all_x_indices = jnp.clip(all_x_indices.flatten(), 0, image_dim)
+            all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
+
+            # Update the canvas
+            canvas = jnp.zeros((image_dim, image_dim))
+            canvas = canvas.at[all_x_indices, all_y_indices].add(1)
+            return canvas
+
+        # Vmap over splines and sum contributions
+        all_spline_params = jnp.clip(all_spline_params, 0.0, 1.0)
+        canvases = jnp.clip(paint_spline_on_canvas(all_spline_params.reshape(-1, 6)), 0.0, 1.0)
+
+        return canvases
+
     @jax.vmap
     def paint_multiple_splines_relative(all_spline_params: jnp.array):
         """Paint multiple splines on a single canvas, with splines painted relative to their first coordinate. Requires speaker_action_dim be a multiple of 6."""
@@ -973,8 +1021,28 @@ def get_speaker_action_transform(fn_name, image_dim):
         return canvas
     
     @jax.vmap
-    def paint_multiple_splines_with_intensity_circle(all_spline_params: jnp.array):
-        """Paint multiple splines on a single canvas, bounded by a unit circle. Requires speaker_action_dim be a multiple of 7."""
+    def paint_multiple_splines_circle(all_spline_params: jnp.array):
+        """Paint multiple splines on a single canvas, bounded by a circle. Requires speaker_action_dim be a multiple of 6."""
+
+        # @jax.vmap
+        def constrain_to_unit_circle(points):
+            """
+            Constrain points to circle centered at (0.5, 0.5)
+            points: shape (..., 2) 
+            """
+            center=0.5
+            # Shift to origin
+            shifted = points - center
+            
+            # Compute distance from center
+            dist = jnp.linalg.norm(shifted, axis=-1, keepdims=True)
+            
+            # Scale down if outside unit circle (this is not the unit circle, it's radius is 0.5, not 1)
+            scale = jnp.minimum(1.0, 0.5 / (dist + 1e-8))
+            constrained = shifted * scale
+            
+            # Shift back
+            return constrained + center
 
         @jax.vmap
         def paint_spline_on_canvas(spline_params: jnp.array):
@@ -988,11 +1056,12 @@ def get_speaker_action_transform(fn_name, image_dim):
 
             brush_size = 1
 
-            spline_params *= image_dim
+            P0_pre = constrain_to_unit_circle(spline_params[0:2])
+            P1_pre = constrain_to_unit_circle(spline_params[2:4])
+            P2_pre = constrain_to_unit_circle(spline_params[4:6])
             
-            # P0, P1, P2 = spline_params.reshape((3, 2)) 
-            P0, P1, P2, W = spline_params[0:2], spline_params[2:4], spline_params[4:6], spline_params[6]
-            W *= -0.003  # This is the weight param. -0.005 is too dark. -0.002 may be too light.
+            P0, P1, P2 = P0_pre*image_dim, P1_pre*image_dim, P2_pre*image_dim
+            
             t_values = jnp.linspace(0, 1, num=50)
             spline_points = bezier_spline(t_values, P0, P1, P2)
             x_points, y_points = jnp.round(spline_points).astype(int).T
@@ -1012,17 +1081,87 @@ def get_speaker_action_transform(fn_name, image_dim):
 
             # Update the canvas
             canvas = jnp.zeros((image_dim, image_dim))
-            canvas = canvas.at[all_x_indices, all_y_indices].add(W)
+            canvas = canvas.at[all_x_indices, all_y_indices].add(1)
             return canvas
 
         background_shade = 0.3 # This is the background color!
         # For nearly all experiments it has been 0.2*number of splines. For a larger sig gap go for 0.1*number of splines.
 
         # Vmap over splines and sum contributions
-        xy = all_spline_params[..., :6].reshape(all_spline_params.shape[:-1] + (3, 2))
-        xy_constrained = xy / jnp.maximum(1.0, jnp.linalg.norm(xy, axis=-1, keepdims=True))
-        all_spline_params_circle = jnp.concatenate([xy_constrained.reshape(all_spline_params.shape[:-1] + (6,)), all_spline_params[..., 6:7]], axis=-1)
-        canvas = jnp.clip(paint_spline_on_canvas(all_spline_params_circle.reshape(-1, 7)).sum(axis=0) + background_shade, 0.0, 1.0)
+        canvas = jnp.clip(paint_spline_on_canvas(all_spline_params.reshape(-1, 6)).sum(axis=0) + background_shade, 0.0, 1.0)
+        return canvas
+    
+    @jax.vmap
+    def paint_multiple_splines_octagon(all_spline_params: jnp.array):
+        """Paint multiple splines on a single canvas, bounded by an octagon. Requires speaker_action_dim be a multiple of 6."""
+
+        # @jax.vmap
+        def constrain_to_octagon(points):
+            """
+            Constrain points to octagon centered at (0.5, 0.5)
+            points: shape (..., 2) 
+            """
+            points = jnp.clip(points, 0, 1)
+
+            center=0.5
+            # Shift to origin
+            shifted = points - center
+            
+            # Compute distance from center
+            dist = jnp.linalg.norm(shifted, axis=-1, keepdims=True)
+            
+            # Scale down if outside unit circle (this is not the unit circle, it's radius is 0.5, not 1)
+            scale = jnp.minimum(1.0, 0.5 / (dist + 1e-8))
+            constrained = shifted * scale
+            
+            # Shift back
+            return constrained + center
+
+        @jax.vmap
+        def paint_spline_on_canvas(spline_params: jnp.array):
+            """Paint a single spline on the canvas with specified thickness using advanced indexing."""
+
+            def bezier_spline(t, P0, P1, P2):
+                """Compute points on a quadratic Bézier spline for a given t."""
+                t = t[:, None]  # Shape (N, 1) to broadcast with P0, P1, P2 of shape (2,)
+                P = (1 - t)**2 * P0 + 2 * (1 - t) * t * P1 + t**2 * P2
+                return P  # Returns shape (N, 2), a list of points on the spline
+
+            brush_size = 1
+
+            P0_pre = constrain_to_octagon(spline_params[0:2])
+            P1_pre = constrain_to_octagon(spline_params[2:4])
+            P2_pre = constrain_to_octagon(spline_params[4:6])
+            
+            P0, P1, P2 = P0_pre*image_dim, P1_pre*image_dim, P2_pre*image_dim
+            
+            t_values = jnp.linspace(0, 1, num=50)
+            spline_points = bezier_spline(t_values, P0, P1, P2)
+            x_points, y_points = jnp.round(spline_points).astype(int).T
+
+            # Generate brush offsets
+            brush_offsets = jnp.array([(dx, dy) for dx in range(-brush_size, brush_size)    # brush_size + 1 for thicker splines. brush_size for normal thickness.
+                                                for dy in range(-brush_size, brush_size)])  # brush_size + 1 for thicker splines. brush_size for normal thickness.
+            x_offsets, y_offsets = brush_offsets.T
+
+            # Calculate all indices to update for each point (broadcasting magic)
+            all_x_indices = x_points[:, None] + x_offsets
+            all_y_indices = y_points[:, None] + y_offsets
+
+            # Flatten indices and filter out-of-bound ones
+            all_x_indices = jnp.clip(all_x_indices.flatten(), 0, image_dim)
+            all_y_indices = jnp.clip(all_y_indices.flatten(), 0, image_dim)
+
+            # Update the canvas
+            canvas = jnp.zeros((image_dim, image_dim))
+            canvas = canvas.at[all_x_indices, all_y_indices].add(1)
+            return canvas
+
+        background_shade = 0.3 # This is the background color!
+        # For nearly all experiments it has been 0.2*number of splines. For a larger sig gap go for 0.1*number of splines.
+
+        # Vmap over splines and sum contributions
+        canvas = jnp.clip(paint_spline_on_canvas(all_spline_params.reshape(-1, 6)).sum(axis=0) + background_shade, 0.0, 1.0)
         return canvas
 
     if fn_name == "identity":
@@ -1039,10 +1178,14 @@ def get_speaker_action_transform(fn_name, image_dim):
         return paint_multiple_splines
     elif fn_name == "splines_weight":
         return paint_multiple_splines_with_intensity
-    elif fn_name == "splines_weight_circle":
-        return paint_multiple_splines_with_intensity_circle
+    elif fn_name == "splines_circle":
+        return paint_multiple_splines_circle
+    elif fn_name == "splines_octagon":
+        return paint_multiple_splines_octagon
     elif fn_name == "splines_weight_by_phone":
         return paint_multiple_splines_with_intensity_by_phone
+    elif fn_name == "splines_by_phone":
+        return paint_multiple_splines_by_phone
     elif fn_name == "splines_relative":
         return paint_multiple_splines_relative
     elif fn_name == "splines_relative_weight":
@@ -1089,18 +1232,10 @@ def make_grid_jnp(images, rowlen=10, padding=1, pad_value=0.0):
     return grid.transpose(2, 0, 1)  # Return in (C, H_grid, W_grid)
 
 if __name__ == "__main__":
-    # Step 1: Download MNIST Dataset
-    # mnist = datasets.MNIST(root='/tmp/mnist/', download=True)
+    splines_weight_circle = get_speaker_action_transform("splines_circle", 32)
 
-    # # Step 2: Convert to Jax arrays
-    # images, labels = to_jax(mnist, num_datapoints=100)
-    # print(images.shape)
+    
+    key = jax.random.PRNGKey(0)
+    spline_params = jax.random.uniform(key, shape=(5, 21), minval=0.0, maxval=1.0)
 
-    image = np.zeros((1, 28, 28))
-
-    image[0][5][5] = 100
-
-    image = jnp.array(image)
-
-    new_image = center_obs(image)
-    print(new_image)
+    splines_weight_circle(spline_params)

@@ -731,7 +731,11 @@ def get_speaker_spline_wasserstein_distances(rng, speaker_apply_fn, speaker_para
             dist_original = distance_fn(mu1, sig1, mu2, sig2)
             
             # Create swapped version: [x3, y3, x2, y2, x1, y1, z]
-            indices = jnp.array([4, 5, 2, 3, 0, 1, 6])
+            # Six Seven (kms)
+            if mu1.shape[-1] == 6:
+                indices = jnp.array([4, 5, 2, 3, 0, 1])
+            elif mu1.shape[-1] == 7:
+                indices = jnp.array([4, 5, 2, 3, 0, 1, 6])
             mu2_swapped = mu2[indices]
             sig2_swapped = sig2[indices]
             
@@ -1855,9 +1859,9 @@ def make_train(config):
     config["NUM_ACTORS"] = (env_kwargs["num_speakers"] + env_kwargs["num_listeners"]) * config["NUM_ENVS"]
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
-    config["SPEAKER_SPLINE_PARAM_SIZE"] = 7 if env_kwargs["speaker_action_transform"] in ('splines_weight', 'splines_weight_bucketed', 'splines_weight_circle') else None
+    config["SPEAKER_SPLINE_PARAM_SIZE"] = 7 if env_kwargs["speaker_action_transform"] in ('splines_weight', 'splines_weight_bucketed') else 6 if env_kwargs["speaker_action_transform"] in ('splines', 'splines_circle', 'splines_octagon') else None
     config["NUM_SPLINES_PER_SIGN"] = env_kwargs["speaker_action_dim"] // config["SPEAKER_SPLINE_PARAM_SIZE"]
-    speaker_action_transform_by_phone = get_speaker_action_transform("splines_weight_by_phone", env_kwargs['image_dim'])
+    speaker_action_transform_by_phone = get_speaker_action_transform("splines_weight_by_phone" if env_kwargs["speaker_action_transform"].startswith('splines_weight') else "splines_by_phone", env_kwargs['image_dim'])
     
     def train(rng):
         # MAKE AGENTS
