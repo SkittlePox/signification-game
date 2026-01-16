@@ -857,7 +857,7 @@ def get_speaker_action_transform(fn_name, image_dim):
 
             # Update the canvas
             canvas = jnp.zeros((image_dim, image_dim))
-            canvas = canvas.at[all_x_indices, all_y_indices].add(1)
+            canvas = canvas.at[all_x_indices, all_y_indices].add(-0.06) # This is an estimate
             return canvas
 
         # Vmap over splines and sum contributions
