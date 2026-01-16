@@ -259,6 +259,30 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "critic_hidden": [128, 128]
         }
     },
+    "conv-ablate-FL-5": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [64, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-6": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [128, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-7": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [256, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
     "conv-ablate-micro-A-0": {
         "LISTENER_ARCH_ABLATION_PARAMS": {
             "conv_features": [2, 2, 2],

@@ -27,7 +27,7 @@
 "PRETRAINED_SPEAKERS": "" #"agents-cifar10-600e-3000dp-84e5"
 
 "LISTENER_ARCH": 'conv'
-"SPEAKER_ARCH": 'splines-rnn-quantized-C-7' # 'splines' 
+"SPEAKER_ARCH": 'splines-rnn-quantized-A0PE-1' # 'splines' 
 "SPEAKER_LATENT_DIM": 128
 "SPEAKER_DROPOUT": 0.0
 "LISTENER_DROPOUT": 0.0

@@ -506,6 +506,8 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         critic_dims = arch.get("critic_dims", [128, 128, 32])
         rnn_hidden_dim = arch.get("rnn_hidden_dim", 16)
         use_pos_encs = arch.get("use_pos_encs", False)
+        use_pos_embs = arch.get("use_pos_embs", False)
+        pos_emb_latent_dim = arch.get("pos_emb_latent_dim", 8)  # make sure that this + the last embedding_dim sums to the rnn_hidden_dim!
 
         # VQ parameters from config
         vq_num_embeddings = arch.get("vq_num_embeddings", 64)
@@ -531,6 +533,9 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
 
         # Create a positional encoding dense adapter if needed
         pos_enc_adapter = nn.Dense(features=rnn_hidden_dim)
+
+        # Create embeddings for positional encodings if needed
+        pos_embeddings = nn.Embed(6, pos_emb_latent_dim)    # NOTE: Assuming we'll never use more than 6 splines
 
         # Get action parameters spline by spline
         def decode_spline(_x):
@@ -559,14 +564,16 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
                 inputs = jnp.concatenate([z, position], axis=-1)
                 inputs = pos_enc_adapter(inputs)
             
-            # Option B: Use previous output as input (uncomment if preferred)
+            # Option B: Use positional *embeddings*
+            elif use_pos_embs:
+                position = pos_embeddings(jnp.ones((z.shape[0]), dtype=jnp.int32) * i)
+                inputs = jnp.concatenate([z, position], axis=-1)
+            
+            # Option C: Use previous output as input (uncomment if preferred)
             # if i == 0:
             #     inputs = z
             # else:
             #     inputs = spline_params_list[-1]
-            
-            # Option C: No input, just evolve the hidden state
-            # inputs = jnp.zeros((batch_size, hidden_dim))
             
             # Option D: just use z
             else:
@@ -966,6 +973,17 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "vq_commitment_cost": 0.25,
             "use_vq": True,
             "straight_through_estimator": False
+        }
+    },
+    "splines-rnn-quantized-A0PE-1": {     # Base is micro-A-3, with positional *embeddings*
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 8],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "use_vq": False,
+            "use_pos_embs": True,
+            "pos_emb_latent_dim": 8
         }
     },
 }
