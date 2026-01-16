@@ -1855,7 +1855,7 @@ def make_train(config):
     config["NUM_ACTORS"] = (env_kwargs["num_speakers"] + env_kwargs["num_listeners"]) * config["NUM_ENVS"]
     config["NUM_MINIBATCHES_LISTENER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_LISTENER"]
     config["NUM_MINIBATCHES_SPEAKER"] = config["NUM_STEPS"] // config["MINIBATCH_SIZE_SPEAKER"]
-    config["SPEAKER_SPLINE_PARAM_SIZE"] = 7 if env_kwargs["speaker_action_transform"] in ('splines_weight', 'splines_weight_bucketed') else None
+    config["SPEAKER_SPLINE_PARAM_SIZE"] = 7 if env_kwargs["speaker_action_transform"] in ('splines_weight', 'splines_weight_bucketed', 'splines_weight_circle') else None
     config["NUM_SPLINES_PER_SIGN"] = env_kwargs["speaker_action_dim"] // config["SPEAKER_SPLINE_PARAM_SIZE"]
     speaker_action_transform_by_phone = get_speaker_action_transform("splines_weight_by_phone", env_kwargs['image_dim'])
     
