@@ -81,6 +81,7 @@
   "speaker_action_transform": "splines_weight"
   "speaker_action_dim": 21  # This must be a multiple of 6 for "splines"
   "log_prob_rewards": True
+  "log_prob_reward_coef": 1.0
   "speaker_whitesum_penalty_coef": 0.0
   "speaker_curve_penalty_coef": 0.0
   "speaker_right_angle_penalty_coef": 0.0

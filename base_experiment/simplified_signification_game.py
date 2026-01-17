@@ -84,6 +84,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         listener_reward_success: float = 1.0,
         listener_reward_failure: float = -0.1,
         log_prob_rewards: bool = False,
+        log_prob_reward_coef: float = 1.0,
         speaker_whitesum_penalty_coef: float = 0.0,
         speaker_curve_penalty_coef: float = 0.0,
         speaker_right_angle_penalty_coef: float = 0.0,
@@ -125,6 +126,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
         self.listener_reward_success = listener_reward_success
         self.listener_reward_failure = listener_reward_failure
         self.log_prob_rewards = log_prob_rewards
+        self.log_prob_reward_coef = log_prob_reward_coef
         self.gaussian_noise_stddev = gaussian_noise_stddev
         self.speaker_assignment_method = speaker_assignment_method
         self.center_and_reshuffle_listener_obs = center_and_reshuffle_listener_obs
@@ -226,7 +228,7 @@ class SimplifiedSignificationGame(MultiAgentEnv):
 
             # Return reward based on whether the listener was correct. These are indexed by channel.
             speaker_channel_reward = jnp.where(listener_correct, self.speaker_reward_success, self.speaker_reward_failure)
-            speaker_channel_reward *= (listener_confidence**2) ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
+            speaker_channel_reward *= (self.log_prob_reward_coef * listener_confidence**2) ** self.log_prob_rewards   # Multiply by logprobs only if self.log_prob_rewards == True
 
             listener_channel_reward_symmetric = jnp.where(listener_correct, self.listener_reward_success, self.listener_reward_failure)
 
