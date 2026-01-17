@@ -378,13 +378,21 @@ class ActorCriticSpeakerSplines(nn.Module):
 
     @nn.compact
     def __call__(self, obs):
+        use_tanh = self.config.get("SPEAKER_USE_TANH", False)
+        critic_use_tanh = self.config.get("SPEAKER_CRITIC_USE_TANH", False)
+
+        if use_tanh:
+            embedding_activation = nn.tanh
+        else:
+            embedding_activation = nn.relu
+
         y = nn.Embed(self.num_classes, self.latent_dim)(obs)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(y)
-        z = nn.relu(z)
+        z = embedding_activation(z)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
-        z = nn.relu(z)
+        z = embedding_activation(z)
         z = nn.Dense(128, kernel_init=nn.initializers.he_uniform())(z)
-        z = nn.relu(z)
+        z = embedding_activation(z)
 
         # Actor Mean
         actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)  # TODO: Eventually I can sweep over these parameters
@@ -397,14 +405,20 @@ class ActorCriticSpeakerSplines(nn.Module):
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
 
         # Critic
+        if critic_use_tanh:
+            critic_activation = nn.tanh
+        else:
+            critic_activation = nn.sigmoid
+
+
         critic = nn.Dense(128)(z)
-        critic = nn.sigmoid(critic)
+        critic = critic_activation(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(128)(critic)
-        critic = nn.sigmoid(critic)
+        critic = critic_activation(critic)
         # critic = nn.Dropout(rate=self.config["SPEAKER_DROPOUT"], deterministic=False)(critic)
         critic = nn.Dense(32)(critic)
-        critic = nn.sigmoid(critic)
+        critic = critic_activation(critic)
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1) # Return policy function and value

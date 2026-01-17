@@ -516,11 +516,19 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         use_vq = arch.get("use_vq", False)
         straight_through_estimator = arch.get("straight_through_estimator", True)
 
+        # Other parameters from config
+        use_tanh = self.config.get("SPEAKER_USE_TANH", False)
+        use_tanh_last = self.config.get("SPEAKER_USE_TANH_LAST", False)
+        sigmoid_temp = self.config.get("SPEAKER_SIGMOID_TEMP", 1.0)
+
         y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
         z = y
         for i, dim in enumerate(embedding_dims):
             z = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(z)
-            z = nn.relu(z)
+            if use_tanh:
+                z = nn.tanh(z)
+            else:
+                z = nn.relu(z)
 
         # Create the SimpleCell
         cell = nn.SimpleCell(features=rnn_hidden_dim)
@@ -540,10 +548,14 @@ class ActorCriticSpeakerRNNQuantized(nn.Module):
         # Get action parameters spline by spline
         def decode_spline(_x):
             actor_mean_i = actor_mean_dense(_x)
-            actor_mean_i = nn.sigmoid(actor_mean_i)  # Apply sigmoid to squash outputs between 0 and 1
-
             scale_diag_i = actor_scale_diag_dense(_x)
-            scale_diag_i = nn.sigmoid(scale_diag_i) * self.config["SPEAKER_SQUISH"] + 1e-8
+
+            if use_tanh_last:
+                actor_mean_i = (nn.tanh(actor_mean_i) + 1) / 2  # Apply sigmoid to squash outputs between 0 and 1
+                scale_diag_i = (nn.tanh(scale_diag_i / sigmoid_temp) + 1) / 2 * self.config["SPEAKER_SQUISH"] + 1e-8
+            else:
+                actor_mean_i = nn.sigmoid(actor_mean_i / sigmoid_temp)  # Apply sigmoid to squash outputs between 0 and 1
+                scale_diag_i = nn.sigmoid(scale_diag_i / sigmoid_temp) * self.config["SPEAKER_SQUISH"] + 1e-8
 
             return (actor_mean_i, scale_diag_i)
 

@@ -7,11 +7,15 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=9:00:00
 #SBATCH --mem=12GB
-#SBATCH --partition=3090-gcondo
 #SBATCH --gres=gpu:1
-#SBATCH -C geforce3090
 
-#SBATCH --array=0-3,5-7
+##SBATCH --partition=3090-gcondo
+##SBATCH -C geforce3090
+
+#SBATCH --partition=gpu
+#SBATCH -C quadrortx
+
+#SBATCH --array=0
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
@@ -260,5 +264,7 @@ cd /oscar/home/bspiegel/signification-game/base_experiment/
 
 
 ### Speaker boundary sweeps
-python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines dense speaker with circle bounding" PROJECT="phonology-study" WANDB_TAGS="['mixed search', 'circle']" +dataset=cifar10b ENV_KWARGS.speaker_action_transform="splines_circle" ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=18 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-FL-$((SLURM_ARRAY_TASK_ID))" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_SQUISH=0.3 SPEAKER_STDDEV=1.0
+# python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines dense speaker with circle bounding" PROJECT="phonology-study" WANDB_TAGS="['mixed search', 'circle']" +dataset=cifar10b ENV_KWARGS.speaker_action_transform="splines_circle" ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=18 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-FL-$((SLURM_ARRAY_TASK_ID))" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_SQUISH=0.3 SPEAKER_STDDEV=1.0
+python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines dense speaker with circle bounding tanh" PROJECT="phonology-study" WANDB_TAGS="['mixed search', 'circle', 'tanh_crit']" +dataset=cifar10b SPEAKER_USE_TANH=False SPEAKER_CRITIC_USE_TANH=True ENV_KWARGS.speaker_action_transform="splines_circle" ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=18 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-FL-$((SLURM_ARRAY_TASK_ID))" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_SQUISH=0.3 SPEAKER_STDDEV=1.0
+# python3 -u ippo_ff.py WANDB_NOTES="phonology-speaker cifar10b 3 splines dense speaker with circle bounding sigmoid temp" PROJECT="phonology-study" WANDB_TAGS="['mixed search', 'circle', 'sigtemp']" +dataset=cifar10b SPEAKER_SIGMOID_TEMP=1.5 ENV_KWARGS.speaker_action_transform="splines_circle" ENV_KWARGS.channel_ratio_fn="0.0 jump to 1.0 at 250" ENV_KWARGS.speaker_action_dim=18 ENV_KWARGS.agent_inferential_mode_fn="tom" LISTENER_N_SAMPLES=6 SPEAKER_N_SEARCH=2 MAX_SPEAKER_N_SEARCH=2 LISTENER_PR_WEIGHT=1.0 SPEAKER_TRAIN_SCHEDULE="off then on at 250" UPDATE_EPOCHS=3000 ENV_NUM_DATAPOINTS=5000 WANDB_MODE=online LISTENER_ARCH="conv-ablate-FL-$((SLURM_ARRAY_TASK_ID))" SPEAKER_ARCH="splines" L2_REG_COEF_LISTENER=1e-2 LISTENER_LR_SCHEDULE="1e-4 jump to 2e-5 at 250" L2_REG_COEF_SPEAKER=1e-2 SPEAKER_LR_SCHEDULE=1e-4 SPEAKER_SQUISH=0.3 SPEAKER_STDDEV=1.0
 
