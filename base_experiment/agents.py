@@ -381,6 +381,13 @@ class ActorCriticSpeakerSplines(nn.Module):
         use_tanh = self.config.get("SPEAKER_USE_TANH", False)
         critic_use_tanh = self.config.get("SPEAKER_CRITIC_USE_TANH", False)
 
+        noise_key = self.make_rng('noise')
+        spline_noise_key, sign_noise_key = jax.random.split(noise_key, 2)
+        per_spline_noise_std_dev = self.config.get("SPEAKER_PER_SPLINE_NOISE", 0.0)
+        per_sign_noise_std_dev = self.config.get("SPEAKER_PER_SIGN_NOISE", 0.0)
+        spline_param_size = self.config.get("SPEAKER_SPLINE_PARAM_SIZE")
+        splines_per_sign = self.config.get("NUM_SPLINES_PER_SIGN")
+
         if use_tanh:
             embedding_activation = nn.tanh
         else:
@@ -400,6 +407,31 @@ class ActorCriticSpeakerSplines(nn.Module):
 
         scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(z)
         scale_diag = nn.sigmoid(scale_diag) * self.config["SPEAKER_SQUISH"] + 1e-8
+
+        ## Add noise to the actor outputs
+        # per spline
+        per_spline_noise = per_spline_noise_std_dev * jax.random.normal(spline_noise_key, shape=(actor_mean.shape[0], splines_per_sign, 2))     # For each spline, an x and y translation (2)
+        spline_translations = jnp.tile(per_spline_noise, (1, 1, 3))
+
+        if spline_param_size == 7:
+            # Add an extra dimension of zeros to the weight value
+            extra_zeros = jnp.zeros((actor_mean.shape[0], 3, 1))
+            spline_translations = jnp.concatenate((spline_translations, extra_zeros), axis=2)
+        actor_mean += spline_translations.reshape(actor_mean.shape)
+        
+        # per sign
+        per_sign_noise = per_sign_noise_std_dev * jax.random.normal(sign_noise_key, shape=(actor_mean.shape[0], 1, 2))     # For each sign, an x and y translation (2)
+        sign_translations = jnp.tile(per_sign_noise, (1, splines_per_sign, 3))
+
+        if spline_param_size == 7:
+            # Add an extra dimension of zeros to the weight value
+            extra_zeros = jnp.zeros((actor_mean.shape[0], 3, 1))
+            sign_translations = jnp.concatenate((sign_translations, extra_zeros), axis=2)
+        actor_mean += sign_translations.reshape(actor_mean.shape)
+
+        # actor_mean += per_spline_noise_std_dev * jax.random.normal(spline_noise_key, shape=actor_mean.shape)
+        # xy_noise = per_sign_noise_std_dev * jax.random.normal(spline_noise_key, shape=(actor_mean.shape[0], 2))
+        # xy_noise_tiled = jnp.tile(xy_noise, (1, 3))
         
         # Create a multivariate normal distribution with diagonal covariance matrix
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)

@@ -15,7 +15,7 @@
 #SBATCH --partition=gpu
 #SBATCH -C quadrortx
 
-#SBATCH --array=0
+#SBATCH --array=1-7
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
