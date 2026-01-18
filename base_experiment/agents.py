@@ -410,6 +410,7 @@ class ActorCriticSpeakerSplines(nn.Module):
 
         ## Add noise to the actor outputs
         # per spline
+        noise_offset = jnp.zeros_like(actor_mean)
         if per_spline_noise_std_dev != 0.0:
             per_spline_noise = per_spline_noise_std_dev * jax.random.normal(spline_noise_key, shape=(actor_mean.shape[0], splines_per_sign, 2))     # For each spline, an x and y translation (2)
             spline_translations = jnp.tile(per_spline_noise, (1, 1, 3))
@@ -418,7 +419,7 @@ class ActorCriticSpeakerSplines(nn.Module):
                 # Add an extra dimension of zeros to the weight value
                 extra_zeros = jnp.zeros((actor_mean.shape[0], 3, 1))
                 spline_translations = jnp.concatenate((spline_translations, extra_zeros), axis=2)
-            actor_mean += spline_translations.reshape(actor_mean.shape)
+            noise_offset += spline_translations.reshape(actor_mean.shape)
         # per sign
         if per_sign_noise_std_dev != 0.0:
             per_sign_noise = per_sign_noise_std_dev * jax.random.normal(sign_noise_key, shape=(actor_mean.shape[0], 1, 2))     # For each sign, an x and y translation (2)
@@ -428,10 +429,12 @@ class ActorCriticSpeakerSplines(nn.Module):
                 # Add an extra dimension of zeros to the weight value
                 extra_zeros = jnp.zeros((actor_mean.shape[0], 3, 1))
                 sign_translations = jnp.concatenate((sign_translations, extra_zeros), axis=2)
-            actor_mean += sign_translations.reshape(actor_mean.shape)
+            noise_offset += sign_translations.reshape(actor_mean.shape)
+        
+        noisy_actor_mean = actor_mean + jax.lax.stop_gradient(noise_offset)
 
         # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
+        pi = distrax.MultivariateNormalDiag(loc=noisy_actor_mean, scale_diag=scale_diag)
 
         # Critic
         if critic_use_tanh:
