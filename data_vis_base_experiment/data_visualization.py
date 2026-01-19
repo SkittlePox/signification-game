@@ -2124,8 +2124,18 @@ def make_graphics_fall_2025():
 
 def make_graphics_newyear_2026():
     # download_speaker_examples(run_id="signification-team/phonology-study/el0lk7n8", directory="./comic-moon-918/", tom_examples_only=True)
-    make_simple_animation(directory="./comic-moon-918/", labels=False, speaker_selection=[2]*10, frames=500, fname_suffix_info="row2", fps=20, cmap='cividis')
-    make_simple_animation(directory="./comic-moon-918/", labels=False, speaker_selection=[4]*10, frames=500, fname_suffix_info="row4", fps=20, cmap='cividis')
+    # download_speaker_examples(run_id="signification-team/phonology-study/jp39a4yv", directory="./stoic-dust-980/", tom_examples_only=True)
+    # download_speaker_examples(run_id="signification-team/phonology-study/g9tmjm5g", directory="./comic-bird-993/", tom_examples_only=True)
+
+
+    # make_simple_animation(directory="./comic-moon-918/", labels=False, speaker_selection=[2]*10, frames=500, fname_suffix_info="row2", fps=20, cmap='cividis')
+    # make_simple_animation(directory="./comic-moon-918/", labels=False, speaker_selection=[4]*10, frames=500, fname_suffix_info="row4", fps=20, cmap='cividis')
+
+    # make_simple_animation(directory="./stoic-dust-980/", labels=False, speaker_selection=[6]*10, frames=600, fname_suffix_info="row6", fps=20, cmap='cividis')
+    # make_simple_animation(directory="./stoic-dust-980/", labels=False, speaker_selection=[4]*10, frames=500, fname_suffix_info="row4", fps=20, cmap='summer')
+
+    make_simple_animation(directory="./comic-bird-993/", labels=False, speaker_selection=[6]*10, frames=600, fname_suffix_info="row6f", fps=20, cmap='summer')
+    make_simple_animation(directory="./comic-bird-993/", labels=False, speaker_selection=[8]*10, frames=600, fname_suffix_info="row8f", fps=20, cmap='summer')
 
 
 def make_phonology_graphics():
