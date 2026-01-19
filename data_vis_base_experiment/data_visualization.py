@@ -28,7 +28,7 @@ def download_speaker_examples(run_id, directory, tom_examples_only=True):
     print("Downloading for run", directory)
     for file in tqdm(files, desc="Downloading speaker examples"):
         if fname_fragment in str(file):
-            file.download(root=directory)
+            file.download(root=directory, exist_ok=True)
 
 def download_probe_data(run_id, directory, which_speakers=[0]):
     os.makedirs(directory, exist_ok=True)
@@ -871,10 +871,10 @@ def make_multi_animation_noprobe(directories, labels, num_imgs=None, fname_prefi
     print("Saved file")
 
 
-def make_simple_animation(directory, labels=True, num_epochs=2800, epoch_start=0, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
+def make_simple_animation(directory, labels=True, frames=600, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int)), fname_suffix_info="", fps=20, cmap='viridis'):
     height_dx = image_dim + 2   # Assuming 2px border
-
-    FPS=20
+    if fname_suffix_info != "":
+        fname_suffix_info = "_"+fname_suffix_info
     
     # Load image data
     image_dir = os.path.join(directory, "media/images/env/")
@@ -884,6 +884,8 @@ def make_simple_animation(directory, labels=True, num_epochs=2800, epoch_start=0
     sorted_files = sorted([f for f in files if f.startswith(fname_template)],
                          key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
     sorted_files = [os.path.join(image_dir, f) for f in sorted_files]
+
+    # print(sorted_files)
     
 
     # Initialize figure
@@ -906,7 +908,7 @@ def make_simple_animation(directory, labels=True, num_epochs=2800, epoch_start=0
         ###########
 
         img_ax.clear()
-        img_ax.imshow(row_img, cmap="gray")
+        img_ax.imshow(row_img, cmap=cmap)
         img_ax.axis("off")
         img_ax.set_title(f"Signals at Epoch {frame * 5}")
         # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
@@ -917,11 +919,14 @@ def make_simple_animation(directory, labels=True, num_epochs=2800, epoch_start=0
     
     # print(animation.writers.list())
     
-    ani = animation.FuncAnimation(fig, update, frames=600, interval=1000//FPS)
+    ani = animation.FuncAnimation(fig, update, frames=min(frames, len(sorted_files)), interval=1000//fps)
+    
+    if frames > len(sorted_files):
+        print(f"You are asking for {frames} frames but there are only {len(sorted_files)} images")
 
     uuidstr = str(uuid.uuid4())[:5]
 
-    ani.save(f"../joint-plots/vid_simple_{directory.split('-')[-1][:-1]}_{uuidstr}.mp4", writer="ffmpeg", fps=FPS)
+    ani.save(f"../joint-plots/vid_simple_{directory.split('-')[-1][:-1]}{fname_suffix_info}_{uuidstr}.mp4", writer="ffmpeg", fps=fps)
 
     print("Saved file")
 
@@ -2117,6 +2122,12 @@ def make_graphics_fall_2025():
     make_simple_animation_same_sign_multi_agent(animation_dirs, referent_coordinates=referent_coordinates, epochs=6000, labels=run_labels, start_epoch=500)
     # make_labeled_animation(animation_dirs, num_epochs=5500, epoch_start=500, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int))):
 
+def make_graphics_newyear_2026():
+    # download_speaker_examples(run_id="signification-team/phonology-study/el0lk7n8", directory="./comic-moon-918/", tom_examples_only=True)
+    make_simple_animation(directory="./comic-moon-918/", labels=False, speaker_selection=[2]*10, frames=500, fname_suffix_info="row2", fps=20, cmap='cividis')
+    make_simple_animation(directory="./comic-moon-918/", labels=False, speaker_selection=[4]*10, frames=500, fname_suffix_info="row4", fps=20, cmap='cividis')
+
+
 def make_phonology_graphics():
     df = pd.read_csv("../sweep-run-list/wandb_export_2025-12-20T11_48_15.271-05_00.csv")
     filtered_df = df[["Name", "ID", "Tags", "LISTENER_ARCH", "SPEAKER_ARCH"]]
@@ -2131,6 +2142,8 @@ if __name__=="__main__":
     # make_graphics_post_conference()
     # remake_graphics_part1()
     # make_graphics_part2()
-    make_phonology_graphics()
+    # make_phonology_graphics()
+    make_graphics_newyear_2026()
+    ## Don't forget to `module load ffmpeg``!
     
     
