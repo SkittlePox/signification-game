@@ -1204,7 +1204,7 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
         total_loss = (
                 loss_actor
                 + vf_coef * value_loss
-                - ent_coef_speaker * entropy
+                + ent_coef_speaker * -1 * entropy    # This should be flipped but I am keeping it this way - Jan 19.
                 + l2_penalty
                 + vq_coef * vq_loss
         )
