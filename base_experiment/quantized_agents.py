@@ -1066,6 +1066,17 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "pos_emb_latent_dim": 8
         }
     },
+    "splines-rnn-quantized-A0PE-1b": {     # Base is micro-A-3, with positional *embeddings*
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 12],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 24,
+            "use_vq": False,
+            "use_pos_embs": True,
+            "pos_emb_latent_dim": 12
+        }
+    },
     "splines-rnn-quantized-A0PE-2": {     # Base is micro-A-3, with positional *embeddings*
         "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
             "embedding_latent_dim": 32,
@@ -1075,6 +1086,17 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "use_vq": False,
             "use_pos_embs": True,
             "pos_emb_latent_dim": 16
+        }
+    },
+    "splines-rnn-quantized-A0PE-2b": {     # Base is micro-A-3, with positional *embeddings*
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 16, 24],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 48,
+            "use_vq": False,
+            "use_pos_embs": True,
+            "pos_emb_latent_dim": 24
         }
     },
     "splines-rnn-quantized-A0PE-3": {     # Base is micro-A-3, with positional *embeddings*
