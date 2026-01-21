@@ -411,7 +411,7 @@ SPEAKER_ARCH_QUANTIZATION_PARAMETERS = {
 }
 
 
-class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
+class ActorCriticSpeakerDensePerSpline(nn.Module):
     num_classes: int
     num_splines: int
     spline_action_dim: int
@@ -420,65 +420,54 @@ class ActorCriticSpeakerDensePerSplineQuantized(nn.Module):
     @nn.compact
     def __call__(self, obs):
         # Get architecture from config with defaults
-        arch = self.config.get("SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS", {})
+        use_tanh = self.config.get("SPEAKER_USE_TANH", False)
+        critic_use_tanh = self.config.get("SPEAKER_CRITIC_USE_TANH", False)
+
+        arch = self.config.get("SPEAKER_ARCH_PERSPLINE_PARAMETERS", {})
         embedding_latent_dim = arch.get("embedding_latent_dim", 128)
         embedding_dims = arch.get("embedding_dims", [128, 128, 128])
         critic_dims = arch.get("critic_dims", [128, 128, 32])
 
-        # VQ parameters from config
-        vq_num_embeddings = arch.get("vq_num_embeddings", 512)
-        vq_embedding_dim = arch.get("vq_embedding_dim", 64)
-        vq_commitment_cost = arch.get("vq_commitment_cost", 0.25)
-        use_vq = arch.get("use_vq", False)
+        if use_tanh:
+            embedding_activation = nn.tanh
+        else:
+            embedding_activation = nn.relu
 
         y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
         z = y
         for i, dim in enumerate(embedding_dims):
             z = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(z)
-            z = nn.relu(z)
+            z = embedding_activation(z)
 
-        # Create the vq layer and dense adapter if needed
-        vq_layer = VectorQuantizer(num_embeddings=vq_num_embeddings, embedding_dim=vq_embedding_dim, commitment_cost=vq_commitment_cost,)
-        vq_adapter = nn.Dense(features=vq_embedding_dim)
+        # Actor Mean
+        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)  # TODO: Eventually I can sweep over these parameters
+        actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        # Get action parameters spline by spline and quantize
-        def decode_spline(_x):
-            actor_mean_i = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(_x)
-            actor_mean_i = nn.sigmoid(actor_mean_i)  # Apply sigmoid to squash outputs between 0 and 1
+        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(z)
+        scale_diag = nn.sigmoid(scale_diag) * self.config["SPEAKER_SQUISH"] + 1e-8
 
-            scale_diag_i = nn.Dense(self.spline_action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(_x)
-            scale_diag_i = nn.sigmoid(scale_diag_i) * self.config["SPEAKER_SQUISH"] + 1e-8
-
-            return (actor_mean_i, scale_diag_i)
-
-        actor_means = []
-        actor_scale_diags = []
-
-        # NOTE: I'm pretty sure this is basically useless since it's decoding the same value for each spline. This was a practice agent
-        for _ in range(self.num_splines):
-            actor_mean_i, scale_diag_i = decode_spline(z)
-            actor_means.append(actor_mean_i)
-            actor_scale_diags.append(scale_diag_i)
-        
-        actor_mean = jnp.concatenate(actor_means, axis=1)
-        actor_scale_diag = jnp.concatenate(actor_scale_diags, axis=1)
-        
         # Create a multivariate normal distribution with diagonal covariance matrix
-        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=actor_scale_diag)
+        pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
+
+        # Critic
+        if critic_use_tanh:
+            critic_activation = nn.tanh
+        else:
+            critic_activation = nn.sigmoid
 
         # Critic
         critic = z
         for i, dim in enumerate(critic_dims):
-            critic = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(critic)
-            critic = nn.sigmoid(critic)
+            critic = nn.Dense(dim)(critic)
+            critic = critic_activation(critic)
 
         critic = nn.Dense(1)(critic)
 
         return pi, jnp.squeeze(critic, axis=-1)
 
-SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS = {
+SPEAKER_ARCH_PERSPLINE_PARAMETERS = {
     "splines-perspline-quantized-A9-0": {
-        "SPEAKER_ARCH_PERSPLINE_QUANTIZATION_PARAMETERS": {
+        "SPEAKER_ARCH_PERSPLINE_PARAMETERS": {
             "embedding_latent_dim": 8,
             "embedding_dims": [4, 4],
             "critic_dims": [8, 8],

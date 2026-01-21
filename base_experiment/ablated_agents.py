@@ -1126,12 +1126,20 @@ class ActorCriticSpeakerSplinesAblationReady(nn.Module):
         embedding_latent_dim = arch.get("embedding_latent_dim", 128)
         embedding_dims = arch.get("embedding_dims", [128, 128, 128])
         critic_dims = arch.get("critic_dims", [128, 128, 32])
+        
+        use_tanh = self.config.get("SPEAKER_USE_TANH", False)
+        critic_use_tanh = self.config.get("SPEAKER_CRITIC_USE_TANH", False)
+
+        if use_tanh:
+            embedding_activation = nn.tanh
+        else:
+            embedding_activation = nn.relu
 
         y = nn.Embed(self.num_classes, embedding_latent_dim)(obs)
         z = y
         for i, dim in enumerate(embedding_dims):
             z = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(z)
-            z = nn.relu(z)
+            z = embedding_activation(z)
 
         # Actor Mean
         actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)
@@ -1143,11 +1151,16 @@ class ActorCriticSpeakerSplinesAblationReady(nn.Module):
         # Create a multivariate normal distribution with diagonal covariance matrix
         pi = distrax.MultivariateNormalDiag(loc=actor_mean, scale_diag=scale_diag)
 
+        if critic_use_tanh:
+            critic_activation = nn.tanh
+        else:
+            critic_activation = nn.sigmoid
+
         # Critic
         critic = z
         for i, dim in enumerate(critic_dims):
-            critic = nn.Dense(dim, kernel_init=nn.initializers.he_uniform())(critic)
-            critic = nn.sigmoid(critic)
+            critic = nn.Dense(dim)(critic)
+            critic = critic_activation(critic)
 
         critic = nn.Dense(1)(critic)
 
