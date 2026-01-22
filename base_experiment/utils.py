@@ -14,6 +14,7 @@ import cloudpickle
 from flax.training import train_state, orbax_utils
 import orbax.checkpoint
 from omegaconf import OmegaConf
+import flax
 
 def to_jax(dataset, num_datapoints=100):
     images = []
@@ -1230,6 +1231,38 @@ def make_grid_jnp(images, rowlen=10, padding=1, pad_value=0.0):
     grid = pad_images.reshape(nrows * (H + 2 * padding), rowlen * (W + 2 * padding), C)
     
     return grid.transpose(2, 0, 1)  # Return in (C, H_grid, W_grid)
+
+def rescale_params_to(params, target_params, exclude_paths=None):
+    """Rescale parameters, optionally excluding certain paths."""
+    exclude_paths = exclude_paths or []
+    
+    # Flatten with paths
+    flat_with_paths_A = flax.traverse_util.flatten_dict(params, sep='/')
+    flat_with_paths_B = flax.traverse_util.flatten_dict(target_params, sep='/')
+    
+    # Separate included and excluded params
+    included_A = {k: v for k, v in flat_with_paths_A.items() 
+                if not any(excl in k for excl in exclude_paths)}
+    excluded_A = {k: v for k, v in flat_with_paths_A.items() 
+                if any(excl in k for excl in exclude_paths)}
+
+    included_B = {k: v for k, v in flat_with_paths_B.items() 
+                if not any(excl in k for excl in exclude_paths)}
+
+    # Calculate target norm only from target params
+    target_norm = jnp.sqrt(sum(jnp.sum(v**2) for v in included_B.values()))
+    
+    # Calculate norm only from included params
+    current_norm = jnp.sqrt(sum(jnp.sum(v**2) for v in included_A.values()))
+    scale = target_norm / current_norm
+    
+    # Rescale only included params
+    rescaled_included = {k: v * scale for k, v in included_A.items()}
+    
+    # Combine back
+    all_params = {**rescaled_included, **excluded_A}
+    return flax.traverse_util.unflatten_dict(all_params, sep='/')
+
 
 if __name__ == "__main__":
     splines_weight_circle = get_speaker_action_transform("splines_circle", 32)

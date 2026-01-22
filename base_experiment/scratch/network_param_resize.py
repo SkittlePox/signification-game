@@ -112,3 +112,5 @@ new_params_large_s = rescale_params_to(
 print(small_norm)
 print(large_norm)
 print(l2_norm(new_params_large_s))
+print(show_layers(params_large))
+print(show_layers(new_params_large_s))

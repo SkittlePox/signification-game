@@ -26,7 +26,7 @@ from agents import *
 import pathlib
 import icon_probe
 import time
-from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, shift_obs, save_agents, make_grid_jnp, calc_log_volume, get_tom_speaker_n_search_fn, get_speaker_action_transform
+from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, shift_obs, save_agents, make_grid_jnp, calc_log_volume, get_tom_speaker_n_search_fn, get_speaker_action_transform, rescale_params_to
 
 
 class TrainState(train_state.TrainState):
@@ -337,6 +337,22 @@ def initialize_speaker(env, rng, config, i):
             dtype=jnp.int32
         )
     network_params = speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
+
+    if config["RESCALE_SPEAKER_PARAMS_TO"] != "":
+        old_param_norm = jnp.sqrt(sum(jnp.sum(p**2) for p in jax.tree_util.tree_leaves(network_params))) 
+
+        temp_config = config.copy()
+
+        temp_config["SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS"] = SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS[temp_config["RESCALE_SPEAKER_PARAMS_TO"]]['SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS']
+        target_speaker_network = ActorCriticSpeakerRNNQuantized(num_classes=temp_config["ENV_KWARGS"]["num_classes"]+1, num_splines=temp_config["NUM_SPLINES_PER_SIGN"], spline_action_dim=temp_config["SPEAKER_SPLINE_PARAM_SIZE"], config=temp_config)
+        target_network_params = target_speaker_network.init({'params': p_rng, 'dropout': d_rng, 'noise': n_rng}, init_x)
+
+        network_params = rescale_params_to(network_params, target_network_params, exclude_paths=config["RESCALE_SPEAKER_PARAMS_EXCLUDE"])
+
+        new_param_norm = jnp.sqrt(sum(jnp.sum(p**2) for p in jax.tree_util.tree_leaves(network_params)))
+        target_param_norm = jnp.sqrt(sum(jnp.sum(p**2) for p in jax.tree_util.tree_leaves(target_network_params)))
+
+        print(f"Rescaled network parameters from {old_param_norm} to {new_param_norm} to match target norm {target_param_norm}")
 
     lr_func = get_anneal_schedule(config["SPEAKER_LR_SCHEDULE"], config["NUM_MINIBATCHES_SPEAKER"])
     tx = optax.chain(
