@@ -823,6 +823,15 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "use_vq": False
         }
     },
+    "splines-rnn-quantized-A0-3+": {     # Base is micro-A-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [64, 64, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 64,
+            "use_vq": False
+        }
+    },
     "splines-rnn-quantized-A0-4": {     # Base is micro-A-3
         "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
             "embedding_latent_dim": 32,
@@ -838,15 +847,6 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "embedding_dims": [32, 32, 256],
             "critic_dims": [16, 16],
             "rnn_hidden_dim": 256,
-            "use_vq": False
-        }
-    },
-    "splines-rnn-quantized-A0-3+": {     # Base is micro-A-3
-        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
-            "embedding_latent_dim": 32,
-            "embedding_dims": [64, 64, 64],
-            "critic_dims": [16, 16],
-            "rnn_hidden_dim": 64,
             "use_vq": False
         }
     },
@@ -868,6 +868,33 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "use_vq": False
         }
     },
+    "splines-rnn-quantized-A0-3++": {     # Base is micro-A-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 64,
+            "embedding_dims": [64, 64, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 64,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A0-4++": {     # Base is micro-A-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 128],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 128,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A0-5++": {     # Base is micro-A-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 256,
+            "embedding_dims": [256, 256, 256],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 256,
+            "use_vq": False
+        }
+    },
     "splines-rnn-quantized-A3Q-0": {     # Base is micro-A-3, quantized
         "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
             "embedding_latent_dim": 32,
@@ -878,6 +905,60 @@ SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS = {
             "vq_embedding_dim": 16,
             "vq_commitment_cost": 0.25,
             "use_vq": True
+        }
+    },
+    "splines-rnn-quantized-A03H-0": {     # Base is A0-3, just with different rnn size
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 32, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 4,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A03H-1": {     # Base is A0-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 32, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 8,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A03H-2": {     # Base is A0-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 32, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 16,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A03H-3": {     # Base is A0-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 32, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 32,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A03H-4": {     # Base is A0-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 32, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 64,
+            "use_vq": False
+        }
+    },
+    "splines-rnn-quantized-A03H-5": {     # Base is A0-3
+        "SPEAKER_ARCH_RNN_QUANTIZATION_PARAMETERS": {
+            "embedding_latent_dim": 32,
+            "embedding_dims": [32, 32, 64],
+            "critic_dims": [16, 16],
+            "rnn_hidden_dim": 128,
+            "use_vq": False
         }
     },
     "splines-rnn-quantized-A3Q-1": {     # Base is micro-A-3, quantized
