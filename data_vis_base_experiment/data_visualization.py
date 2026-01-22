@@ -89,8 +89,12 @@ def download_spline_data(run_id, directory):
         ("spline wasserstein distances invariant/all speakers mean", "spline_wasserstein_distances_mean_invariant.csv", "invariant spline wasserstein means"),
         ("spline wasserstein distances invariant/all speakers std dev", "spline_wasserstein_distances_stddevs_invariant.csv", "invariant spline wasserstein std devs"),
         ("spline wasserstein distances invariant/all speakers cv", "spline_wasserstein_distances_cv_invariant.csv", "invariant spline wasserstein cvs"),
-        ("spline visual distances/all speakers multsum mean", "spline_visual_multsum_distances_mean.csv", "spline multsum means"),
-        ("spline visual distances/all speakers multsum std dev", "spline_visual_multsum_distances_stddevs.csv", "spline multsum std devs"),
+        # ("spline visual distances/all speakers multsum mean", "spline_visual_multsum_distances_mean.csv", "spline multsum means"),
+        # ("spline visual distances/all speakers multsum std dev", "spline_visual_multsum_distances_stddevs.csv", "spline multsum std devs"),
+        ("spline w2 distances variance weighted invariant/all speakers mean", "spline_w2_distances_invariant.csv", "spline w2 distances invariant"),
+        ("spline w2 distances variance weighted/all speakers mean", "spline_w2_distances.csv", "spline w2 distances"),
+        ("spline w2 distances variance weighted invariant/all speakers std dev", "spline_w2_distances_invariant_std_dev.csv", "spline w2 distances invariant std dev"),
+        ("spline w2 distances variance weighted/all speakers std dev", "spline_w2_distances_std_dev.csv", "spline w2 distances std dev"),
     ]
 
     for metric_key, filename, description in metrics:
