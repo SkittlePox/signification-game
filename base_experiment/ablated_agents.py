@@ -315,6 +315,22 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "critic_hidden": [128, 128]
         }
     },
+    "conv-ablate-FL-7+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [512, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-8+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [1024, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
     "conv-ablate-FL-5": {
         "LISTENER_ARCH_ABLATION_PARAMS": {
             "conv_features": [64, 128],
@@ -1281,6 +1297,36 @@ SPEAKER_ARCH_ABLATION_PARAMETERS = {
         "SPEAKER_ARCH_ABLATION_PARAMETERS": {
             "embedding_latent_dim": 128,
             "embedding_dims": [128, 128, 32]
+        }
+    },
+    "splines-ablate-LL-0": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 8]
+        }
+    },
+    "splines-ablate-LL-1": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 16]
+        }
+    },
+    "splines-ablate-LL-2": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 32]
+        }
+    },
+    "splines-ablate-LL-3": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 64]
+        }
+    },
+    "splines-ablate-LL-4": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 128]
         }
     },
     "splines-ablate-micro-A-0": {
