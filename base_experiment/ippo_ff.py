@@ -1262,6 +1262,12 @@ def wandb_callback(metrics):
         referent_mask = jnp.where(speaker_obs == referent, 1, 0)
         return jnp.sum(masked_speaker_success * referent_mask) / (1 + jnp.sum(referent_mask * speaker_alive))
     
+    def calc_per_speaker_success(speaker, speaker_reward, speaker_obs, speaker_alive):
+        masked_speaker_reward = speaker_reward * speaker_alive
+        masked_speaker_success = jnp.where(masked_speaker_reward > 0.0, 1, 0) + jnp.where(masked_speaker_reward < 0.0, 0, 0)
+        # referent_mask = jnp.where(speaker_obs == referent, 1, 0)
+        return jnp.sum(masked_speaker_success * referent_mask) / (1 + jnp.sum(referent_mask * speaker_alive))
+    
     def calc_overall_speaker_success(speaker_reward, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
         masked_speaker_success = jnp.where(masked_speaker_reward > 0.0, 1, 0) + jnp.where(masked_speaker_reward < 0.0, 0, 0)
@@ -1351,6 +1357,10 @@ def wandb_callback(metrics):
 
     average_speaker_success = calc_overall_speaker_success(trimmed_transition_batch.speaker_reward, trimmed_transition_batch.speaker_alive)
     metric_dict.update({"success/average success/all speakers": average_speaker_success.item()})
+
+    srew = trimmed_transition_batch.speaker_reward
+    average_success_by_speaker = jnp.mean(jnp.where(srew > 0.0, 1, 0) + jnp.where(srew < 0.0, 0, 0), axis=0)
+    metric_dict.update({f"success/average success/speaker {i}": average_success_by_speaker[i].item() for i in range(len(average_success_by_speaker))})
 
     #### Referent Classification Rate logging
     per_referent_classification_rate = jax.vmap(calc_per_referent_listener_classification_rate, in_axes=(0, None, None))(jnp.arange(num_classes, dtype=int), trimmed_transition_batch.listener_action, trimmed_transition_batch.listener_obs_source)

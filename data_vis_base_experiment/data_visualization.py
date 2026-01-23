@@ -1706,6 +1706,52 @@ def make_avg_probe_plot(directorybunch, labels, sp_num=0, all_speakers_avg=False
 #     uuidstr = str(uuid.uuid4())[:5]
 #     plt.savefig(os.path.join("../sweep-plots/", f"gridplot_{metric}_epoch_{epoch}_{uuidstr}.png"))
 
+def make_speaker_entropy_success_tradeoff_plot(df):
+    # filtered_df = df[["Name", "ID", "Tags", "LISTENER_ARCH", "SPEAKER_ARCH", "ENT_COEF_SPEAKER", "success/average success/all speakers", "spline w2 distances variance weighted/all speakers mean"]]
+
+    # Assuming your dataframe is called 'df'
+    fig, ax = plt.subplots(figsize=(5, 3))
+
+    ax.errorbar(
+        df['ENT_COEF_SPEAKER'],
+        df['success/average success/all speakers'],
+        yerr=0.1*np.ones_like(df['success/average success/all speakers']),  # Replace with your standard deviation/error column NOTE: THESE ARE NOT RIGHT! I NEED TO RE-RUN THE RUNS. May want to display the actual distribution as well instead of just error bars!
+        fmt='none',  # No line connecting points
+        ecolor='gray',
+        alpha=0.5,
+        capsize=3
+    )
+
+    # Create scatter plot with color mapping
+    scatter = ax.scatter(
+        df['ENT_COEF_SPEAKER'],
+        df['success/average success/all speakers'],
+        c=df['spline w2 distances variance weighted/all speakers mean'],
+        cmap='viridis_r',  # You can change this to other colormaps like 'plasma', 'coolwarm', etc.
+        s=100,  # Point size
+        alpha=0.7,  # Transparency
+        edgecolors='black',
+        linewidths=0.5
+    )
+
+    # Add colorbar
+    cbar = plt.colorbar(scatter, ax=ax)
+    cbar.set_label('Mean Spline Differences', rotation=270, labelpad=20)
+
+    # Labels and title
+    ax.set_xscale('symlog', linthresh=1e-6)
+    ax.set_xlabel('Speaker Entropy', fontsize=12)
+    ax.set_ylabel('Communicative Success', fontsize=12)
+    ax.set_title('Coms. Success vs Speaker Entropy', fontsize=14)
+
+    # Grid for easier reading
+    ax.grid(True, alpha=0.3)
+    ax.tick_params(axis='x', labelsize=8)
+
+    plt.tight_layout()
+    uuidstr = str(uuid.uuid4())[:5]
+    plt.savefig(os.path.join("../phone-plots/", f"speaker_success_entropy_tradeoff_{uuidstr}.png"))
+
 def make_graphics_post_conference():
     # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
     # download_probe_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
@@ -2143,21 +2189,24 @@ def make_graphics_newyear_2026():
 
 
 def make_phonology_graphics():
-    df = pd.read_csv("../sweep-run-list/wandb_export_2025-12-20T11_48_15.271-05_00.csv")
-    filtered_df = df[["Name", "ID", "Tags", "LISTENER_ARCH", "SPEAKER_ARCH"]]
+    # df = pd.read_csv("../sweep-run-list/wandb_export_2025-12-20T11_48_15.271-05_00.csv")
+    # filtered_df = df[["Name", "ID", "Tags", "LISTENER_ARCH", "SPEAKER_ARCH"]]
 
     # for run_info in filtered_df.values.tolist():
     #     download_spline_data(run_id=f"signification-team/phonology-study/{run_info[1]}", directory=f"./{run_info[0]}/")
 
     # make_value_grid_plot(filtered_df)
 
+    df = pd.read_csv("../sweep-run-list/wandb_export_2026-01-22T18_51_26.707-05_00.csv")
+    make_speaker_entropy_success_tradeoff_plot(df)
+
 
 if __name__=="__main__":
     # make_graphics_post_conference()
     # remake_graphics_part1()
     # make_graphics_part2()
-    # make_phonology_graphics()
-    make_graphics_newyear_2026()
+    make_phonology_graphics()
+    # make_graphics_newyear_2026()
     ## Don't forget to `module load ffmpeg``!
     
     
