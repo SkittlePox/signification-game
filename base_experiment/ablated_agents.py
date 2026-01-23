@@ -259,6 +259,62 @@ LISTENER_ARCH_ABLATION_PARAMETERS = {
             "critic_hidden": [128, 128]
         }
     },
+    "conv-ablate-FL-0+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [4, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-1+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [8, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-2+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [16, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-3+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [32, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-4+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [64, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-5+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [128, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
+    "conv-ablate-FL-6+": {
+        "LISTENER_ARCH_ABLATION_PARAMS": {
+            "conv_features": [256, 128],
+            "embedding_dims": [128, 128, 128],
+            "actor_hidden": 128,
+            "critic_hidden": [128, 128]
+        }
+    },
     "conv-ablate-FL-5": {
         "LISTENER_ARCH_ABLATION_PARAMS": {
             "conv_features": [64, 128],

@@ -15,9 +15,6 @@ import json
 
 from utils import get_sweep_dirs
 
-# os.chdir(os.path.join(os.getcwd(), "data_vis_base_experiment/runs"))  # For debug!
-os.chdir(os.path.join(os.getcwd(), "runs"))
-
 
 def download_speaker_examples(run_id, directory, tom_examples_only=True):
     fname_fragment = "tom_speaker_examples" if tom_examples_only else "speaker_examples"
@@ -83,12 +80,12 @@ def download_spline_data(run_id, directory):
 
     # Define metrics to download
     metrics = [
-        ("spline wasserstein distances/all speakers mean", "spline_wasserstein_distances_mean.csv", "spline wasserstein means"),
-        ("spline wasserstein distances/all speakers std dev", "spline_wasserstein_distances_stddevs.csv", "spline wasserstein std devs"),
-        ("spline wasserstein distances/all speakers cv", "spline_wasserstein_distances_cv.csv", "spline wasserstein cvs"),
-        ("spline wasserstein distances invariant/all speakers mean", "spline_wasserstein_distances_mean_invariant.csv", "invariant spline wasserstein means"),
-        ("spline wasserstein distances invariant/all speakers std dev", "spline_wasserstein_distances_stddevs_invariant.csv", "invariant spline wasserstein std devs"),
-        ("spline wasserstein distances invariant/all speakers cv", "spline_wasserstein_distances_cv_invariant.csv", "invariant spline wasserstein cvs"),
+        # ("spline wasserstein distances/all speakers mean", "spline_wasserstein_distances_mean.csv", "spline wasserstein means"),
+        # ("spline wasserstein distances/all speakers std dev", "spline_wasserstein_distances_stddevs.csv", "spline wasserstein std devs"),
+        # ("spline wasserstein distances/all speakers cv", "spline_wasserstein_distances_cv.csv", "spline wasserstein cvs"),
+        # ("spline wasserstein distances invariant/all speakers mean", "spline_wasserstein_distances_mean_invariant.csv", "invariant spline wasserstein means"),
+        # ("spline wasserstein distances invariant/all speakers std dev", "spline_wasserstein_distances_stddevs_invariant.csv", "invariant spline wasserstein std devs"),
+        # ("spline wasserstein distances invariant/all speakers cv", "spline_wasserstein_distances_cv_invariant.csv", "invariant spline wasserstein cvs"),
         # ("spline visual distances/all speakers multsum mean", "spline_visual_multsum_distances_mean.csv", "spline multsum means"),
         # ("spline visual distances/all speakers multsum std dev", "spline_visual_multsum_distances_stddevs.csv", "spline multsum std devs"),
         ("spline w2 distances variance weighted invariant/all speakers mean", "spline_w2_distances_invariant.csv", "spline w2 distances invariant"),
@@ -1752,6 +1749,88 @@ def make_speaker_entropy_success_tradeoff_plot(df):
     uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../phone-plots/", f"speaker_success_entropy_tradeoff_{uuidstr}.png"))
 
+def make_FL_spline_distance_plot(master_df, num_epochs=3000, epoch_start=250, rolling_window=100):
+    w2_distances = []
+    std_devs = []
+    labels = master_df['LISTENER_ARCH'].tolist()
+
+    for run_name in master_df['Name']:
+        df = pd.read_parquet(f"./{run_name}/0000.parquet") 
+        
+        raw_w2_distancs = df['spline w2 distances variance weighted/all speakers mean']
+        raw_w2_std_devs = df['spline w2 distances variance weighted/all speakers std dev']
+
+
+        if rolling_window:
+            raw_w2_distancs = raw_w2_distancs.rolling(window=rolling_window, center=True, min_periods=1).mean()
+            raw_w2_std_devs = raw_w2_std_devs.rolling(window=rolling_window, center=True, min_periods=1).mean()
+        
+        w2_distances.append(raw_w2_distancs)
+        std_devs.append(raw_w2_std_devs)
+    
+    sns.set_theme(style="darkgrid")
+
+    # Plot the data with larger font
+    fig, ax = plt.subplots(figsize=(5, 3))
+    fig.patch.set_facecolor('#f3f3f3ff')  # Set the background color of the figure
+
+    colors = [sns.color_palette("deep")[0], sns.color_palette("deep")[1], sns.color_palette("deep")[2], sns.color_palette("deep")[3], sns.color_palette("deep")[4]]
+    colors = ["black", 
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("flare", as_cmap=True)(50),
+              sns.color_palette("flare", as_cmap=True)(100), sns.color_palette("crest", as_cmap=True)(50)]
+    paired = sns.color_palette("Paired")
+    colors = [paired[0], paired[2], paired[3], paired[4], paired[5]]
+
+    sns.color_palette("flare", as_cmap=True)
+
+    for i, (mean, std_dev) in enumerate(zip(w2_distances, std_devs)):
+        if num_epochs is not None:
+            mean = mean.head(num_epochs)
+            mean = mean.tail(len(mean)-epoch_start)
+            std_dev = std_dev.head(num_epochs)
+            std_dev = std_dev.tail(len(std_dev)-epoch_start)
+
+        mean = mean.dropna()
+        std_dev = std_dev.dropna()
+        # if len(markers_on) > 0:
+        #     marker_style = dict(
+        #         marker=7,  # Change to preferred marker shape
+        #         markersize=12,  # Marker size
+        #         markerfacecolor="black",  # Marker face color
+        #         markeredgecolor="black",  # Marker edge color
+        #         markeredgewidth=1.5  # Marker edge width
+        #     )
+
+        #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
+
+        ax.plot(mean, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
+        ax.fill_between(list(range(epoch_start, len(std_dev)+epoch_start)), mean-std_dev, mean+std_dev, color=sns.color_palette("Set1")[i], alpha=0.05)
+
+    # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
+    # ax.set_xlabel('Epoch', fontsize=16)
+    # ax.set_ylabel('Entropy', fontsize=16)
+    ax.tick_params(axis='both', which='major', labelsize=18)
+    # plt.legend(fontsize=13, loc='upper right', handleheight=0.3)
+
+    # Get current y limits and extend upper bound by 20%
+    ymin, ymax = ax.get_ylim()
+    ax.set_ylim(ymin, ymax * 1.0)
+    
+    fig.tight_layout()
+    uuidstr = str(uuid.uuid4())[:5]
+    plt.savefig(os.path.join("../sweep-plots/", f"FL_spline_w2_distance_{uuidstr}.png"))
+
+    config = {
+        "directories": master_df['Name'].tolist(),
+        "labels": labels,
+        "num_epochs": num_epochs,
+    }
+
+    with open(f'../sweep-plots/configs/config_{uuidstr}.json', 'w+') as f:
+        json.dump(config, f)
+
+    print(f"FL_spline_w2_distance_{uuidstr}.png")
+
 def make_graphics_post_conference():
     # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
     # download_probe_data(run_id="signification-team/signification-game/ni2dajf2", directory="./glad-dew-2358/")
@@ -2197,16 +2276,34 @@ def make_phonology_graphics():
 
     # make_value_grid_plot(filtered_df)
 
-    df = pd.read_csv("../sweep-run-list/wandb_export_2026-01-22T18_51_26.707-05_00.csv")
-    make_speaker_entropy_success_tradeoff_plot(df)
+    # df = pd.read_csv("../sweep-run-list/wandb_export_2026-01-22T18_51_26.707-05_00.csv")
+    # make_speaker_entropy_success_tradeoff_plot(df)
 
+
+    df = pd.read_csv("../sweep-run-list/wandb_export_2026-01-22T19_46_20.303-05_00.csv")
+    filtered_df = df[["Name", "ID", "Tags", "LISTENER_ARCH"]]
+
+    # api = wandb.Api()
+    # for run_info in filtered_df.values.tolist():
+    #     # download_spline_data(run_id=f"signification-team/phonology-study/{run_info[1]}", directory=f"./{run_info[0]}/")
+    #     parquet_file = api.artifact(f"signification-team/phonology-study/run-{run_info[1]}-history:latest")
+    #     art_dir = parquet_file.download(f"./{run_info[0]}")
+    #     print(art_dir)
+    
+    make_FL_spline_distance_plot(filtered_df)
+    
 
 if __name__=="__main__":
+    DEBUGGER = "DEBUGGER=True" in os.sys.argv
+    if DEBUGGER:
+        os.chdir(os.path.join(os.getcwd(), "data_vis_base_experiment/runs"))  # For debug!
+    else:
+        os.chdir(os.path.join(os.getcwd(), "runs"))
+        
     # make_graphics_post_conference()
     # remake_graphics_part1()
     # make_graphics_part2()
     make_phonology_graphics()
     # make_graphics_newyear_2026()
     ## Don't forget to `module load ffmpeg``!
-    
-    
+
