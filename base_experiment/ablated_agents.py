@@ -1329,6 +1329,12 @@ SPEAKER_ARCH_ABLATION_PARAMETERS = {
             "embedding_dims": [128, 128, 128]
         }
     },
+    "splines-ablate-LL-5": {
+        "SPEAKER_ARCH_ABLATION_PARAMETERS": {
+            "embedding_latent_dim": 128,
+            "embedding_dims": [128, 128, 256]
+        }
+    },
     "splines-ablate-micro-A-0": {
         "SPEAKER_ARCH_ABLATION_PARAMETERS": {
             "embedding_latent_dim": 32,

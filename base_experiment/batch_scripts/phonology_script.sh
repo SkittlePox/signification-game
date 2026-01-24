@@ -5,7 +5,7 @@
 #SBATCH -c 4
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=16:00:00
+#SBATCH --time=5:00:00
 #SBATCH --mem=12GB
 #SBATCH --gres=gpu:1
 
@@ -15,7 +15,7 @@
 ##SBATCH --partition=gpu
 ##SBATCH -C quadrortx
 
-#SBATCH --array=0-4
+#SBATCH --array=0-0
 #SBATCH -o job_outputs_ph/siggame_ph_job_%j.o
 #SBATCH -e job_outputs_ph/siggame_ph_job_%j.e
 #SBATCH --mail-type=END
