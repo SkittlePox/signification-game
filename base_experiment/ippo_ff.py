@@ -1968,14 +1968,14 @@ def wandb_callback(metrics):
 
     ##### Gradient logging for actor mean and scale diag
 
-    (actor_mean_grads, actor_scale_diag_grads) = selected_grads
+    # (actor_mean_grads, actor_scale_diag_grads) = selected_grads
 
-    metric_dict.update({'grads l2 norm/actor means all speakers average': actor_mean_grads.mean()})
-    metric_dict.update({'grads l2 norm/actor scale diags all speakers average': actor_scale_diag_grads.mean()})
+    # metric_dict.update({'grads l2 norm/actor means all speakers average': actor_mean_grads.mean()})
+    # metric_dict.update({'grads l2 norm/actor scale diags all speakers average': actor_scale_diag_grads.mean()})
 
-    for i in range(num_speakers):
-        metric_dict.update({f'grads l2 norm/actor means speaker {i} average': actor_mean_grads[i]})
-        metric_dict.update({f'grads l2 norm/actor scale diags speaker {i} average': actor_scale_diag_grads[i]})
+    # for i in range(num_speakers):
+    #     metric_dict.update({f'grads l2 norm/actor means speaker {i} average': actor_mean_grads[i]})
+    #     metric_dict.update({f'grads l2 norm/actor scale diags speaker {i} average': actor_scale_diag_grads[i]})
 
     #####
 
@@ -2223,7 +2223,7 @@ def make_train(config):
                                                   lambda _: ((batched_listener_params, batched_listener_opt_states), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches))))), None)
             final_speaker_outputs = jax.lax.cond(train_speaker,
                                                  lambda _: vmap_update_speaker(update_speaker_rngs, speaker_transition_batch, speaker_advantages, speaker_targets, batched_speaker_params, batched_speaker_opt_states),
-                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), ((jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)))), (jnp.ones(env_kwargs["num_speakers"]), env_kwargs["num_speakers"]))), None)
+                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), ((jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)))), (jnp.ones(env_kwargs["num_speakers"], num_speaker_minibatches), jnp.ones(env_kwargs["num_speakers"], num_speaker_minibatches)))), None)
             ## Unpack the outputs
             (final_listener_params, final_listener_opt_states), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)) = final_listener_outputs
             (final_speaker_params, final_speaker_opt_states), ((speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy, speaker_vq_loss)), selected_grads) = final_speaker_outputs
