@@ -26,6 +26,7 @@ from agents import *
 import pathlib
 import icon_probe
 import time
+import matplotlib.pyplot as plt
 from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, shift_obs, save_agents, make_grid_jnp, calc_log_volume, get_tom_speaker_n_search_fn, get_speaker_action_transform, rescale_params_to
 
 
@@ -1731,6 +1732,21 @@ def wandb_callback(metrics):
         metric_dict.update({"spline w2 distances variance weighted/all speakers cv": jnp.mean(cvs_w2_variance_weighted)})
         metric_dict.update({"spline w2 distances variance weighted/all speakers std dev": jnp.mean(stds_w2_variance_weighted)})
 
+        ##### TODO: Build an image from the flattened_lower_triangles
+        sorted_flattened_lower_triangles = jnp.sort(flattened_lower_triangles, axis=1)
+        double_sorted_flattened_lower_triangles = jnp.sort(flattened_lower_triangles.flatten())
+
+        fig, axs = plt.subplots(tight_layout=True, figsize=(3, 2))
+        axs.hist(double_sorted_flattened_lower_triangles, bins=30, edgecolor='black', alpha=0.7)
+        axs.set_xlabel('Distance Between Splines')
+        axs.set_ylabel('Frequency')
+        # axs.set_title('Spline Similarities')
+
+        wandb.log({"spline w2 distances variance weighted/all speakers histogram": wandb.Image(fig)})
+        # wandb.log({"spline w2 distances variance weighted/all speakers histogram plotly": fig})
+        plt.close(fig)
+
+
 
         ### W2 Variance Weighted Translation invariant
         metric_dict.update({"spline w2 distances variance weighted invariant/all speakers mean": jnp.mean(w2_variance_weighted_invariant_spline_info.flatten())})
@@ -1890,6 +1906,20 @@ def wandb_callback(metrics):
             metric_dict.update({f"w2 sign distances/speaker {i} w2 min": jnp.min(w2_sign_distances_for_speaker.flatten())})
 
             metric_dict.update({f"w2 sign distances/speaker {i} w2 mean": jnp.mean(w2_sign_distances_for_speaker.flatten())})
+
+            ### W2 Spline distances histogram
+
+            sorted_flattened_lower_triangles_for_speaker = sorted_flattened_lower_triangles[i]
+
+            fig, axs = plt.subplots(tight_layout=True, figsize=(3, 2))
+            axs.hist(sorted_flattened_lower_triangles_for_speaker, bins=30, edgecolor='black', alpha=0.7)
+            axs.set_xlabel('Distance Between Splines')
+            axs.set_ylabel('Frequency')
+            # axs.set_title('Spline Similarities')
+
+            wandb.log({f"spline w2 distances variance weighted/speaker {i} histogram": wandb.Image(fig)})
+            # wandb.log({f"spline w2 distances variance weighted/speaker {i} histogram plotly": fig})
+            plt.close(fig)
 
     #####
 
@@ -2223,7 +2253,7 @@ def make_train(config):
                                                   lambda _: ((batched_listener_params, batched_listener_opt_states), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches))))), None)
             final_speaker_outputs = jax.lax.cond(train_speaker,
                                                  lambda _: vmap_update_speaker(update_speaker_rngs, speaker_transition_batch, speaker_advantages, speaker_targets, batched_speaker_params, batched_speaker_opt_states),
-                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), ((jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)))), (jnp.ones(env_kwargs["num_speakers"], num_speaker_minibatches), jnp.ones(env_kwargs["num_speakers"], num_speaker_minibatches)))), None)
+                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), ((jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)))), (jnp.ones((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.ones((env_kwargs["num_speakers"], num_speaker_minibatches))))), None)
             ## Unpack the outputs
             (final_listener_params, final_listener_opt_states), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)) = final_listener_outputs
             (final_speaker_params, final_speaker_opt_states), ((speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy, speaker_vq_loss)), selected_grads) = final_speaker_outputs

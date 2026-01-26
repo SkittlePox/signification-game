@@ -15,6 +15,8 @@ from flax.training import train_state, orbax_utils
 import orbax.checkpoint
 from omegaconf import OmegaConf
 import flax
+import matplotlib.pyplot as plt
+import numpy as np
 
 def to_jax(dataset, num_datapoints=100):
     images = []
@@ -1264,11 +1266,30 @@ def rescale_params_to(params, target_params, exclude_paths=None):
     return flax.traverse_util.unflatten_dict(all_params, sep='/')
 
 
+def make_spline_similarity_histogram(values, bins=30):
+    fig, axs = plt.subplots(tight_layout=True, figsize=(3, 2))
+    axs.hist(values, bins=bins, edgecolor='black', alpha=0.7)
+    axs.set_xlabel('Distances')
+    axs.set_ylabel('Frequency')
+    axs.set_title('Spline Similarities')
+    return fig
+
+
 if __name__ == "__main__":
-    splines_weight_circle = get_speaker_action_transform("splines_circle", 32)
+    # splines_weight_circle = get_speaker_action_transform("splines_circle", 32)
 
     
-    key = jax.random.PRNGKey(0)
-    spline_params = jax.random.uniform(key, shape=(5, 21), minval=0.0, maxval=1.0)
+    # key = jax.random.PRNGKey(0)
+    # spline_params = jax.random.uniform(key, shape=(5, 21), minval=0.0, maxval=1.0)
 
-    splines_weight_circle(spline_params)
+    # splines_weight_circle(spline_params)
+
+    key = jax.random.PRNGKey(0)
+
+    similarities = jax.random.uniform(key, shape=(5, 435), minval=0.0, maxval=1.0)
+
+    fig = make_spline_similarity_histogram(similarities[0])
+
+    print()
+
+
