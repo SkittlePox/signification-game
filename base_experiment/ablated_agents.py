@@ -1214,10 +1214,10 @@ class ActorCriticSpeakerSplinesAblationReady(nn.Module):
             z = embedding_activation(z)
 
         # Actor Mean
-        actor_mean = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)
+        actor_mean = nn.Dense(self.action_dim, name='actor_mean', kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV"]))(z)
         actor_mean = nn.sigmoid(actor_mean)  # Apply sigmoid to squash outputs between 0 and 1
 
-        scale_diag = nn.Dense(self.action_dim, kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(z)
+        scale_diag = nn.Dense(self.action_dim, name='actor_scale_diag', kernel_init=nn.initializers.normal(self.config["SPEAKER_STDDEV2"]))(z)
         scale_diag = nn.sigmoid(scale_diag) * self.config["SPEAKER_SQUISH"] + 1e-8
         
         # Create a multivariate normal distribution with diagonal covariance matrix

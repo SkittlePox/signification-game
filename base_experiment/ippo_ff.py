@@ -1301,14 +1301,22 @@ def update_minibatch_speaker(runner_state, speaker_apply_fn, speaker_optimizer_t
     
     updates, new_opt_state = speaker_optimizer_tx.update(grads, speaker_opt_state_i)
     new_params = optax.apply_updates(speaker_params_i, updates)
+    
+    actor_mean_grads = jax.tree_util.tree_leaves(grads['params']['actor_mean'])
+    actor_mean_grad_norms = jnp.sqrt(jnp.sum(actor_mean_grads[0]**2) + jnp.sum(actor_mean_grads[1]**2))
+
+    actor_scale_diag_grads = jax.tree_util.tree_leaves(grads['params']['actor_scale_diag'])
+    actor_scale_diag_grad_norms = jnp.sqrt(jnp.sum(actor_scale_diag_grads[0]**2) + jnp.sum(actor_scale_diag_grads[1]**2))
+    
+    selected_grad_norms = (actor_mean_grad_norms, actor_scale_diag_grad_norms)
 
     # (new_params, new_opt_state)
     runner_state = (new_params, new_opt_state)
 
-    return runner_state, total_loss
+    return runner_state, (total_loss, selected_grad_norms)
 
 def wandb_callback(metrics):
-    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, wasserstein_spline_info_variance_weighted, w2_variance_weighted_spline_info, w2_variance_weighted_invariant_spline_info, speaker_gaussian_heatmaps, speaker_gaussian_heatmaps_lexsorted, w2_sign_distances, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes) = metrics
+    (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_info, wasserstein_spline_info_invariant, wasserstein_spline_info_variance_weighted, w2_variance_weighted_spline_info, w2_variance_weighted_invariant_spline_info, speaker_gaussian_heatmaps, speaker_gaussian_heatmaps_lexsorted, w2_sign_distances, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, num_classes, selected_grads) = metrics
     
     def calc_per_referent_speaker_reward(referent, speaker_reward, speaker_obs, speaker_alive):
         masked_speaker_reward = speaker_reward * speaker_alive
@@ -1958,6 +1966,19 @@ def wandb_callback(metrics):
             metric_dict.update({f'probe/entropy/speaker {i} class {j}': probe_per_class_entropy[j] for j in range(len(probe_per_class_entropy))})
     #####
 
+    ##### Gradient logging for actor mean and scale diag
+
+    (actor_mean_grads, actor_scale_diag_grads) = selected_grads
+
+    metric_dict.update({'grads l2 norm/actor means all speakers average': actor_mean_grads.mean()})
+    metric_dict.update({'grads l2 norm/actor scale diags all speakers average': actor_scale_diag_grads.mean()})
+
+    for i in range(num_speakers):
+        metric_dict.update({f'grads l2 norm/actor means speaker {i} average': actor_mean_grads[i]})
+        metric_dict.update({f'grads l2 norm/actor scale diags speaker {i} average': actor_scale_diag_grads[i]})
+
+    #####
+
 
     wandb.log(metric_dict)
 
@@ -2042,13 +2063,13 @@ def make_train(config):
                 _this_rng, _next_rng = jax.random.split(_rng)
 
                 speaker_update_args = (_this_rng, trans_batch, advantages, targets, speaker_params_i, speaker_opt_state_i)
-                (updated_speaker_params, updated_speaker_opt_state), loss = partial_update_speaker(speaker_update_args)
+                (updated_speaker_params, updated_speaker_opt_state), (loss, selected_grads) = partial_update_speaker(speaker_update_args)
                 
                 # Carry forward updated state
-                return (_next_rng, updated_speaker_params, updated_speaker_opt_state), loss
+                return (_next_rng, updated_speaker_params, updated_speaker_opt_state), (loss, selected_grads)
             
-            (final_rng, final_speaker_params, final_speaker_opt_state), total_loss = jax.lax.scan(scan_step, carry_state, step_data)
-            return (final_speaker_params, final_speaker_opt_state), total_loss
+            (final_rng, final_speaker_params, final_speaker_opt_state), (total_loss, selected_grads) = jax.lax.scan(scan_step, carry_state, step_data)
+            return (final_speaker_params, final_speaker_opt_state), (total_loss, selected_grads)
         
         def update_listener(_rng, trans_batch_for_listener_i, advantages_for_listener_i, targets_for_listener_i, listener_params_i, listener_opt_state_i):
             carry_state = (_rng, listener_params_i, listener_opt_state_i)
@@ -2202,10 +2223,10 @@ def make_train(config):
                                                   lambda _: ((batched_listener_params, batched_listener_opt_states), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), (jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches)), jnp.zeros((env_kwargs["num_listeners"], num_listener_minibatches))))), None)
             final_speaker_outputs = jax.lax.cond(train_speaker,
                                                  lambda _: vmap_update_speaker(update_speaker_rngs, speaker_transition_batch, speaker_advantages, speaker_targets, batched_speaker_params, batched_speaker_opt_states),
-                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches))))), None)
+                                                 lambda _: ((batched_speaker_params, batched_speaker_opt_states), ((jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), (jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)), jnp.zeros((env_kwargs["num_speakers"], num_speaker_minibatches)))), (jnp.ones(env_kwargs["num_speakers"]), env_kwargs["num_speakers"]))), None)
             ## Unpack the outputs
             (final_listener_params, final_listener_opt_states), (listener_loss_total, (listener_loss_value, listener_loss_actor, listener_entropy)) = final_listener_outputs
-            (final_speaker_params, final_speaker_opt_states), (speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy, speaker_vq_loss)) = final_speaker_outputs
+            (final_speaker_params, final_speaker_opt_states), ((speaker_loss_total, (speaker_loss_value, speaker_loss_actor, speaker_entropy, speaker_vq_loss)), selected_grads) = final_speaker_outputs
             ########################################################
 
             ## Update the runner_state for the next scan loop
@@ -2303,7 +2324,7 @@ def make_train(config):
             probe_logging_params = (config["PROBE_LOGGING_ITER"], num_probe_exs)
             ###
 
-            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, speaker_gaussian_heatmaps, gaussian_heatmaps_lexsorted, w2_sign_distances, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'])
+            metrics_for_logging = (speaker_loss_for_logging, listener_loss_for_logging, optimizer_params_stats_for_logging, agent_param_stats_for_logging, env_info_for_logging, trimmed_transition_batch, speaker_examples, gut_speaker_heatmaps, wasserstein_spline_matrix, wasserstein_spline_matrix_invariant, wasserstein_spline_matrix_variance_weighted, spline_wasserstein_matrix_w2_variance_scaled, spline_wasserstein_matrix_w2_variance_scaled_invariant, speaker_gaussian_heatmaps, gaussian_heatmaps_lexsorted, w2_sign_distances, phone_heatmap_matrix, update_step, speaker_example_logging_params, final_speaker_images, probe_logging_params, probe_logits, env_kwargs['num_classes'], selected_grads)
 
             jax.experimental.io_callback(wandb_callback, None, metrics_for_logging)
             
