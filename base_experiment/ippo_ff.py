@@ -1867,7 +1867,7 @@ def wandb_callback(metrics):
             ### W2 Sign distance
             w2_sign_distances_for_speaker = w2_sign_distances[i]
 
-            heatmap_image_w2_sign_dists = wandb.Image(np.array(w2_sign_distances_for_speaker)/5.0, caption=f"average sign w2 distances speaker {i}")
+            heatmap_image_w2_sign_dists = wandb.Image(np.array(w2_sign_distances_for_speaker)/10.0, caption=f"average sign w2 distances speaker {i}")
             metric_dict.update({f"w2 sign distances/speaker {i} heatmap": heatmap_image_w2_sign_dists})
 
 
