@@ -12,6 +12,7 @@ import matplotlib
 import matplotlib as mpl
 import seaborn as sns
 import json
+from collections import defaultdict
 
 from utils import get_sweep_dirs
 
@@ -1749,9 +1750,11 @@ def make_speaker_entropy_success_tradeoff_plot(df):
     uuidstr = str(uuid.uuid4())[:5]
     plt.savefig(os.path.join("../phone-plots/", f"speaker_success_entropy_tradeoff_{uuidstr}.png"))
 
-def make_FL_spline_distance_plot(master_df, num_epochs=3000, epoch_start=250, rolling_window=100):
+def make_FL_spline_distance_plot(master_df, num_epochs=1500, epoch_start=250, rolling_window=100, legend_dict={}):
     w2_distances = []
     std_devs = []
+    pooled_std_devs = []
+    # individual_std_devs = defaultdict(list)
     labels = master_df['LISTENER_ARCH'].tolist()
 
     for run_name in master_df['Name']:
@@ -1760,14 +1763,20 @@ def make_FL_spline_distance_plot(master_df, num_epochs=3000, epoch_start=250, ro
         raw_w2_distancs = df['spline w2 distances variance weighted/all speakers mean']
         raw_w2_std_devs = df['spline w2 distances variance weighted/all speakers std dev']
 
+        raw_pooled_w2_std_devs = df[f'spline w2 distances variance weighted/speaker 0 w2 std dev'] ** 2
+        for i in range(1, 5):
+            raw_pooled_w2_std_devs += df[f'spline w2 distances variance weighted/speaker {i} w2 std dev'] ** 2
+        raw_pooled_w2_std_devs = np.sqrt(raw_pooled_w2_std_devs/5)
 
         if rolling_window:
             raw_w2_distancs = raw_w2_distancs.rolling(window=rolling_window, center=True, min_periods=1).mean()
             raw_w2_std_devs = raw_w2_std_devs.rolling(window=rolling_window, center=True, min_periods=1).mean()
-        
+            raw_pooled_w2_std_devs = raw_pooled_w2_std_devs.rolling(window=rolling_window, center=True, min_periods=1).mean()
+
         w2_distances.append(raw_w2_distancs)
         std_devs.append(raw_w2_std_devs)
-    
+        pooled_std_devs.append(raw_pooled_w2_std_devs)
+
     sns.set_theme(style="darkgrid")
 
     # Plot the data with larger font
@@ -1783,15 +1792,22 @@ def make_FL_spline_distance_plot(master_df, num_epochs=3000, epoch_start=250, ro
 
     sns.color_palette("flare", as_cmap=True)
 
-    for i, (mean, std_dev) in enumerate(zip(w2_distances, std_devs)):
+    for i, (mean, std_dev, pooled_std_dev) in enumerate(zip(w2_distances, std_devs, pooled_std_devs)):
         if num_epochs is not None:
             mean = mean.head(num_epochs)
             mean = mean.tail(len(mean)-epoch_start)
             std_dev = std_dev.head(num_epochs)
             std_dev = std_dev.tail(len(std_dev)-epoch_start)
+            pooled_std_dev = pooled_std_dev.head(num_epochs)
+            pooled_std_dev = pooled_std_dev.tail(len(std_dev)-epoch_start)
 
         mean = mean.dropna()
         std_dev = std_dev.dropna()
+        pooled_std_dev = pooled_std_dev.dropna()
+
+        pooled_std_dev /= np.sqrt(435 * 5)
+
+        conf_interval = 1.96 * std_dev / np.sqrt(2175)
         # if len(markers_on) > 0:
         #     marker_style = dict(
         #         marker=7,  # Change to preferred marker shape
@@ -1804,7 +1820,8 @@ def make_FL_spline_distance_plot(master_df, num_epochs=3000, epoch_start=250, ro
         #     ax.plot(data, color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.7, markevery=markers_on, **marker_style)
 
         ax.plot(mean, label=labels[i], color=sns.color_palette("Set1")[i], linewidth=2, alpha=0.5)
-        ax.fill_between(list(range(epoch_start, len(std_dev)+epoch_start)), mean-std_dev, mean+std_dev, color=sns.color_palette("Set1")[i], alpha=0.05)
+        ax.fill_between(list(range(epoch_start, len(std_dev)+epoch_start)), mean-(pooled_std_dev), mean+(pooled_std_dev), color=sns.color_palette("Set1")[i], alpha=0.05)
+        # ax.errorbar(x, means, yerr=errors, fmt='o', capsize=5)
 
     # ax.set_title(f'Probe Entropy for Speaker Signals', fontsize=16)
     # ax.set_xlabel('Epoch', fontsize=16)
@@ -1830,6 +1847,7 @@ def make_FL_spline_distance_plot(master_df, num_epochs=3000, epoch_start=250, ro
         json.dump(config, f)
 
     print(f"FL_spline_w2_distance_{uuidstr}.png")
+
 
 def make_graphics_post_conference():
     # download_reward_data(run_id="signification-team/signification-game/desfenmt", directory="./tough-cloud-2359/")
@@ -2280,7 +2298,7 @@ def make_phonology_graphics():
     # make_speaker_entropy_success_tradeoff_plot(df)
 
 
-    df = pd.read_csv("../sweep-run-list/wandb_export_2026-01-22T19_46_20.303-05_00.csv")
+    df = pd.read_csv("../sweep-run-list/wandb_export_2026-01-26T16_23_55.445-05_00.csv")
     filtered_df = df[["Name", "ID", "Tags", "LISTENER_ARCH"]]
 
     # api = wandb.Api()
