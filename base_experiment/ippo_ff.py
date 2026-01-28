@@ -26,7 +26,8 @@ from agents import *
 import pathlib
 import icon_probe
 import time
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
+import numpy as np
 from utils import get_anneal_schedule, get_train_freezing, speaker_penalty_whitesum_fn, speaker_penalty_curve_fn, center_obs, shift_obs, save_agents, make_grid_jnp, calc_log_volume, get_tom_speaker_n_search_fn, get_speaker_action_transform, rescale_params_to
 
 
@@ -1732,20 +1733,12 @@ def wandb_callback(metrics):
         metric_dict.update({"spline w2 distances variance weighted/all speakers cv": jnp.mean(cvs_w2_variance_weighted)})
         metric_dict.update({"spline w2 distances variance weighted/all speakers std dev": jnp.mean(stds_w2_variance_weighted)})
 
-        ##### TODO: Build an image from the flattened_lower_triangles
+        ##### Build an image from the flattened_lower_triangles
         sorted_flattened_lower_triangles = jnp.sort(flattened_lower_triangles, axis=1)
         double_sorted_flattened_lower_triangles = jnp.sort(flattened_lower_triangles.flatten())
 
-        fig, axs = plt.subplots(tight_layout=True, figsize=(3, 2))
-        axs.hist(double_sorted_flattened_lower_triangles, bins=30, edgecolor='black', alpha=0.7)
-        axs.set_xlabel('Distance Between Splines')
-        axs.set_ylabel('Frequency')
-        # axs.set_title('Spline Similarities')
-
-        wandb.log({"spline w2 distances variance weighted/all speakers histogram": wandb.Image(fig)})
-        # wandb.log({"spline w2 distances variance weighted/all speakers histogram plotly": fig})
-        plt.close(fig)
-
+        np_hist = np.histogram(np.array(double_sorted_flattened_lower_triangles), bins=60, density=True, range=(0.0, 9.0))
+        wandb.log({"spline w2 distances variance weighted/all speakers histogram panel": wandb.Histogram(np_histogram=np_hist)})
 
 
         ### W2 Variance Weighted Translation invariant
@@ -1911,15 +1904,14 @@ def wandb_callback(metrics):
 
             sorted_flattened_lower_triangles_for_speaker = sorted_flattened_lower_triangles[i]
 
-            fig, axs = plt.subplots(tight_layout=True, figsize=(3, 2))
-            axs.hist(sorted_flattened_lower_triangles_for_speaker, bins=30, edgecolor='black', alpha=0.7)
-            axs.set_xlabel('Distance Between Splines')
-            axs.set_ylabel('Frequency')
-            # axs.set_title('Spline Similarities')
+            # fig, axs = plt.subplots(tight_layout=True, figsize=(3, 2))
+            # axs.hist(sorted_flattened_lower_triangles_for_speaker, bins=30, edgecolor='black', alpha=0.7)
+            # axs.set_xlabel('Distance Between Splines')
+            # axs.set_ylabel('Frequency')
+            # # axs.set_title('Spline Similarities')
 
-            wandb.log({f"spline w2 distances variance weighted/speaker {i} histogram": wandb.Image(fig)})
-            # wandb.log({f"spline w2 distances variance weighted/speaker {i} histogram plotly": fig})
-            plt.close(fig)
+            np_hist = np.histogram(np.array(sorted_flattened_lower_triangles_for_speaker), bins=60, density=True, range=(0.0, 9.0))
+            wandb.log({f"spline w2 distances variance weighted/speaker {i} histogram panel": wandb.Histogram(np_histogram=np_hist)})
 
     #####
 
