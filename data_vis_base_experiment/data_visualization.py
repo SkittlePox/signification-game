@@ -71,7 +71,6 @@ def download_reward_data(run_id, directory):
     rewards_df = pd.DataFrame(rewards)
     rewards_df.to_csv(os.path.join(directory, f"reward_for_speaker_images_all_listeners.csv"), index=False)
 
-
 def download_spline_data(run_id, directory):
     os.makedirs(directory, exist_ok=True)
     api = wandb.Api()
@@ -103,6 +102,18 @@ def download_spline_data(run_id, directory):
             print(f"✓ Successfully saved {filename}")
         except KeyError as e:
             print(f"Warning: Could not find key '{metric_key}': {e}")
+
+def download_w2_heatmaps(run_id, directory, which_speaker=0):
+    fname_fragment = f"spline w2 distances variance weighted/speaker {which_speaker} heatmap"
+    os.makedirs(directory, exist_ok=True)
+    api = wandb.Api(timeout=29)
+    run = api.run(run_id)
+    files = run.files()
+    print("Downloading for run", directory)
+    
+    for file in tqdm(files, desc="Downloading w2 heatmaps"):
+        if fname_fragment in str(file):
+            file.download(root=directory, exist_ok=True)
 
 def download_communication_success_data(run_id, directory, referents=list(range(10))):
     os.makedirs(directory, exist_ok=True)
@@ -931,6 +942,84 @@ def make_simple_animation(directory, labels=True, frames=600, fname_prefix="tom_
     ani.save(f"../joint-plots/vid_simple_{directory.split('-')[-1][:-1]}{fname_suffix_info}_{uuidstr}.mp4", writer="ffmpeg", fps=fps)
 
     print("Saved file")
+
+
+def make_simple_animation_with_w2_dists(directory, labels=True, frames=600, fname_prefix="tom_", image_dim=32, referent_selection=list(range(10)), speaker_selection=list(np.zeros(10, dtype=int)), w2_speaker=None, fname_suffix_info="", fps=20, cmap='viridis'):
+    height_dx = image_dim + 2   # Assuming 2px border
+    if fname_suffix_info != "":
+        fname_suffix_info = "_"+fname_suffix_info
+    
+    # Load image data
+    image_dir = os.path.join(directory, "media/images/env/")
+    files = os.listdir(image_dir)
+    fname_template = fname_prefix+"speaker_examples_"
+
+
+    sorted_files = sorted([f for f in files if f.startswith(fname_template)],
+                         key=lambda x: int(x.split(fname_template)[1].split('_')[0]))
+    sorted_files = [os.path.join(image_dir, f) for f in sorted_files]
+
+    image_dir2 = os.path.join(directory, "media/images/spline w2 distances variance weighted/")
+
+    files2 = os.listdir(image_dir2)
+    fname_template = f"speaker {w2_speaker}"
+
+    sorted_files_w2 = sorted([f for f in files2 if f.startswith(fname_template)],
+                         key=lambda x: int(x.split(fname_template)[1].split('_')[1]))
+    sorted_files_w2 = [os.path.join(image_dir2, f) for f in sorted_files_w2]
+
+    # print(sorted_files_w2)
+    
+
+    # Initialize figure
+    fig, axes = plt.subplots(1, 2, figsize=(7, 2), gridspec_kw={'width_ratios': [2, 1]})
+    img_ax, w2_ax = axes
+    # fig.tight_layout()
+
+    def update(frame):
+        # Load and update image
+        # img = plt.imread(sorted_files[frame])
+
+        ##### Crop img here if you want.
+        img = Image.open(sorted_files[frame])
+        img_array = np.array(img)
+        # local_height_dx = height_dx if i == len(image_files) - 1 else height_dx
+        row_imgs = []
+        for ii, j in zip(referent_selection, speaker_selection):
+            local_width_dx = height_dx #if ii == referent_selection[-1] else height_dx
+            row_imgs.append(img_array[height_dx*j:height_dx*j+height_dx, height_dx*ii:height_dx*ii+local_width_dx])
+        row_img = np.concatenate(row_imgs, axis=1)
+        ###########
+
+        img_ax.clear()
+        img_ax.imshow(row_img, cmap=cmap)
+        img_ax.axis("off")
+        img_ax.set_title(f"Signals at Epoch {frame * 5}")
+        # ("Bicycle", "Butterfly", "Camel", "Crab", "Dolphin", "Palm Tree", "Rocket", "Snail", "Snake", "Spider")
+        if labels:
+            img_ax.text(-2, 45, " ".join(("Bicycle", "Butterfly", "Camel", " Crab  ", "Dolphin", " Tree ", " Rocket", "  Snail  ", "Snake  ", "Spider")), size="xx-small")
+        
+        # print(frame // 5)
+        w2_ax.set_title("Pairwise Spline Similarities")
+        img_w2 = Image.open(sorted_files_w2[frame])
+        w2_ax.imshow(img_w2)
+
+        # print(sorted_files_w2[frame])
+
+        return img_ax, w2_ax
+    
+    # print(animation.writers.list())
+    
+    ani = animation.FuncAnimation(fig, update, frames=min(frames, len(sorted_files)), interval=1000//fps)
+    
+    if frames > len(sorted_files):
+        print(f"You are asking for {frames} frames but there are only {len(sorted_files)} images")
+
+    uuidstr = str(uuid.uuid4())[:5]
+
+    ani.save(f"../joint-plots/vid_simple_plus_w2_{directory.split('-')[-1][:-1]}{fname_suffix_info}_{uuidstr}.mp4", writer="ffmpeg", fps=fps)
+
+    print("Saved file", f"../joint-plots/vid_simple_plus_w2_{directory.split('-')[-1][:-1]}{fname_suffix_info}_{uuidstr}.mp4")
 
 
 def make_simple_animation_same_sign_multi_agent(directories, referent_coordinates=((0,1), (4,5)), labels=[], fname_prefix="tom_", epochs=3000, image_dim=32, start_epoch=500):
@@ -2273,6 +2362,7 @@ def make_graphics_newyear_2026():
     # download_speaker_examples(run_id="signification-team/phonology-study/el0lk7n8", directory="./comic-moon-918/", tom_examples_only=True)
     # download_speaker_examples(run_id="signification-team/phonology-study/jp39a4yv", directory="./stoic-dust-980/", tom_examples_only=True)
     # download_speaker_examples(run_id="signification-team/phonology-study/g9tmjm5g", directory="./comic-bird-993/", tom_examples_only=True)
+    # download_w2_heatmaps(run_id="signification-team/phonology-study/el0lk7n8", directory="./comic-moon-918/", which_speaker=2)
 
 
     # make_simple_animation(directory="./comic-moon-918/", labels=False, speaker_selection=[2]*10, frames=500, fname_suffix_info="row2", fps=20, cmap='cividis')
@@ -2281,8 +2371,10 @@ def make_graphics_newyear_2026():
     # make_simple_animation(directory="./stoic-dust-980/", labels=False, speaker_selection=[6]*10, frames=600, fname_suffix_info="row6", fps=20, cmap='cividis')
     # make_simple_animation(directory="./stoic-dust-980/", labels=False, speaker_selection=[4]*10, frames=500, fname_suffix_info="row4", fps=20, cmap='summer')
 
-    make_simple_animation(directory="./comic-bird-993/", labels=False, speaker_selection=[6]*10, frames=600, fname_suffix_info="row6f", fps=20, cmap='summer')
-    make_simple_animation(directory="./comic-bird-993/", labels=False, speaker_selection=[8]*10, frames=600, fname_suffix_info="row8f", fps=20, cmap='summer')
+    # make_simple_animation(directory="./comic-bird-993/", labels=False, speaker_selection=[6]*10, frames=600, fname_suffix_info="row6f", fps=20, cmap='summer')
+    # make_simple_animation(directory="./comic-bird-993/", labels=False, speaker_selection=[8]*10, frames=600, fname_suffix_info="row8f", fps=20, cmap='summer')
+
+    make_simple_animation_with_w2_dists(directory="./comic-moon-918/", labels=False, speaker_selection=[4]*10, frames=500, w2_speaker=2, fname_suffix_info="row4", fps=20, cmap='cividis')
 
 
 def make_phonology_graphics():
@@ -2321,7 +2413,7 @@ if __name__=="__main__":
     # make_graphics_post_conference()
     # remake_graphics_part1()
     # make_graphics_part2()
-    make_phonology_graphics()
-    # make_graphics_newyear_2026()
+    # make_phonology_graphics()
+    make_graphics_newyear_2026()
     ## Don't forget to `module load ffmpeg``!
 
